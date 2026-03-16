@@ -132,7 +132,7 @@ export default function Admin() {
                     <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.religion} · {p.occupation}</div>
                   </div>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-                    <div className={badge badge-${p.profile_status}}>{p.profile_status}</div>
+                    <div className={`badge badge-${p.profile_status}`}>{p.profile_status}</div>
                     <div style={{fontSize:10,color:'#8e8e8e',fontFamily:'monospace'}}>{p.profile_code}</div>
                   </div>
                 </div>
