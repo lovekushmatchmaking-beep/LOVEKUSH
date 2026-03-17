@@ -10,5 +10,5 @@ export const generateProfileCode = (gender, religion) => {
   const r = { Hindu:'H', Muslim:'M', Sikh:'S', Christian:'C', Jain:'J', Buddhist:'B' }[religion] || 'O'
   const y = new Date().getFullYear().toString().slice(-2)
   const n = Math.floor(1000 + Math.random() * 9000)
-  return LK-${g}${r}${y}-${n}
+  return "LK-" + g + r + y + "-" + n
 }
