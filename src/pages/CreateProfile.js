@@ -82,7 +82,6 @@ export default function CreateProfile({ user }) {
     try {
       const code = generateProfileCode(form.gender, form.religion)
 
-      // Insert profile
       const { data: profile, error: pErr } = await supabase
         .from('profiles')
         .insert({
@@ -98,7 +97,6 @@ export default function CreateProfile({ user }) {
 
       if(pErr) throw pErr
 
-      // Upload photos
       const photoUploads = photoFiles.filter(Boolean)
       for(let i=0; i<photoUploads.length; i++){
         const file = photoUploads[i]
@@ -120,7 +118,7 @@ export default function CreateProfile({ user }) {
         }
       }
 
-      showToast('✓ Profile created! Code: ' + code)
+      showToast('Profile created! Code: ' + code)
       setTimeout(()=>navigate('/dashboard'), 1500)
     } catch(err) {
       showToast('Error: ' + err.message)
@@ -132,18 +130,17 @@ export default function CreateProfile({ user }) {
 
   return (
     <div style={{minHeight:'100vh',background:'#fff'}}>
-      <div className={toast ${toast?'show':''}}>{toast}</div>
+      <div className={"toast " + (toast?'show':'')}>{toast}</div>
 
-      {/* Sticky Header */}
       <div style={{position:'sticky',top:0,zIndex:90,background:'rgba(255,255,255,0.97)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(0,0,0,0.06)',padding:'12px 20px'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
           <div style={{fontFamily:'DM Sans',fontSize:14,fontWeight:200,letterSpacing:'0.3em'}}>LOVEKUSH</div>
           <div style={{fontSize:12,color:'#8e8e8e'}}>Step {step+1} of {STEPS.length}</div>
         </div>
-        <div className="progress-wrap"><div className="progress-fill" style={{width:${pct}%}}></div></div>
+        <div className="progress-wrap"><div className="progress-fill" style={{width:pct+'%'}}></div></div>
         <div className="step-tabs">
           {STEPS.map((s,i)=>(
-            <div key={s} className={step-tab ${i===step?'active':i<step?'done':''}}
+            <div key={s} className={"step-tab " + (i===step?'active':i<step?'done':'')}
               onClick={()=>i<step&&setStep(i)}>
               {i<step?'✓ ':''}{s}
             </div>
@@ -153,7 +150,6 @@ export default function CreateProfile({ user }) {
 
       <div className="page-container">
 
-        {/* STEP 0 — Personal */}
         {step===0 && (
           <div>
             <h2 className="page-title">Personal Details</h2>
@@ -243,7 +239,6 @@ export default function CreateProfile({ user }) {
           </div>
         )}
 
-        {/* STEP 1 — Education */}
         {step===1 && (
           <div>
             <h2 className="page-title">Education & Career</h2>
@@ -283,7 +278,6 @@ export default function CreateProfile({ user }) {
           </div>
         )}
 
-        {/* STEP 2 — Lifestyle */}
         {step===2 && (
           <div>
             <h2 className="page-title">Lifestyle</h2>
@@ -293,7 +287,7 @@ export default function CreateProfile({ user }) {
               <label className="form-label">Diet *</label>
               <div className="radio-group">
                 {diets.map(d=>(
-                  <div key={d} className={radio-option ${form.diet===d?'selected':''}} onClick={()=>set('diet',d)}>
+                  <div key={d} className={"radio-option " + (form.diet===d?'selected':'')} onClick={()=>set('diet',d)}>
                     {form.diet===d?'◉':'○'} {d}
                   </div>
                 ))}
@@ -324,14 +318,13 @@ export default function CreateProfile({ user }) {
 
             <div className="form-group">
               <label className="form-label">About Me *</label>
-              <textarea className="form-textarea" placeholder="Tell us about yourself, your personality, what you're looking for..." 
+              <textarea className="form-textarea" placeholder="Tell us about yourself, your personality, what you're looking for..."
                 value={form.about_me} onChange={e=>set('about_me',e.target.value)} style={{minHeight:120}} />
               <div className="form-hint">{form.about_me?.length||0} characters (minimum 50)</div>
             </div>
           </div>
         )}
 
-        {/* STEP 3 — Family */}
         {step===3 && (
           <div>
             <h2 className="page-title">Family Background</h2>
@@ -341,7 +334,7 @@ export default function CreateProfile({ user }) {
               <label className="form-label">Family Type *</label>
               <div className="radio-group">
                 {famTypes.map(f=>(
-                  <div key={f} className={radio-option ${form.family_type===f?'selected':''}} onClick={()=>set('family_type',f)}>
+                  <div key={f} className={"radio-option " + (form.family_type===f?'selected':'')} onClick={()=>set('family_type',f)}>
                     {form.family_type===f?'◉':'○'} {f} Family
                   </div>
                 ))}
@@ -352,7 +345,7 @@ export default function CreateProfile({ user }) {
               <label className="form-label">Family Values</label>
               <div className="radio-group">
                 {famValues.map(f=>(
-                  <div key={f} className={radio-option ${form.family_values===f?'selected':''}} onClick={()=>set('family_values',f)}>
+                  <div key={f} className={"radio-option " + (form.family_values===f?'selected':'')} onClick={()=>set('family_values',f)}>
                     {form.family_values===f?'◉':'○'} {f}
                   </div>
                 ))}
@@ -387,7 +380,6 @@ export default function CreateProfile({ user }) {
           </div>
         )}
 
-        {/* STEP 4 — Preferences */}
         {step===4 && (
           <div>
             <h2 className="page-title">Partner Preferences</h2>
@@ -437,7 +429,6 @@ export default function CreateProfile({ user }) {
           </div>
         )}
 
-        {/* STEP 5 — Photos */}
         {step===5 && (
           <div>
             <h2 className="page-title">Your Photos</h2>
@@ -449,7 +440,7 @@ export default function CreateProfile({ user }) {
 
             <div className="photo-grid">
               {photos.map((photo, idx)=>(
-                <div key={idx} className={photo-slot ${photo?'filled':''}}
+                <div key={idx} className={"photo-slot " + (photo?'filled':'')}
                   onClick={()=>!photo&&fileRefs.current[idx].current.click()}>
                   {photo ? (
                     <>
@@ -475,7 +466,7 @@ export default function CreateProfile({ user }) {
                 <span style={{fontSize:12,fontWeight:600}}>{completeness()}%</span>
               </div>
               <div className="progress-wrap">
-                <div className="progress-fill" style={{width:${completeness()}%}}></div>
+                <div className="progress-fill" style={{width:completeness()+'%'}}></div>
               </div>
             </div>
 
@@ -485,7 +476,6 @@ export default function CreateProfile({ user }) {
           </div>
         )}
 
-        {/* Navigation Buttons */}
         <div style={{display:'flex',gap:10,marginTop:24}}>
           {step>0&&(
             <button className="btn btn-outline" style={{flex:1}} onClick={()=>setStep(s=>s-1)}>← Back</button>
