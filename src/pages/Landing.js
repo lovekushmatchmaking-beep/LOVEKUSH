@@ -22,7 +22,10 @@ export default function Landing({ user }) {
       { name:'AUSTRALIA', x:0.80, y:0.66, couple:'Dev & Kavya', story:'Sydney to Kerala. Tradition united them.' },
     ]
 
-    const resize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight }
+    const resize = () => {
+      canvas.width = canvas.offsetWidth
+      canvas.height = canvas.offsetHeight
+    }
     resize()
     window.addEventListener('resize', resize)
     canvas.addEventListener('mousemove', e => {
@@ -49,8 +52,8 @@ export default function Landing({ user }) {
     const bezier = (a, b, t) => {
       const cx = (a.x+b.x)/2, cy = (a.y+b.y)/2 - H()*0.12
       return {
-        x: (1-t)(1-t)*a.x + 2(1-t)*t*cx + t*t*b.x,
-        y: (1-t)(1-t)*a.y + 2(1-t)*t*cy + t*t*b.y
+        x: (1-t)*(1-t)*a.x + 2*(1-t)*t*cx + t*t*b.x,
+        y: (1-t)*(1-t)*a.y + 2*(1-t)*t*cy + t*t*b.y
       }
     }
 
@@ -59,7 +62,7 @@ export default function Landing({ user }) {
       ctx.beginPath(); ctx.ellipse(0,0,sz*1.8,sz*0.3,0,0,Math.PI*2); ctx.fill()
       ctx.beginPath(); ctx.moveTo(-sz*0.2,0); ctx.lineTo(-sz*0.9,sz); ctx.lineTo(sz*0.3,sz*0.1); ctx.closePath(); ctx.fill()
       ctx.beginPath(); ctx.moveTo(-sz*0.2,0); ctx.lineTo(-sz*0.9,-sz); ctx.lineTo(sz*0.3,-sz*0.1); ctx.closePath(); ctx.fill()
-      ctx.font = 300 ${Math.max(8,sz*0.65)}px DM Sans
+      ctx.font = '300 ' + Math.max(8,sz*0.65) + 'px DM Sans'
       ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.letterSpacing='0.2em'
       ctx.fillText('LOVEKUSH', -24, -sz*1.2)
       ctx.restore()
@@ -67,7 +70,7 @@ export default function Landing({ user }) {
 
     const drawKnot = (cx, cy, sz, alpha) => {
       ctx.save(); ctx.translate(cx,cy)
-      ctx.strokeStyle=rgba(0,0,0,${alpha})
+      ctx.strokeStyle='rgba(0,0,0,' + alpha + ')'
       ctx.lineWidth=sz*0.06; ctx.lineCap='round'; ctx.lineJoin='round'
       const s=sz*0.44
       for(let l=0;l<3;l++){
@@ -80,11 +83,115 @@ export default function Landing({ user }) {
         ctx.stroke(); ctx.restore()
       }
       ctx.beginPath(); ctx.arc(0,0,sz*0.06,0,Math.PI*2)
-      ctx.fillStyle=rgba(0,0,0,${alpha}); ctx.fill()
+      ctx.fillStyle='rgba(0,0,0,' + alpha + ')'; ctx.fill()
       ctx.restore()
     }
 
     const BRAND = 'LOVEKUSH'
+
+    const tick = (ts) => {
+      const dt = Math.min((ts-lastTs)/1000, 0.05)
+      lastTs=ts; pt+=dt
+
+      ctx.clearRect(0,0,W(),H())
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,W(),H())
+
+      // Particles
+      const pa = Math.min(pt/1.5,1)*0.5
+      particles.forEach(p => {
+        ctx.beginPath()
+        ctx.arc((p.x+(mx-0.5)*0.03)*W(), (p.y+(my-0.5)*0.03)*H(), p.r, 0, Math.PI*2)
+        ctx.fillStyle='rgba(0,0,0,' + (p.op*pa) + ')'; ctx.fill()
+        p.y+=p.vy; if(p.y<0){p.y=1;p.x=Math.random()}
+      })
+
+      if(phase===0){
+        if(pt>1){phase=1;pt=0}
+
+      } else if(phase===1){
+        const a=Math.min(pt/1.5,1)
+        drawKnot(W()/2,H()/2,Math.min(W(),H())*0.1,a)
+        if(pt>2.5){phase=2;pt=0;textI=0;textTimer=0}
+
+      } else if(phase===2){
+        const shrink=Math.min(pt/1.5,1)
+        const ks=Math.min(W(),H())*0.1*(1-shrink*0.7)
+        drawKnot(W()/2,H()/2,ks,1)
+        textTimer+=dt
+        if(textTimer>0.12&&textI<BRAND.length){textI++;textTimer=0}
+        if(textI>0){
+          ctx.font='200 ' + Math.min(W()*0.07,56) + 'px DM Sans'
+          ctx.fillStyle='#000'; ctx.textAlign='center'; ctx.letterSpacing='0.5em'
+          ctx.fillText(BRAND.slice(0,textI),W()/2,H()/2+8)
+          if(textI===BRAND.length){
+            ctx.font='300 ' + Math.min(W()*0.02,13) + 'px DM Sans'
+            ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.letterSpacing='0.3em'
+            ctx.fillText('GLOBAL MATCHMAKING',W()/2,H()/2+32)
+          }
+          ctx.textAlign='left'
+        }
+        if(pt>3.5&&textI===BRAND.length){phase=3;pt=0;curCity=0;planeT=0}
+
+      } else if(phase===3){
+        const nc=(curCity+1)%cities.length
+        const spd=0.6*dt; planeT=Math.min(planeT+spd,1)
+        const pos=bezier(cityXY(curCity),cityXY(nc),planeT)
+        const p1=bezier(cityXY(curCity),cityXY(nc),Math.max(0,planeT-0.01))
+        const p2=bezier(cityXY(curCity),cityXY(nc),Math.min(1,planeT+0.01))
+        const ang=Math.atan2(p2.y-p1.y,p2.x-p1.x)
+        drawPlane(pos.x,pos.y,ang,Math.min(W(),H())*0.02)
+        if(planeT>=1){phase=4;pt=0;curCity=nc}
+
+      } else if(phase===4){
+        const c=cityXY(curCity), city=cities[curCity]
+        const pulse=(Math.sin(pt*3)+1)/2
+        ctx.beginPath(); ctx.arc(c.x,c.y,10+pulse*12,0,Math.PI*2)
+        ctx.strokeStyle='rgba(0,0,0,' + (0.3-pulse*0.2) + ')'; ctx.lineWidth=1.5; ctx.stroke()
+        ctx.beginPath(); ctx.arc(c.x,c.y,4,0,Math.PI*2)
+        ctx.fillStyle='#000'; ctx.fill()
+
+        // Story card
+        const opacity=Math.min(pt/0.5,1)
+        let cx=c.x+16, cy=c.y-50
+        if(cx+200>W())cx=c.x-210
+        if(cy<20)cy=c.y+20
+
+        ctx.save()
+        ctx.globalAlpha=opacity
+        ctx.fillStyle='rgba(0,0,0,0.88)'
+        roundRect(ctx,cx,cy,200,72,10); ctx.fill()
+        ctx.fillStyle='#fff'
+        ctx.font='400 10px DM Sans'; ctx.letterSpacing='0.2em'
+        ctx.fillText(city.name.toUpperCase(), cx+12, cy+18)
+        ctx.font='400 14px Cormorant Garamond'
+        ctx.fillText(city.couple, cx+12, cy+36)
+        ctx.font='300 11px DM Sans'; ctx.fillStyle='rgba(255,255,255,0.6)'
+        wrapText(ctx, city.story, cx+12, cy+52, 176, 14)
+        ctx.restore()
+
+        if(pt>2.5){
+          if(curCity<cities.length-1){phase=3;pt=0;planeT=0}
+          else{phase=5;pt=0}
+        }
+
+      } else if(phase===5){
+        // Final - show all city dots + glow
+        cities.forEach((c,i)=>{
+          const pos=cityXY(i)
+          ctx.beginPath(); ctx.arc(pos.x,pos.y,3,0,Math.PI*2)
+          ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fill()
+        })
+        const glowT=Math.min(pt/2,1)
+        const grad=ctx.createRadialGradient(W()*0.5,H()*0.4,0,W()*0.5,H()*0.4,W()*0.4)
+        grad.addColorStop(0,'rgba(0,0,0,' + (0.05*glowT) + ')')
+        grad.addColorStop(1,'rgba(0,0,0,0)')
+        ctx.fillStyle=grad; ctx.fillRect(0,0,W(),H())
+        drawKnot(W()/2,H()/2,Math.min(W(),H())*0.08*glowT,0.4*glowT)
+        if(pt>3&&!finalShown){finalShown=true;showFinal()}
+      }
+
+      animId=requestAnimationFrame(tick)
+    }
 
     function roundRect(ctx,x,y,w,h,r){
       ctx.beginPath()
@@ -100,8 +207,9 @@ export default function Landing({ user }) {
       const words=text.split(' '); let line=''
       for(let w of words){
         const test=line+w+' '
-        if(ctx.measureText(test).width>maxW&&line){ ctx.fillText(line,x,y); line=w+' '; y+=lineH }
-        else line=test
+        if(ctx.measureText(test).width>maxW&&line){
+          ctx.fillText(line,x,y); line=w+' '; y+=lineH
+        } else line=test
       }
       ctx.fillText(line,x,y)
     }
@@ -110,107 +218,17 @@ export default function Landing({ user }) {
       document.getElementById('landing-content').style.opacity='1'
       document.getElementById('landing-content').style.transform='translateY(0)'
     }
-    (ts) => {
-      const dt = Math.min((ts-lastTs)/1000, 0.05)
-      lastTs=ts; pt+=dt
-
-      ctx.clearRect(0,0,W(),H())
-      ctx.fillStyle='#fff'; ctx.fillRect(0,0,W(),H())
-
-      const pa = Math.min(pt/1.5,1)*0.5
-      particles.forEach(p => {
-        ctx.beginPath()
-        ctx.arc((p.x+(mx-0.5)*0.03)*W(), (p.y+(my-0.5)*0.03)*H(), p.r, 0, Math.PI*2)
-        ctx.fillStyle=rgba(0,0,0,${p.op*pa}); ctx.fill()
-        p.y+=p.vy; if(p.y<0){p.y=1;p.x=Math.random()}
-      })
-
-      if(phase===0){ if(pt>1){phase=1;pt=0} }
-      else if(phase===1){
-        const a=Math.min(pt/1.5,1)
-        drawKnot(W()/2,H()/2,Math.min(W(),H())*0.1,a)
-        if(pt>2.5){phase=2;pt=0;textI=0;textTimer=0}
-      }
-      else if(phase===2){
-        const shrink=Math.min(pt/1.5,1)
-        const ks=Math.min(W(),H())0.1(1-shrink*0.7)
-        drawKnot(W()/2,H()/2,ks,1)
-        textTimer+=dt
-        if(textTimer>0.12&&textI<BRAND.length){textI++;textTimer=0}
-        if(textI>0){
-          ctx.font=200 ${Math.min(W()*0.07,56)}px DM Sans
-          ctx.fillStyle='#000'; ctx.textAlign='center'; ctx.letterSpacing='0.5em'
-          ctx.fillText(BRAND.slice(0,textI),W()/2,H()/2+8)
-          if(textI===BRAND.length){
-            ctx.font=300 ${Math.min(W()*0.02,13)}px DM Sans
-            ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.letterSpacing='0.3em'
-            ctx.fillText('GLOBAL MATCHMAKING',W()/2,H()/2+32)
-          }
-          ctx.textAlign='left'
-        }
-        if(pt>3.5&&textI===BRAND.length){phase=3;pt=0;curCity=0;planeT=0}
-      }
-      else if(phase===3){
-        const nc=(curCity+1)%cities.length
-        const spd=0.6*dt; planeT=Math.min(planeT+spd,1)
-        const pos=bezier(cityXY(curCity),cityXY(nc),planeT)
-        const p1=bezier(cityXY(curCity),cityXY(nc),Math.max(0,planeT-0.01))
-        const p2=bezier(cityXY(curCity),cityXY(nc),Math.min(1,planeT+0.01))
-        const ang=Math.atan2(p2.y-p1.y,p2.x-p1.x)
-        drawPlane(pos.x,pos.y,ang,Math.min(W(),H())*0.02)
-        if(planeT>=1){phase=4;pt=0;curCity=nc}
-      }
-      else if(phase===4){
-        const c=cityXY(curCity), city=cities[curCity]
-        const pulse=(Math.sin(pt*3)+1)/2
-        ctx.beginPath(); ctx.arc(c.x,c.y,10+pulse*12,0,Math.PI*2)
-        ctx.strokeStyle=rgba(0,0,0,${0.3-pulse*0.2}); ctx.lineWidth=1.5; ctx.stroke()
-        ctx.beginPath(); ctx.arc(c.x,c.y,4,0,Math.PI*2)
-        ctx.fillStyle='#000'; ctx.fill()
-        const opacity=Math.min(pt/0.5,1)
-        let cx=c.x+16, cy=c.y-50
-        if(cx+200>W())cx=c.x-210
-        if(cy<20)cy=c.y+20
-        ctx.save(); ctx.globalAlpha=opacity
-        ctx.fillStyle='rgba(0,0,0,0.88)'
-        roundRect(ctx,cx,cy,200,72,10); ctx.fill()
-        ctx.fillStyle='#fff'
-        ctx.font=400 10px DM Sans; ctx.letterSpacing='0.2em'
-        ctx.fillText(city.name.toUpperCase(), cx+12, cy+18)
-        ctx.font=400 14px Cormorant Garamond
-        ctx.fillText(city.couple, cx+12, cy+36)
-        ctx.font=300 11px DM Sans; ctx.fillStyle='rgba(255,255,255,0.6)'
-        wrapText(ctx, city.story, cx+12, cy+52, 176, 14)
-        ctx.restore()
-        if(pt>2.5){
-          if(curCity<cities.length-1){phase=3;pt=0;planeT=0}
-          else{phase=5;pt=0}
-        }
-      }
-      else if(phase===5){
-        cities.forEach((c,i)=>{
-          const pos=cityXY(i)
-          ctx.beginPath(); ctx.arc(pos.x,pos.y,3,0,Math.PI*2)
-          ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fill()
-        })
-        const glowT=Math.min(pt/2,1)
-        const grad=ctx.createRadialGradient(W()*0.5,H()*0.4,0,W()*0.5,H()*0.4,W()*0.4)
-        grad.addColorStop(0,rgba(0,0,0,${0.05*glowT}))
-        grad.addColorStop(1,'rgba(0,0,0,0)')
-        ctx.fillStyle=grad; ctx.fillRect(0,0,W(),H())
-        drawKnot(W()/2,H()/2,Math.min(W(),H())*0.08*glowT,0.4*glowT)
-        if(pt>3&&!finalShown){finalShown=true;showFinal()}
-      }
-
-      animId=requestAnimationFrame(tick)
-    }
 
     requestAnimationFrame(ts=>{lastTs=ts;requestAnimationFrame(tick)})
-    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize) }
+    return () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener('resize', resize)
+    }
   }, [])
 
   return (
     <div style={{minHeight:'100vh',background:'#fff'}}>
+      {/* Navbar */}
       <nav className="navbar">
         <span className="nav-brand">LOVEKUSH</span>
         <div className="nav-right">
@@ -225,8 +243,11 @@ export default function Landing({ user }) {
         </div>
       </nav>
 
+      {/* Canvas Animation */}
       <div style={{position:'relative',height:'calc(100vh - 52px)',overflow:'hidden'}}>
         <canvas ref={canvasRef} style={{width:'100%',height:'100%',display:'block'}} />
+
+        {/* Final CTA */}
         <div id="landing-content" style={{
           position:'absolute',inset:0,display:'flex',flexDirection:'column',
           alignItems:'center',justifyContent:'center',textAlign:'center',
@@ -246,19 +267,21 @@ export default function Landing({ user }) {
             <div style={{width:40,height:1,background:'rgba(0,0,0,0.2)',margin:'0 auto 16px'}}></div>
             <div style={{fontFamily:'Cormorant Garamond',fontSize:'clamp(18px,3vw,26px)',fontStyle:'italic',fontWeight:300,marginBottom:36,opacity:0.8}}>Bridging Hearts, Building Legacies.</div>
             <div style={{display:'flex',gap:12,justifyContent:'center',flexWrap:'wrap'}}>
-              <button className="btn btn-black btn-lg" onClick={()=>navigate('/register')}>Begin Your Journey →</button>
-              <button className="btn btn-outline btn-lg" onClick={()=>document.getElementById('features').scrollIntoView({behavior:'smooth'})}>Learn More ↓</button>
+              <button className="btn btn-black btn-lg" onClick={()=>navigate('/register')} style={{pointerEvents:'all'}}>Begin Your Journey →</button>
+              <button className="btn btn-outline btn-lg" onClick={()=>document.getElementById('features').scrollIntoView({behavior:'smooth'})} style={{pointerEvents:'all'}}>Learn More ↓</button>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Features Section */}
       <div id="features" style={{background:'#fff',padding:'60px 20px'}}>
         <div style={{maxWidth:600,margin:'0 auto'}}>
           <div className="section-label" style={{textAlign:'center',marginBottom:8}}>Why Lovekush</div>
           <h2 style={{fontFamily:'Cormorant Garamond',fontSize:'clamp(28px,5vw,42px)',fontWeight:300,textAlign:'center',marginBottom:40,lineHeight:1.2}}>
             A service built on<br/><em>trust & discretion.</em>
           </h2>
+
           <div style={{display:'flex',flexDirection:'column',gap:1,border:'1px solid rgba(0,0,0,0.08)',borderRadius:16,overflow:'hidden'}}>
             {[
               {icon:'💎',title:'Handpicked Introductions',desc:'Every match personally reviewed. No random browsing.'},
@@ -278,6 +301,7 @@ export default function Landing({ user }) {
               </div>
             ))}
           </div>
+
           <div style={{marginTop:32,display:'flex',flexDirection:'column',gap:10}}>
             <button className="btn btn-black btn-full btn-lg" onClick={()=>navigate('/register')}>Create Free Profile</button>
             <button className="btn btn-outline btn-full" onClick={()=>navigate('/login')}>Already registered? Login</button>
@@ -285,7 +309,8 @@ export default function Landing({ user }) {
         </div>
       </div>
 
-      <footer style={{borderTop:'1px solid rgba(0,0,0,0.08)',padding:'40px 20px',textAlign:'center'}}>
+      {/* Footer */}
+      <footer style={{borderTop:'1px solid rgba(0,0,0,0.08)',padding:'40px 20px',textAlign:'center',background:'#fff'}}>
         <div style={{fontFamily:'DM Sans',fontSize:20,fontWeight:200,letterSpacing:'0.45em',marginBottom:6}}>LOVEKUSH</div>
         <div style={{fontFamily:'Cormorant Garamond',fontStyle:'italic',fontSize:14,opacity:0.4,marginBottom:20}}>Bridging Hearts, Building Legacies.</div>
         <div style={{display:'flex',gap:20,justifyContent:'center',flexWrap:'wrap',marginBottom:16}}>
