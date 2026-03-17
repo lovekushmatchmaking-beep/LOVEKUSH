@@ -103,7 +103,7 @@ export default function CreateProfile({ user }) {
       for(let i=0; i<photoUploads.length; i++){
         const file = photoUploads[i]
         const ext = file.name.split('.').pop()
-        const path = ${user.id}/${Date.now()}-${i}.${ext}
+        const path = user.id + "/" + Date.now() + "-" + i + "." + ext
         const { data: uploadData } = await supabase.storage
           .from('lovekush-photos')
           .upload(path, file, { upsert: true })
