@@ -30,6 +30,7 @@ export default function Admin() {
         active: data.filter(p=>p.profile_status==='active').length,
         blocked: data.filter(p=>p.profile_status==='blocked').length,
       })
+      // Load photos for each profile
       const photoMap = {}
       for(const p of data) {
         const { data: ph } = await supabase.from('photos').select('*').eq('profile_id',p.id).eq('is_primary',true).single()
@@ -79,6 +80,7 @@ export default function Admin() {
       </nav>
 
       <div style={{maxWidth:800,margin:'0 auto',padding:'20px'}}>
+        {/* Stats */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:20}}>
           {[
             {label:'Total',val:stats.total,bg:'#f5f5f5'},
@@ -93,14 +95,15 @@ export default function Admin() {
           ))}
         </div>
 
-        <div style={{display:'flex',gap:4,marginBottom:16,borderBottom:'1px solid rgba(0,0,0,0.08)'}}>
+        {/* Tabs */}
+        <div style={{display:'flex',gap:4,marginBottom:16,borderBottom:'1px solid rgba(0,0,0,0.08)',paddingBottom:0}}>
           {['all','pending','active','blocked'].map(t=>(
             <button key={t} onClick={()=>setActiveTab(t)}
               style={{padding:'8px 16px',border:'none',background:'transparent',
                 fontSize:13,fontWeight:activeTab===t?600:400,
                 color:activeTab===t?'#000':'#8e8e8e',
                 borderBottom:activeTab===t?'2px solid #000':'2px solid transparent',
-                cursor:'pointer',textTransform:'capitalize'}}>
+                cursor:'pointer',textTransform:'capitalize',letterSpacing:'0.03em'}}>
               {t}
             </button>
           ))}
@@ -109,6 +112,7 @@ export default function Admin() {
           </button>
         </div>
 
+        {/* Profile List */}
         {filtered.length === 0 ? (
           <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:14}}>
             No profiles in this category
@@ -132,23 +136,24 @@ export default function Admin() {
                     <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.religion} · {p.occupation}</div>
                   </div>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-                    <div className={`badge badge-${p.profile_status}`}>{p.profile_status}</div>
+                    <div className={"badge badge-" + p.profile_status} style={{fontSize:10}}>{p.profile_status}</div>
                     <div style={{fontSize:10,color:'#8e8e8e',fontFamily:'monospace'}}>{p.profile_code}</div>
                   </div>
                 </div>
 
+                {/* Expanded */}
                 {selected?.id===p.id && (
                   <div style={{marginTop:14,paddingTop:14,borderTop:'1px solid rgba(0,0,0,0.06)'}}>
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14,fontSize:13}}>
                       {[
+                        ['Email','—'],
                         ['Education',p.education],
                         ['Income',p.annual_income],
                         ['Family',p.family_type],
                         ['Diet',p.diet],
                         ['Completeness',p.profile_completeness+'%'],
-                        ['Gender',p.gender],
                         ['Registered',new Date(p.created_at).toLocaleDateString('en-IN')],
-                        ['Marital',p.marital_status],
+                        ['Gender',p.gender],
                       ].map(([k,v])=>(
                         <div key={k}>
                           <span style={{color:'#8e8e8e'}}>{k}: </span>
@@ -167,7 +172,7 @@ export default function Admin() {
                       )}
                       {p.profile_status!=='pending'&&(
                         <button className="btn btn-outline btn-sm"
-                          onClick={e=>{e.stopPropagation();updateStatus(p.id,'pending')}}>↩ Pending</button>
+                          onClick={e=>{e.stopPropagation();updateStatus(p.id,'pending')}}>↩ Set Pending</button>
                       )}
                     </div>
                   </div>
