@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, generateProfileCode } from '../supabase'
 
 const STEPS = ['Personal','Education','Lifestyle','Family','Preferences','Photos']
+
 const religions = ['Hindu','Muslim','Sikh','Christian','Jain','Buddhist','Other']
 const educations = ['Class 10th','Class 12th','Graduation','Post Graduation','Professional Degree','Doctorate']
 const incomes = ['No income','Below ₹1L','₹1–3L','₹3–5L','₹5–10L','Above ₹10L']
@@ -80,6 +81,8 @@ export default function CreateProfile({ user }) {
     setSaving(true)
     try {
       const code = generateProfileCode(form.gender, form.religion)
+
+      // Insert profile
       const { data: profile, error: pErr } = await supabase
         .from('profiles')
         .insert({
@@ -92,12 +95,15 @@ export default function CreateProfile({ user }) {
           profile_completeness: completeness()
         })
         .select().single()
+
       if(pErr) throw pErr
+
+      // Upload photos
       const photoUploads = photoFiles.filter(Boolean)
       for(let i=0; i<photoUploads.length; i++){
         const file = photoUploads[i]
         const ext = file.name.split('.').pop()
-        const path = `${user.id}/${Date.now()}-${i}.${ext}`
+        const path = ${user.id}/${Date.now()}-${i}.${ext}
         const { data: uploadData } = await supabase.storage
           .from('lovekush-photos')
           .upload(path, file, { upsert: true })
@@ -113,6 +119,7 @@ export default function CreateProfile({ user }) {
           })
         }
       }
+
       showToast('✓ Profile created! Code: ' + code)
       setTimeout(()=>navigate('/dashboard'), 1500)
     } catch(err) {
@@ -122,10 +129,12 @@ export default function CreateProfile({ user }) {
   }
 
   const pct = Math.round(((step+1)/STEPS.length)*100)
+
   return (
     <div style={{minHeight:'100vh',background:'#fff'}}>
       <div className={toast ${toast?'show':''}}>{toast}</div>
 
+      {/* Sticky Header */}
       <div style={{position:'sticky',top:0,zIndex:90,background:'rgba(255,255,255,0.97)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(0,0,0,0.06)',padding:'12px 20px'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
           <div style={{fontFamily:'DM Sans',fontSize:14,fontWeight:200,letterSpacing:'0.3em'}}>LOVEKUSH</div>
@@ -143,15 +152,19 @@ export default function CreateProfile({ user }) {
       </div>
 
       <div className="page-container">
+
+        {/* STEP 0 — Personal */}
         {step===0 && (
           <div>
             <h2 className="page-title">Personal Details</h2>
             <p className="page-subtitle">Tell us about yourself</p>
+
             <div className="form-group">
               <label className="form-label">Full Name *</label>
               <input className="form-input" placeholder="As per records" value={form.full_name}
                 onChange={e=>set('full_name',e.target.value)} autoFocus />
             </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Age *</label>
@@ -165,11 +178,13 @@ export default function CreateProfile({ user }) {
                 </select>
               </div>
             </div>
+
             <div className="form-group">
               <label className="form-label">Date of Birth</label>
               <input className="form-input" type="date" value={form.date_of_birth}
                 onChange={e=>set('date_of_birth',e.target.value)} />
             </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">City *</label>
@@ -182,6 +197,7 @@ export default function CreateProfile({ user }) {
                   onChange={e=>set('state',e.target.value)} />
               </div>
             </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Country</label>
@@ -195,6 +211,7 @@ export default function CreateProfile({ user }) {
                 </select>
               </div>
             </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Community</label>
@@ -207,6 +224,7 @@ export default function CreateProfile({ user }) {
                   onChange={e=>set('mother_tongue',e.target.value)} />
               </div>
             </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Height</label>
@@ -225,31 +243,37 @@ export default function CreateProfile({ user }) {
           </div>
         )}
 
+        {/* STEP 1 — Education */}
         {step===1 && (
           <div>
             <h2 className="page-title">Education & Career</h2>
             <p className="page-subtitle">Your professional background</p>
+
             <div className="form-group">
               <label className="form-label">Highest Education *</label>
               <select className="form-select" value={form.education} onChange={e=>set('education',e.target.value)}>
                 {educations.map(e=><option key={e}>{e}</option>)}
               </select>
             </div>
+
             <div className="form-group">
               <label className="form-label">Field of Study</label>
-              <input className="form-input" placeholder="Engineering, Medicine..." value={form.field_of_study}
+              <input className="form-input" placeholder="Engineering, Medicine, Arts..." value={form.field_of_study}
                 onChange={e=>set('field_of_study',e.target.value)} />
             </div>
+
             <div className="form-group">
               <label className="form-label">Current Occupation *</label>
               <input className="form-input" placeholder="Software Engineer, Doctor..." value={form.occupation}
                 onChange={e=>set('occupation',e.target.value)} />
             </div>
+
             <div className="form-group">
               <label className="form-label">Employer / Company</label>
-              <input className="form-input" placeholder="TCS, Self-employed..." value={form.employer}
+              <input className="form-input" placeholder="TCS, Infosys, Self-employed..." value={form.employer}
                 onChange={e=>set('employer',e.target.value)} />
             </div>
+
             <div className="form-group">
               <label className="form-label">Annual Income</label>
               <select className="form-select" value={form.annual_income} onChange={e=>set('annual_income',e.target.value)}>
@@ -259,10 +283,12 @@ export default function CreateProfile({ user }) {
           </div>
         )}
 
+        {/* STEP 2 — Lifestyle */}
         {step===2 && (
           <div>
             <h2 className="page-title">Lifestyle</h2>
             <p className="page-subtitle">Help us understand you better</p>
+
             <div className="form-group">
               <label className="form-label">Diet *</label>
               <div className="radio-group">
@@ -273,6 +299,7 @@ export default function CreateProfile({ user }) {
                 ))}
               </div>
             </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Smoking</label>
@@ -287,23 +314,29 @@ export default function CreateProfile({ user }) {
                 </select>
               </div>
             </div>
+
             <div className="form-group">
               <label className="form-label">Hobbies & Interests</label>
-              <input className="form-input" placeholder="Reading, Travel, Music..." value={form.hobbies}
+              <input className="form-input" placeholder="Reading, Travel, Music, Cricket..." value={form.hobbies}
                 onChange={e=>set('hobbies',e.target.value)} />
+              <div className="form-hint">Separate with commas</div>
             </div>
+
             <div className="form-group">
               <label className="form-label">About Me *</label>
-              <textarea className="form-textarea" placeholder="Tell us about yourself..."
+              <textarea className="form-textarea" placeholder="Tell us about yourself, your personality, what you're looking for..." 
                 value={form.about_me} onChange={e=>set('about_me',e.target.value)} style={{minHeight:120}} />
-              <div className="form-hint">{form.about_me?.length||0} characters</div>
+              <div className="form-hint">{form.about_me?.length||0} characters (minimum 50)</div>
             </div>
           </div>
         )}
-{step===3 && (
+
+        {/* STEP 3 — Family */}
+        {step===3 && (
           <div>
             <h2 className="page-title">Family Background</h2>
             <p className="page-subtitle">Family details for better matching</p>
+
             <div className="form-group">
               <label className="form-label">Family Type *</label>
               <div className="radio-group">
@@ -314,6 +347,7 @@ export default function CreateProfile({ user }) {
                 ))}
               </div>
             </div>
+
             <div className="form-group">
               <label className="form-label">Family Values</label>
               <div className="radio-group">
@@ -324,6 +358,7 @@ export default function CreateProfile({ user }) {
                 ))}
               </div>
             </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Father's Profession</label>
@@ -332,29 +367,32 @@ export default function CreateProfile({ user }) {
               </div>
               <div className="form-group">
                 <label className="form-label">Mother's Profession</label>
-                <input className="form-input" placeholder="Homemaker..." value={form.mother_profession}
+                <input className="form-input" placeholder="Homemaker, Teacher..." value={form.mother_profession}
                   onChange={e=>set('mother_profession',e.target.value)} />
               </div>
             </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Siblings</label>
-                <input className="form-input" placeholder="1 brother..." value={form.siblings}
+                <input className="form-input" placeholder="1 brother, 2 sisters..." value={form.siblings}
                   onChange={e=>set('siblings',e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Family City</label>
-                <input className="form-input" placeholder="Delhi..." value={form.family_city}
+                <input className="form-input" placeholder="Delhi, Mumbai..." value={form.family_city}
                   onChange={e=>set('family_city',e.target.value)} />
               </div>
             </div>
           </div>
         )}
 
+        {/* STEP 4 — Preferences */}
         {step===4 && (
           <div>
             <h2 className="page-title">Partner Preferences</h2>
             <p className="page-subtitle">More flexibility = more matches</p>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Age Min</label>
@@ -367,6 +405,7 @@ export default function CreateProfile({ user }) {
                   value={form.partner_age_max} onChange={e=>set('partner_age_max',e.target.value)} />
               </div>
             </div>
+
             <div className="form-group">
               <label className="form-label">Religion Preference</label>
               <select className="form-select" value={form.partner_religion} onChange={e=>set('partner_religion',e.target.value)}>
@@ -374,12 +413,14 @@ export default function CreateProfile({ user }) {
                 {religions.map(r=><option key={r}>{r}</option>)}
               </select>
             </div>
+
             <div className="form-group">
               <label className="form-label">Location Preference</label>
               <select className="form-select" value={form.partner_location} onChange={e=>set('partner_location',e.target.value)}>
                 {['Same city','Same state','Anywhere in India','Open to relocation','Global'].map(l=><option key={l}>{l}</option>)}
               </select>
             </div>
+
             <div className="form-group">
               <label className="form-label">Education Preference</label>
               <select className="form-select" value={form.partner_education} onChange={e=>set('partner_education',e.target.value)}>
@@ -387,21 +428,25 @@ export default function CreateProfile({ user }) {
                 {educations.map(e=><option key={e}>{e}</option>)}
               </select>
             </div>
+
             <div className="form-group">
               <label className="form-label">Additional Notes</label>
-              <textarea className="form-textarea" placeholder="Any other preferences..."
+              <textarea className="form-textarea" placeholder="Any other preferences or expectations..."
                 value={form.partner_notes} onChange={e=>set('partner_notes',e.target.value)} />
             </div>
           </div>
         )}
 
+        {/* STEP 5 — Photos */}
         {step===5 && (
           <div>
             <h2 className="page-title">Your Photos</h2>
             <p className="page-subtitle">Add up to 6 photos. First photo is your profile picture.</p>
+
             <div className="notice" style={{marginBottom:20}}>
-              <strong>Photo Guidelines:</strong> Natural, clear photos only. No filters or edited images.
+              <strong>Photo Guidelines:</strong> Natural, clear photos only. No filters, sunglasses, or edited images. Families prefer honest, natural presentation.
             </div>
+
             <div className="photo-grid">
               {photos.map((photo, idx)=>(
                 <div key={idx} className={photo-slot ${photo?'filled':''}}
@@ -410,12 +455,12 @@ export default function CreateProfile({ user }) {
                     <>
                       <img src={photo} alt="" />
                       <button className="remove-btn" onClick={e=>{e.stopPropagation();removePhoto(idx)}}>✕</button>
-                      {idx===0&&<div style={{position:'absolute',bottom:4,left:4,background:'rgba(0,0,0,0.7)',color:'#fff',fontSize:9,padding:'2px 6px',borderRadius:4}}>MAIN</div>}
+                      {idx===0&&<div style={{position:'absolute',bottom:4,left:4,background:'rgba(0,0,0,0.7)',color:'#fff',fontSize:9,padding:'2px 6px',borderRadius:4,letterSpacing:'0.1em'}}>MAIN</div>}
                     </>
                   ) : (
                     <>
                       <span style={{fontSize:24,opacity:0.25}}>+</span>
-                      <span style={{fontSize:9,opacity:0.35}}>{idx===0?'MAIN':'PHOTO '+(idx+1)}</span>
+                      <span style={{fontSize:9,opacity:0.35,letterSpacing:'0.1em'}}>{idx===0?'MAIN':'PHOTO '+(idx+1)}</span>
                     </>
                   )}
                   <input ref={fileRefs.current[idx]} type="file" accept="image/*" style={{display:'none'}}
@@ -423,6 +468,7 @@ export default function CreateProfile({ user }) {
                 </div>
               ))}
             </div>
+
             <div style={{marginBottom:24}}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
                 <span style={{fontSize:12,color:'#8e8e8e'}}>Profile Completeness</span>
@@ -432,12 +478,14 @@ export default function CreateProfile({ user }) {
                 <div className="progress-fill" style={{width:${completeness()}%}}></div>
               </div>
             </div>
+
             <div className="notice">
-              <strong>After submission:</strong> Our team will review your profile within 24-48 hours.
+              <strong>After submission:</strong> Our team will review your profile within 24-48 hours before it becomes visible to potential matches.
             </div>
           </div>
         )}
 
+        {/* Navigation Buttons */}
         <div style={{display:'flex',gap:10,marginTop:24}}>
           {step>0&&(
             <button className="btn btn-outline" style={{flex:1}} onClick={()=>setStep(s=>s-1)}>← Back</button>
