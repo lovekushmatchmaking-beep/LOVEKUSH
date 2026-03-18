@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import EditPhotos from './EditPhotos'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 
@@ -168,7 +169,13 @@ export default function Dashboard({ user }) {
                 {/* Photos */}
                 {photos.length > 0 && (
                   <div className="card" style={{marginBottom:12}}>
-                    <div className="section-label" style={{marginBottom:12}}>Photos ({photos.length})</div>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                    <div className="section-label">Photos ({photos.length})</div>
+                    <button className="btn btn-outline" style={{fontSize:11,padding:'5px 14px'}}
+                      onClick={()=>setActiveTab('editphotos')}>
+                      Manage Photos
+                    </button>
+                  </div>
                     <div className="photo-grid">
                       {photos.map((p,i)=>(
                         <div key={i} style={{aspectRatio:1,borderRadius:10,overflow:'hidden',background:'#f5f5f5'}}>
@@ -289,6 +296,15 @@ export default function Dashboard({ user }) {
               </div>
             )}
           </div>
+        )}
+
+        {/* EDIT PHOTOS TAB */}
+        {activeTab === 'editphotos' && profile && (
+          <EditPhotos
+            user={user}
+            profileId={profile.id}
+            onBack={()=>setActiveTab('home')}
+          />
         )}
 
         {/* EDIT PROFILE TAB */}
