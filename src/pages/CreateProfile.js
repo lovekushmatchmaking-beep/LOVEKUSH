@@ -12,6 +12,61 @@ const habits = ['Never','Occasionally','Yes']
 const famTypes = ['Nuclear','Joint','Extended']
 const famValues = ['Traditional','Moderate','Liberal']
 
+// Auto compress any image to under 800KB — user ko pata nahi chalega
+const compressImage = (file) => {
+  return new Promise((resolve) => {
+    const maxSizeKB = 800
+    const maxWidth = 1200
+    const maxHeight = 1200
+
+    const img = new Image()
+    const reader = new FileReader()
+
+    reader.onload = (e) => {
+      img.src = e.target.result
+    }
+
+    img.onload = () => {
+      let width = img.width
+      let height = img.height
+
+      // Resize if too large
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, width, height)
+
+      // Compress with quality adjustment
+      let quality = 0.85
+      const tryCompress = () => {
+        canvas.toBlob((blob) => {
+          if (blob.size / 1024 > maxSizeKB && quality > 0.3) {
+            quality -= 0.1
+            tryCompress()
+          } else {
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            })
+            resolve(compressedFile)
+          }
+        }, 'image/jpeg', quality)
+      }
+
+      tryCompress()
+    }
+
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function CreateProfile({ user }) {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
@@ -45,12 +100,17 @@ export default function CreateProfile({ user }) {
     setTimeout(()=>setToast(''),3000)
   }
 
-  const handlePhotoSelect = (idx, file) => {
+  const handlePhotoSelect = async (idx, file) => {
     if(!file) return
+    // Show preview immediately
     const url = URL.createObjectURL(file)
     const newPhotos = [...photos]; newPhotos[idx] = url
-    const newFiles = [...photoFiles]; newFiles[idx] = file
-    setPhotos(newPhotos); setPhotoFiles(newFiles)
+    setPhotos(newPhotos)
+
+    // Compress in background — user ko pata nahi chalega
+    const compressed = await compressImage(file)
+    const newFiles = [...photoFiles]; newFiles[idx] = compressed
+    setPhotoFiles(newFiles)
   }
 
   const removePhoto = (idx) => {
@@ -100,11 +160,10 @@ export default function CreateProfile({ user }) {
       const photoUploads = photoFiles.filter(Boolean)
       for(let i=0; i<photoUploads.length; i++){
         const file = photoUploads[i]
-        const ext = file.name.split('.').pop()
-        const path = user.id + "/" + Date.now() + "-" + i + "." + ext
+        const path = user.id + '/' + Date.now() + '-' + i + '.jpg'
         const { data: uploadData } = await supabase.storage
           .from('lovekush-photos')
-          .upload(path, file, { upsert: true })
+          .upload(path, file, { upsert: true, contentType: 'image/jpeg' })
         if(uploadData) {
           const { data: urlData } = supabase.storage
             .from('lovekush-photos')
@@ -130,7 +189,7 @@ export default function CreateProfile({ user }) {
 
   return (
     <div style={{minHeight:'100vh',background:'#fff'}}>
-      <div className={"toast " + (toast?'show':'')}>{toast}</div>
+      <div className={'toast ' + (toast?'show':'')}>{toast}</div>
 
       <div style={{position:'sticky',top:0,zIndex:90,background:'rgba(255,255,255,0.97)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(0,0,0,0.06)',padding:'12px 20px'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
@@ -140,7 +199,7 @@ export default function CreateProfile({ user }) {
         <div className="progress-wrap"><div className="progress-fill" style={{width:pct+'%'}}></div></div>
         <div className="step-tabs">
           {STEPS.map((s,i)=>(
-            <div key={s} className={"step-tab " + (i===step?'active':i<step?'done':'')}
+            <div key={s} className={'step-tab ' + (i===step?'active':i<step?'done':'')}
               onClick={()=>i<step&&setStep(i)}>
               {i<step?'✓ ':''}{s}
             </div>
@@ -287,7 +346,7 @@ export default function CreateProfile({ user }) {
               <label className="form-label">Diet *</label>
               <div className="radio-group">
                 {diets.map(d=>(
-                  <div key={d} className={"radio-option " + (form.diet===d?'selected':'')} onClick={()=>set('diet',d)}>
+                  <div key={d} className={'radio-option ' + (form.diet===d?'selected':'')} onClick={()=>set('diet',d)}>
                     {form.diet===d?'◉':'○'} {d}
                   </div>
                 ))}
@@ -334,7 +393,7 @@ export default function CreateProfile({ user }) {
               <label className="form-label">Family Type *</label>
               <div className="radio-group">
                 {famTypes.map(f=>(
-                  <div key={f} className={"radio-option " + (form.family_type===f?'selected':'')} onClick={()=>set('family_type',f)}>
+                  <div key={f} className={'radio-option ' + (form.family_type===f?'selected':'')} onClick={()=>set('family_type',f)}>
                     {form.family_type===f?'◉':'○'} {f} Family
                   </div>
                 ))}
@@ -345,7 +404,7 @@ export default function CreateProfile({ user }) {
               <label className="form-label">Family Values</label>
               <div className="radio-group">
                 {famValues.map(f=>(
-                  <div key={f} className={"radio-option " + (form.family_values===f?'selected':'')} onClick={()=>set('family_values',f)}>
+                  <div key={f} className={'radio-option ' + (form.family_values===f?'selected':'')} onClick={()=>set('family_values',f)}>
                     {form.family_values===f?'◉':'○'} {f}
                   </div>
                 ))}
@@ -440,7 +499,7 @@ export default function CreateProfile({ user }) {
 
             <div className="photo-grid">
               {photos.map((photo, idx)=>(
-                <div key={idx} className={"photo-slot " + (photo?'filled':'')}
+                <div key={idx} className={'photo-slot ' + (photo?'filled':'')}
                   onClick={()=>!photo&&fileRefs.current[idx].current.click()}>
                   {photo ? (
                     <>
