@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
+import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS } from '../constants/profileOptions'
 
 export default function Dashboard({ user }) {
   const navigate = useNavigate()
@@ -411,11 +412,6 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
     setSaving(false)
   }
 
-  const religions = ['Hindu','Muslim','Sikh','Christian','Jain','Buddhist','Other']
-  const educations = ['Class 10th','Class 12th','Graduation','Post Graduation','Professional Degree','Doctorate']
-  const incomes = ['No income','Below ₹1L','₹1–3L','₹3–5L','₹5–10L','Above ₹10L']
-  const diets = ['Vegetarian','Eggetarian','Non-Vegetarian','Vegan','Jain']
-  const habits = ['Never','Occasionally','Yes']
 
   return (
     <div>
@@ -440,7 +436,7 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
           <div className="form-group">
             <label className="form-label">Religion</label>
             <select className="form-select" value={form.religion} onChange={e=>set('religion',e.target.value)}>
-              {religions.map(r=><option key={r}>{r}</option>)}
+              {RELIGIONS.map(r=><option key={r}>{r}</option>)}
             </select>
           </div>
         </div>
@@ -469,7 +465,7 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
         <div className="form-group">
           <label className="form-label">Education</label>
           <select className="form-select" value={form.education} onChange={e=>set('education',e.target.value)}>
-            {educations.map(e=><option key={e}>{e}</option>)}
+            {EDUCATIONS.map(e=><option key={e}>{e}</option>)}
           </select>
         </div>
         <div className="form-group">
@@ -479,7 +475,7 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
         <div className="form-group">
           <label className="form-label">Annual Income</label>
           <select className="form-select" value={form.annual_income} onChange={e=>set('annual_income',e.target.value)}>
-            {incomes.map(i=><option key={i}>{i}</option>)}
+            {INCOME_RANGES.map(i=><option key={i}>{i}</option>)}
           </select>
         </div>
       </div>
@@ -489,20 +485,20 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
         <div className="form-group">
           <label className="form-label">Diet</label>
           <select className="form-select" value={form.diet} onChange={e=>set('diet',e.target.value)}>
-            {diets.map(d=><option key={d}>{d}</option>)}
+            {DIETS.map(d=><option key={d}>{d}</option>)}
           </select>
         </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Smoking</label>
             <select className="form-select" value={form.smoking} onChange={e=>set('smoking',e.target.value)}>
-              {habits.map(h=><option key={h}>{h}</option>)}
+              {HABITS.map(h=><option key={h}>{h}</option>)}
             </select>
           </div>
           <div className="form-group">
             <label className="form-label">Drinking</label>
             <select className="form-select" value={form.drinking} onChange={e=>set('drinking',e.target.value)}>
-              {habits.map(h=><option key={h}>{h}</option>)}
+              {HABITS.map(h=><option key={h}>{h}</option>)}
             </select>
           </div>
         </div>
@@ -532,7 +528,7 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
           <label className="form-label">Religion Preference</label>
           <select className="form-select" value={form.partner_religion} onChange={e=>set('partner_religion',e.target.value)}>
             <option value="Any">Any / Open to all</option>
-            {religions.map(r=><option key={r}>{r}</option>)}
+            {RELIGIONS.map(r=><option key={r}>{r}</option>)}
           </select>
         </div>
         <div className="form-group">

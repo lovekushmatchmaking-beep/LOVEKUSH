@@ -2,70 +2,21 @@ import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, generateProfileCode } from '../supabase'
 
+import {
+  DIETS,
+  EDUCATIONS,
+  FAMILY_TYPES,
+  FAMILY_VALUES,
+  HABITS,
+  HEIGHT_RANGES,
+  INCOME_RANGES,
+  LOCATION_PREFERENCES,
+  MARITAL_STATUSES,
+  RELIGIONS,
+} from '../constants/profileOptions'
+import { compressImage } from '../utils/compressImage'
+
 const STEPS = ['Personal','Education','Lifestyle','Family','Preferences','Photos']
-
-const religions = ['Hindu','Muslim','Sikh','Christian','Jain','Buddhist','Other']
-const educations = ['Class 10th','Class 12th','Graduation','Post Graduation','Professional Degree','Doctorate']
-const incomes = ['No income','Below ₹1L','₹1–3L','₹3–5L','₹5–10L','Above ₹10L']
-const diets = ['Vegetarian','Eggetarian','Non-Vegetarian','Vegan','Jain']
-const habits = ['Never','Occasionally','Yes']
-const famTypes = ['Nuclear','Joint','Extended']
-const famValues = ['Traditional','Moderate','Liberal']
-
-// Auto compress any image to under 800KB — user ko pata nahi chalega
-const compressImage = (file) => {
-  return new Promise((resolve) => {
-    const maxSizeKB = 800
-    const maxWidth = 1200
-    const maxHeight = 1200
-
-    const img = new Image()
-    const reader = new FileReader()
-
-    reader.onload = (e) => {
-      img.src = e.target.result
-    }
-
-    img.onload = () => {
-      let width = img.width
-      let height = img.height
-
-      // Resize if too large
-      if (width > maxWidth || height > maxHeight) {
-        const ratio = Math.min(maxWidth / width, maxHeight / height)
-        width = Math.round(width * ratio)
-        height = Math.round(height * ratio)
-      }
-
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(img, 0, 0, width, height)
-
-      // Compress with quality adjustment
-      let quality = 0.85
-      const tryCompress = () => {
-        canvas.toBlob((blob) => {
-          if (blob.size / 1024 > maxSizeKB && quality > 0.3) {
-            quality -= 0.1
-            tryCompress()
-          } else {
-            const compressedFile = new File([blob], file.name, {
-              type: 'image/jpeg',
-              lastModified: Date.now()
-            })
-            resolve(compressedFile)
-          }
-        }, 'image/jpeg', quality)
-      }
-
-      tryCompress()
-    }
-
-    reader.readAsDataURL(file)
-  })
-}
 
 export default function CreateProfile({ user }) {
   const navigate = useNavigate()
@@ -262,7 +213,7 @@ export default function CreateProfile({ user }) {
               <div className="form-group">
                 <label className="form-label">Religion *</label>
                 <select className="form-select" value={form.religion} onChange={e=>set('religion',e.target.value)}>
-                  {religions.map(r=><option key={r}>{r}</option>)}
+                  {RELIGIONS.map(r=><option key={r}>{r}</option>)}
                 </select>
               </div>
             </div>
@@ -285,13 +236,13 @@ export default function CreateProfile({ user }) {
                 <label className="form-label">Height</label>
                 <select className="form-select" value={form.height} onChange={e=>set('height',e.target.value)}>
                   <option value="">Select</option>
-                  {["Below 5'0\"","5'0\"–5'2\"","5'3\"–5'5\"","5'6\"–5'8\"","5'9\"–6'0\"","Above 6'0\""].map(h=><option key={h}>{h}</option>)}
+                  {HEIGHT_RANGES.map(h=><option key={h}>{h}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Marital Status</label>
                 <select className="form-select" value={form.marital_status} onChange={e=>set('marital_status',e.target.value)}>
-                  {['Never Married','Divorced','Widowed','Separated'].map(s=><option key={s}>{s}</option>)}
+                  {MARITAL_STATUSES.map(s=><option key={s}>{s}</option>)}
                 </select>
               </div>
             </div>
@@ -306,7 +257,7 @@ export default function CreateProfile({ user }) {
             <div className="form-group">
               <label className="form-label">Highest Education *</label>
               <select className="form-select" value={form.education} onChange={e=>set('education',e.target.value)}>
-                {educations.map(e=><option key={e}>{e}</option>)}
+                {EDUCATIONS.map(e=><option key={e}>{e}</option>)}
               </select>
             </div>
 
@@ -331,7 +282,7 @@ export default function CreateProfile({ user }) {
             <div className="form-group">
               <label className="form-label">Annual Income</label>
               <select className="form-select" value={form.annual_income} onChange={e=>set('annual_income',e.target.value)}>
-                {incomes.map(i=><option key={i}>{i}</option>)}
+                {INCOME_RANGES.map(i=><option key={i}>{i}</option>)}
               </select>
             </div>
           </div>
@@ -345,7 +296,7 @@ export default function CreateProfile({ user }) {
             <div className="form-group">
               <label className="form-label">Diet *</label>
               <div className="radio-group">
-                {diets.map(d=>(
+                {DIETS.map(d=>(
                   <div key={d} className={'radio-option ' + (form.diet===d?'selected':'')} onClick={()=>set('diet',d)}>
                     {form.diet===d?'◉':'○'} {d}
                   </div>
@@ -357,13 +308,13 @@ export default function CreateProfile({ user }) {
               <div className="form-group">
                 <label className="form-label">Smoking</label>
                 <select className="form-select" value={form.smoking} onChange={e=>set('smoking',e.target.value)}>
-                  {habits.map(h=><option key={h}>{h}</option>)}
+                  {HABITS.map(h=><option key={h}>{h}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Drinking</label>
                 <select className="form-select" value={form.drinking} onChange={e=>set('drinking',e.target.value)}>
-                  {habits.map(h=><option key={h}>{h}</option>)}
+                  {HABITS.map(h=><option key={h}>{h}</option>)}
                 </select>
               </div>
             </div>
@@ -392,7 +343,7 @@ export default function CreateProfile({ user }) {
             <div className="form-group">
               <label className="form-label">Family Type *</label>
               <div className="radio-group">
-                {famTypes.map(f=>(
+                {FAMILY_TYPES.map(f=>(
                   <div key={f} className={'radio-option ' + (form.family_type===f?'selected':'')} onClick={()=>set('family_type',f)}>
                     {form.family_type===f?'◉':'○'} {f} Family
                   </div>
@@ -403,7 +354,7 @@ export default function CreateProfile({ user }) {
             <div className="form-group">
               <label className="form-label">Family Values</label>
               <div className="radio-group">
-                {famValues.map(f=>(
+                {FAMILY_VALUES.map(f=>(
                   <div key={f} className={'radio-option ' + (form.family_values===f?'selected':'')} onClick={()=>set('family_values',f)}>
                     {form.family_values===f?'◉':'○'} {f}
                   </div>
@@ -461,14 +412,14 @@ export default function CreateProfile({ user }) {
               <label className="form-label">Religion Preference</label>
               <select className="form-select" value={form.partner_religion} onChange={e=>set('partner_religion',e.target.value)}>
                 <option value="Any">Any / Open to all</option>
-                {religions.map(r=><option key={r}>{r}</option>)}
+                {RELIGIONS.map(r=><option key={r}>{r}</option>)}
               </select>
             </div>
 
             <div className="form-group">
               <label className="form-label">Location Preference</label>
               <select className="form-select" value={form.partner_location} onChange={e=>set('partner_location',e.target.value)}>
-                {['Same city','Same state','Anywhere in India','Open to relocation','Global'].map(l=><option key={l}>{l}</option>)}
+                {LOCATION_PREFERENCES.map(l=><option key={l}>{l}</option>)}
               </select>
             </div>
 
@@ -476,7 +427,7 @@ export default function CreateProfile({ user }) {
               <label className="form-label">Education Preference</label>
               <select className="form-select" value={form.partner_education} onChange={e=>set('partner_education',e.target.value)}>
                 <option value="Any">Any</option>
-                {educations.map(e=><option key={e}>{e}</option>)}
+                {EDUCATIONS.map(e=><option key={e}>{e}</option>)}
               </select>
             </div>
 

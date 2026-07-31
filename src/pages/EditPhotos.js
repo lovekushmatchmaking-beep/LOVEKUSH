@@ -1,54 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
 
-// Auto compress any image to under 800KB
-const compressImage = (file) => {
-  return new Promise((resolve) => {
-    const maxSizeKB = 800
-    const maxWidth = 1200
-    const maxHeight = 1200
-
-    const img = new Image()
-    const reader = new FileReader()
-
-    reader.onload = (e) => { img.src = e.target.result }
-
-    img.onload = () => {
-      let width = img.width
-      let height = img.height
-
-      if (width > maxWidth || height > maxHeight) {
-        const ratio = Math.min(maxWidth / width, maxHeight / height)
-        width = Math.round(width * ratio)
-        height = Math.round(height * ratio)
-      }
-
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(img, 0, 0, width, height)
-
-      let quality = 0.85
-      const tryCompress = () => {
-        canvas.toBlob((blob) => {
-          if (blob.size / 1024 > maxSizeKB && quality > 0.3) {
-            quality -= 0.1
-            tryCompress()
-          } else {
-            const compressedFile = new File([blob], file.name, {
-              type: 'image/jpeg',
-              lastModified: Date.now()
-            })
-            resolve(compressedFile)
-          }
-        }, 'image/jpeg', quality)
-      }
-      tryCompress()
-    }
-    reader.readAsDataURL(file)
-  })
-}
+import { compressImage } from '../utils/compressImage'
 
 export default function EditPhotos({ user, profileId, onBack }) {
   const [photos, setPhotos] = useState([])
