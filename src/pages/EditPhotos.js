@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
-
 import { compressImage } from '../utils/compressImage'
+import SignedImage from '../components/SignedImage'
 
 export default function EditPhotos({ user, profileId, onBack }) {
   const [photos, setPhotos] = useState([])
@@ -40,21 +40,19 @@ export default function EditPhotos({ user, profileId, onBack }) {
       const compressed = await compressImage(file)
       const path = user.id + '/' + Date.now() + '.jpg'
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('lovekush-photos')
         .upload(path, compressed, { contentType: 'image/jpeg' })
 
       if (uploadError) throw uploadError
 
-      const { data: urlData } = supabase.storage
-        .from('lovekush-photos')
-        .getPublicUrl(path)
-
+      // PEHLE: public URL bhi save karte the. AB: sirf storage_path —
+      // dikhaane ke waqt SignedImage temporary link banata hai.
       const isPrimary = photos.length === 0
 
       await supabase.from('photos').insert({
         profile_id: profileId,
-        photo_url: urlData.publicUrl,
+        storage_path: path,
         is_primary: isPrimary,
         photo_type: isPrimary ? 'profile' : 'general'
       })
@@ -71,10 +69,8 @@ export default function EditPhotos({ user, profileId, onBack }) {
     try {
       await supabase.from('photos').delete().eq('id', photo.id)
 
-      // Extract path from URL and delete from storage
-      const urlParts = photo.photo_url.split('/lovekush-photos/')
-      if (urlParts[1]) {
-        await supabase.storage.from('lovekush-photos').remove([urlParts[1]])
+      if (photo.storage_path) {
+        await supabase.storage.from('lovekush-photos').remove([photo.storage_path])
       }
 
       // If deleted was primary, make first remaining photo primary
@@ -118,16 +114,11 @@ export default function EditPhotos({ user, profileId, onBack }) {
 
       if (uploadError) throw uploadError
 
-      const { data: urlData } = supabase.storage
-        .from('lovekush-photos')
-        .getPublicUrl(path)
-
-      await supabase.from('photos').update({ photo_url: urlData.publicUrl }).eq('id', photo.id)
+      await supabase.from('photos').update({ storage_path: path }).eq('id', photo.id)
 
       // Delete old from storage
-      const urlParts = photo.photo_url.split('/lovekush-photos/')
-      if (urlParts[1]) {
-        await supabase.storage.from('lovekush-photos').remove([urlParts[1]])
+      if (photo.storage_path) {
+        await supabase.storage.from('lovekush-photos').remove([photo.storage_path])
       }
 
       showToast('Photo replaced!')
@@ -228,7 +219,7 @@ function PhotoCard({ photo, idx, onDelete, onSetPrimary, onReplace, uploading })
     <div style={{display:'flex',gap:12,alignItems:'center',padding:'12px',background:'#f9f9f9',borderRadius:14,position:'relative'}}>
       {/* Photo */}
       <div style={{width:72,height:72,borderRadius:10,overflow:'hidden',flexShrink:0,background:'#e0e0e0'}}>
-        <img src={photo.photo_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+        <SignedImage path={photo.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
       </div>
 
       {/* Info */}
@@ -291,4 +282,3 @@ function PhotoCard({ photo, idx, onDelete, onSetPrimary, onReplace, uploading })
     </div>
   )
 }
-
