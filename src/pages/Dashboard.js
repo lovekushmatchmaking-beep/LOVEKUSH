@@ -3,6 +3,8 @@ import EditPhotos from './EditPhotos'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS } from '../constants/profileOptions'
+import { rankMatches } from '../utils/matching'
+import SignedImage from '../components/SignedImage'
 
 export default function Dashboard({ user }) {
   const navigate = useNavigate()
@@ -31,14 +33,37 @@ export default function Dashboard({ user }) {
         .eq('profile_id', p.id)
       setPhotos(ph || [])
 
-      // Load matches
-      const { data: m } = await supabase
-        .from('profiles')
-        .select('*, photos(*)')
+      // Load matches — "profiles_public_view" se (sensitive fields
+      // pehle se hi exclude hain database-level pe) — opposite gender
+      // pe query-level pe hi filter karte hain (efficient), phir baaki
+      // hard-filters (age preference, religion) + soft-scoring client
+      // pe hoti hai (matching.js — GAS system jaisi hi philosophy:
+      // dono taraf ki preferences check hoti hain).
+      const oppositeGender = p.gender === 'Male' ? 'Female' : 'Male'
+      const { data: candidates } = await supabase
+        .from('profiles_public_view')
+        .select('*')
         .neq('user_id', user.id)
-        .eq('profile_status', 'active')
-        .limit(20)
-      setMatches(m || [])
+        .eq('gender', oppositeGender)
+        .limit(100)
+
+      if (candidates && candidates.length > 0) {
+        const ranked = rankMatches(p, candidates)
+        const profileIds = ranked.map(r => r.profile.id)
+        const { data: matchPhotos } = profileIds.length > 0
+          ? await supabase.from('photos').select('*').in('profile_id', profileIds).eq('is_primary', true)
+          : { data: [] }
+        const photoPathByProfile = {}
+        ;(matchPhotos || []).forEach(ph => { photoPathByProfile[ph.profile_id] = ph.storage_path })
+        setMatches(ranked.map(r => ({
+          ...r.profile,
+          matchScore: r.score,
+          matchReasons: r.reasons,
+          primaryPhotoPath: photoPathByProfile[r.profile.id] || null,
+        })))
+      } else {
+        setMatches([])
+      }
 
       // Load messages
       const { data: msg } = await supabase
@@ -91,7 +116,7 @@ export default function Dashboard({ user }) {
                 <div style={{display:'flex',gap:14,alignItems:'flex-start',marginBottom:20,padding:'16px',background:'#f5f5f5',borderRadius:16}}>
                   <div style={{width:64,height:64,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
                     {photos.find(p=>p.is_primary)
-                      ? <img src={photos.find(p=>p.is_primary).photo_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+                      ? <SignedImage path={photos.find(p=>p.is_primary).storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
                       : <span style={{fontSize:24}}>👤</span>
                     }
                   </div>
@@ -180,7 +205,7 @@ export default function Dashboard({ user }) {
                     <div className="photo-grid">
                       {photos.map((p,i)=>(
                         <div key={i} style={{aspectRatio:1,borderRadius:10,overflow:'hidden',background:'#f5f5f5'}}>
-                          <img src={p.photo_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+                          <SignedImage path={p.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
                         </div>
                       ))}
                     </div>
@@ -226,15 +251,25 @@ export default function Dashboard({ user }) {
                 {matches.map((m)=>(
                   <div key={m.id} style={{display:'flex',gap:14,alignItems:'center',padding:'14px',background:'#f5f5f5',borderRadius:14}}>
                     <div style={{width:56,height:56,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0}}>
-                      {m.photos && m.photos.find(p=>p.is_primary)
-                        ? <img src={m.photos.find(p=>p.is_primary).photo_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+                      {m.primaryPhotoPath
+                        ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
                         : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>👤</div>
                       }
                     </div>
                     <div style={{flex:1}}>
-                      <div style={{fontWeight:600,fontSize:15,marginBottom:2}}>{m.full_name}</div>
+                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+                        <div style={{fontWeight:600,fontSize:15}}>{m.full_name}</div>
+                        {typeof m.matchScore === 'number' && (
+                          <span style={{fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:20,background: m.matchScore>=70?'#f0fdf4':m.matchScore>=40?'#fff8e1':'#f5f5f5', color: m.matchScore>=70?'#16a34a':m.matchScore>=40?'#b45309':'#8e8e8e'}}>
+                            {m.matchScore}% match
+                          </span>
+                        )}
+                      </div>
                       <div style={{fontSize:12,color:'#8e8e8e'}}>{m.age} years • {m.city}</div>
                       <div style={{fontSize:11,color:'#8e8e8e'}}>{m.education} • {m.occupation}</div>
+                      {m.matchReasons && m.matchReasons.length > 0 && (
+                        <div style={{fontSize:10,color:'#aaa',marginTop:3}}>{m.matchReasons.slice(0,2).join(' · ')}</div>
+                      )}
                     </div>
                     <button className="btn btn-black" style={{fontSize:11,padding:'6px 14px'}}
                       onClick={()=>setActiveTab('messages')}>
@@ -278,7 +313,7 @@ export default function Dashboard({ user }) {
               <div style={{textAlign:'center',padding:'20px 0'}}>
                 <div style={{width:90,height:90,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',margin:'0 auto 16px',display:'flex',alignItems:'center',justifyContent:'center'}}>
                   {photos.find(p=>p.is_primary)
-                    ? <img src={photos.find(p=>p.is_primary).photo_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+                    ? <SignedImage path={photos.find(p=>p.is_primary).storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
                     : <span style={{fontSize:36}}>👤</span>
                   }
                 </div>
