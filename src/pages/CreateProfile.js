@@ -116,12 +116,14 @@ export default function CreateProfile({ user }) {
           .from('lovekush-photos')
           .upload(path, file, { upsert: true, contentType: 'image/jpeg' })
         if(uploadData) {
-          const { data: urlData } = supabase.storage
-            .from('lovekush-photos')
-            .getPublicUrl(path)
+          // PEHLE: yahan public URL bhi store hota tha aur bucket
+          // "public" tha — koi bhi link se photo dekh sakta tha. AB:
+          // sirf "storage_path" store karte hain, actual dikhaane ke
+          // waqt SignedImage component ek temporary (1hr) link banata
+          // hai jo database RLS check karke hi milta hai.
           await supabase.from('photos').insert({
             profile_id: profile.id,
-            photo_url: urlData.publicUrl,
+            storage_path: path,
             is_primary: i===0,
             photo_type: i===0 ? 'profile' : 'general'
           })
