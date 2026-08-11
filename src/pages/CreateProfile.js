@@ -13,8 +13,11 @@ import {
   LOCATION_PREFERENCES,
   MARITAL_STATUSES,
   RELIGIONS,
+  CASTES,
+  MOTHER_TONGUES,
 } from '../constants/profileOptions'
 import { compressImage } from '../utils/compressImage'
+import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 
 const STEPS = ['Personal','Education','Lifestyle','Family','Preferences','Photos']
 
@@ -28,9 +31,10 @@ export default function CreateProfile({ user }) {
   const [toast, setToast] = useState('')
 
   const [form, setForm] = useState({
-    full_name:'', gender:'Male', age:'', date_of_birth:'',
+    first_name:'', middle_name:'', last_name:'', gender:'Male', date_of_birth:'',
     city:'', state:'', country:'India', religion:'Hindu',
-    community:'', mother_tongue:'', height:'', body_type:'Average',
+    community:'', community_other:'', mother_tongue:'', mother_tongue_other:'',
+    height:'', body_type:'Average',
     marital_status:'Never Married',
     education:'Graduation', field_of_study:'', occupation:'',
     employer:'', annual_income:'₹3–5L',
@@ -72,8 +76,8 @@ export default function CreateProfile({ user }) {
 
   const completeness = () => {
     let score = 0
-    if(form.full_name) score+=10
-    if(form.age) score+=5
+    if(form.first_name && form.last_name) score+=10
+    if(form.date_of_birth) score+=5
     if(form.city) score+=5
     if(form.about_me?.length > 30) score+=15
     if(photos.filter(Boolean).length > 0) score+=20
@@ -86,20 +90,38 @@ export default function CreateProfile({ user }) {
   }
 
   const handleSubmit = async () => {
-    if(!form.full_name || !form.age || !form.city) {
-      showToast('Please fill required fields'); return
+    if(!form.first_name || !form.last_name || !form.date_of_birth || !form.city) {
+      showToast('Please fill required fields (First Name, Last Name, Date of Birth, City)'); return
     }
+
+    const ageCheck = validateAge(form.date_of_birth, form.gender)
+    if (!ageCheck.valid) {
+      showToast(ageCheck.message)
+      return
+    }
+
     setSaving(true)
     try {
+      const fullName = [form.first_name, form.middle_name, form.last_name].filter(Boolean).join(' ')
       const code = generateProfileCode(form.gender, form.religion)
+      const finalCommunity = form.community === 'Other' ? form.community_other : form.community
+      const finalMotherTongue = form.mother_tongue === 'Other' ? form.mother_tongue_other : form.mother_tongue
+
+      // community_other/mother_tongue_other sirf UI helper fields hain
+      // — "profiles" table mein aisa koi column nahi hai, isliye insert
+      // se pehle inhe nikaal dete hain (warna database error aayega).
+      const { community_other, mother_tongue_other, ...formToSave } = form
 
       const { data: profile, error: pErr } = await supabase
         .from('profiles')
         .insert({
           user_id: user.id,
           profile_code: code,
-          ...form,
-          age: parseInt(form.age),
+          ...formToSave,
+          full_name: fullName,
+          community: finalCommunity,
+          mother_tongue: finalMotherTongue,
+          age: ageCheck.age,
           partner_age_min: parseInt(form.partner_age_min) || null,
           partner_age_max: parseInt(form.partner_age_max) || null,
           profile_completeness: completeness()
@@ -109,29 +131,39 @@ export default function CreateProfile({ user }) {
       if(pErr) throw pErr
 
       const photoUploads = photoFiles.filter(Boolean)
+      const photoErrors = []
       for(let i=0; i<photoUploads.length; i++){
         const file = photoUploads[i]
         const path = user.id + '/' + Date.now() + '-' + i + '.jpg'
-        const { data: uploadData } = await supabase.storage
+        const { data: uploadData, error: uploadErr } = await supabase.storage
           .from('lovekush-photos')
           .upload(path, file, { upsert: true, contentType: 'image/jpeg' })
+
+        if (uploadErr) {
+          // PEHLE: yeh error yahan silently discard ho jaata tha — user
+          // ko "Profile created!" hi dikhta tha chahe photo upload fail
+          // ho jaaye. AB: error collect karke user ko clearly batate hain.
+          photoErrors.push('Photo ' + (i+1) + ': ' + uploadErr.message)
+          continue
+        }
         if(uploadData) {
-          // PEHLE: yahan public URL bhi store hota tha aur bucket
-          // "public" tha — koi bhi link se photo dekh sakta tha. AB:
-          // sirf "storage_path" store karte hain, actual dikhaane ke
-          // waqt SignedImage component ek temporary (1hr) link banata
-          // hai jo database RLS check karke hi milta hai.
-          await supabase.from('photos').insert({
+          const { error: insertErr } = await supabase.from('photos').insert({
             profile_id: profile.id,
             storage_path: path,
             is_primary: i===0,
             photo_type: i===0 ? 'profile' : 'general'
           })
+          if (insertErr) photoErrors.push('Photo ' + (i+1) + ' record: ' + insertErr.message)
         }
       }
 
-      showToast('Profile created! Code: ' + code)
-      setTimeout(()=>navigate('/dashboard'), 1500)
+      if (photoErrors.length > 0) {
+        showToast('Profile created, but ' + photoErrors.length + ' photo(s) failed: ' + photoErrors.join(' | '))
+        setTimeout(()=>navigate('/dashboard'), 3500)
+      } else {
+        showToast('Profile created! Code: ' + code)
+        setTimeout(()=>navigate('/dashboard'), 1500)
+      }
     } catch(err) {
       showToast('Error: ' + err.message)
     }
@@ -168,16 +200,38 @@ export default function CreateProfile({ user }) {
             <p className="page-subtitle">Tell us about yourself</p>
 
             <div className="form-group">
-              <label className="form-label">Full Name *</label>
-              <input className="form-input" placeholder="As per records" value={form.full_name}
-                onChange={e=>set('full_name',e.target.value)} autoFocus />
+              <label className="form-label">First Name *</label>
+              <input className="form-input" placeholder="As per records" value={form.first_name}
+                onChange={e=>set('first_name',e.target.value)} autoFocus />
             </div>
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Age *</label>
-                <input className="form-input" type="number" min="18" max="70" placeholder="25"
-                  value={form.age} onChange={e=>set('age',e.target.value)} />
+                <label className="form-label">Middle Name</label>
+                <input className="form-input" placeholder="Optional" value={form.middle_name}
+                  onChange={e=>set('middle_name',e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Last Name / Surname *</label>
+                <input className="form-input" placeholder="As per records" value={form.last_name}
+                  onChange={e=>set('last_name',e.target.value)} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Date of Birth *</label>
+                <input className="form-input" type="date" value={form.date_of_birth}
+                  min={dobInputBounds().min} max={dobInputBounds().max}
+                  onChange={e=>set('date_of_birth',e.target.value)} />
+                {form.date_of_birth && (() => {
+                  const check = validateAge(form.date_of_birth, form.gender)
+                  return (
+                    <div style={{fontSize:12, marginTop:4, color: check.valid ? '#16a34a' : '#dc2626'}}>
+                      {check.valid ? `Age: ${check.age} years` : check.message}
+                    </div>
+                  )
+                })()}
               </div>
               <div className="form-group">
                 <label className="form-label">Gender *</label>
@@ -185,12 +239,6 @@ export default function CreateProfile({ user }) {
                   <option>Male</option><option>Female</option>
                 </select>
               </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Date of Birth</label>
-              <input className="form-input" type="date" value={form.date_of_birth}
-                onChange={e=>set('date_of_birth',e.target.value)} />
             </div>
 
             <div className="form-row">
@@ -222,14 +270,26 @@ export default function CreateProfile({ user }) {
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Community</label>
-                <input className="form-input" placeholder="Optional" value={form.community}
-                  onChange={e=>set('community',e.target.value)} />
+                <label className="form-label">Community / Caste</label>
+                <select className="form-select" value={form.community} onChange={e=>set('community',e.target.value)}>
+                  <option value="">Select</option>
+                  {CASTES.map(c=><option key={c}>{c}</option>)}
+                </select>
+                {form.community === 'Other' && (
+                  <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"
+                    value={form.community_other} onChange={e=>set('community_other',e.target.value)} />
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Mother Tongue</label>
-                <input className="form-input" placeholder="Hindi" value={form.mother_tongue}
-                  onChange={e=>set('mother_tongue',e.target.value)} />
+                <select className="form-select" value={form.mother_tongue} onChange={e=>set('mother_tongue',e.target.value)}>
+                  <option value="">Select</option>
+                  {MOTHER_TONGUES.map(m=><option key={m}>{m}</option>)}
+                </select>
+                {form.mother_tongue === 'Other' && (
+                  <input className="form-input" style={{marginTop:8}} placeholder="Apni Mother Tongue likhein"
+                    value={form.mother_tongue_other} onChange={e=>set('mother_tongue_other',e.target.value)} />
+                )}
               </div>
             </div>
 
@@ -494,8 +554,10 @@ export default function CreateProfile({ user }) {
           )}
           {step<STEPS.length-1 ? (
             <button className="btn btn-black" style={{flex:2}} onClick={()=>{
-              if(step===0&&!form.full_name) return showToast('Please enter your name')
-              if(step===0&&!form.age) return showToast('Please enter your age')
+              if(step===0&&!form.first_name) return showToast('Please enter your first name')
+              if(step===0&&!form.last_name) return showToast('Please enter your last name')
+              if(step===0&&!form.date_of_birth) return showToast('Please enter your date of birth')
+              if(step===0&&form.date_of_birth&&!validateAge(form.date_of_birth,form.gender).valid) return showToast(validateAge(form.date_of_birth,form.gender).message)
               if(step===0&&!form.city) return showToast('Please enter your city')
               setStep(s=>s+1)
             }}>
