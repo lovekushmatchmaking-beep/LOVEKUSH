@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS } from '../constants/profileOptions'
+import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, MOTHER_TONGUES, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES } from '../constants/profileOptions'
+import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
 import SignedImage from '../components/SignedImage'
 
@@ -168,14 +169,50 @@ export default function Dashboard({ user }) {
                     </button>
                   </div>
                   {[
-                    ['Age', profile.age + ' years'],
+                    ['Gender', profile.gender],
+                    ['Age', profile.age ? profile.age + ' years' : null],
+                    ['Date of Birth', profile.date_of_birth],
+                    ['Marital Status', profile.marital_status],
+                    ['Height', profile.height],
+                    ['Body Type', profile.body_type],
                     ['Religion', profile.religion],
+                    ['Community / Caste', profile.community],
+                    ['Mother Tongue', profile.mother_tongue],
+                    ['City', profile.city],
+                    ['State', profile.state],
+                    ['Country', profile.country],
                     ['Education', profile.education],
+                    ['Field of Study', profile.field_of_study],
                     ['Occupation', profile.occupation],
+                    ['Employer', profile.employer],
                     ['Annual Income', profile.annual_income],
                     ['Diet', profile.diet],
+                    ['Smoking', profile.smoking],
+                    ['Drinking', profile.drinking],
+                    ['Hobbies', profile.hobbies],
                     ['Family Type', profile.family_type],
-                    ['Marital Status', profile.marital_status],
+                    ['Family Values', profile.family_values],
+                    ["Father's Profession", profile.father_profession],
+                    ["Mother's Profession", profile.mother_profession],
+                    ['Siblings', profile.siblings],
+                    ['Family City', profile.family_city],
+                  ].filter(([,v])=>v).map(([k,v])=>(
+                    <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
+                      <span style={{color:'#8e8e8e'}}>{k}</span>
+                      <span style={{fontWeight:500}}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Partner Preferences */}
+                <div className="card" style={{marginBottom:12}}>
+                  <div className="section-label" style={{marginBottom:14}}>Partner Preferences</div>
+                  {[
+                    ['Age Range', profile.partner_age_min && profile.partner_age_max ? profile.partner_age_min + ' - ' + profile.partner_age_max + ' years' : null],
+                    ['Religion', profile.partner_religion],
+                    ['Education', profile.partner_education],
+                    ['Location', profile.partner_location],
+                    ['Notes', profile.partner_notes],
                   ].filter(([,v])=>v).map(([k,v])=>(
                     <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
                       <span style={{color:'#8e8e8e'}}>{k}</span>
@@ -212,22 +249,6 @@ export default function Dashboard({ user }) {
                   </div>
                 )}
 
-                {/* Partner Preferences */}
-                <div className="card" style={{marginBottom:12}}>
-                  <div className="section-label" style={{marginBottom:14}}>Partner Preferences</div>
-                  {[
-                    ['Age Range', profile.partner_age_min && profile.partner_age_max ? profile.partner_age_min + ' - ' + profile.partner_age_max + ' years' : null],
-                    ['Religion', profile.partner_religion],
-                    ['Location', profile.partner_location],
-                    ['Education', profile.partner_education],
-                  ].filter(([,v])=>v).map(([k,v])=>(
-                    <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
-                      <span style={{color:'#8e8e8e'}}>{k}</span>
-                      <span style={{fontWeight:500}}>{v}</span>
-                    </div>
-                  ))}
-                </div>
-
                 <div className="notice" style={{marginTop:20}}>
                   <strong>Our team is reviewing your profile.</strong> You'll be notified once it's active and we start finding suitable matches.
                 </div>
@@ -235,6 +256,7 @@ export default function Dashboard({ user }) {
             )}
           </>
         )}
+
 
         {/* MATCHES TAB */}
         {activeTab === 'matches' && (
@@ -377,16 +399,30 @@ export default function Dashboard({ user }) {
 }
 
 function EditProfileForm({ profile, user, onSave, onCancel }) {
+  // Purana full_name ko First/Middle/Last mein todne ki koshish (best-effort —
+  // agar profile purani hai aur sirf full_name mein bana tha)
+  const nameParts = (profile.full_name || '').trim().split(/\s+/)
+  const guessedFirst = profile.first_name || nameParts[0] || ''
+  const guessedLast = profile.last_name || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : '')
+  const guessedMiddle = profile.middle_name || (nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : '')
+
   const [form, setForm] = useState({
-    full_name: profile.full_name || '',
-    age: profile.age || '',
+    first_name: guessedFirst,
+    middle_name: guessedMiddle,
+    last_name: guessedLast,
+    gender: profile.gender || 'Male',
+    date_of_birth: profile.date_of_birth || '',
     city: profile.city || '',
     state: profile.state || '',
     country: profile.country || 'India',
     religion: profile.religion || '',
     community: profile.community || '',
+    community_other: '',
     mother_tongue: profile.mother_tongue || '',
+    mother_tongue_other: '',
     height: profile.height || '',
+    body_type: profile.body_type || 'Average',
+    marital_status: profile.marital_status || 'Never Married',
     education: profile.education || '',
     field_of_study: profile.field_of_study || '',
     occupation: profile.occupation || '',
@@ -421,16 +457,29 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
   }
 
   const handleSave = async () => {
-    if(!form.full_name || !form.age || !form.city) {
-      showToast('Name, Age aur City zaroori hai'); return
+    if(!form.first_name || !form.last_name || !form.date_of_birth || !form.city) {
+      showToast('First Name, Last Name, Date of Birth aur City zaroori hai'); return
+    }
+    const ageCheck = validateAge(form.date_of_birth, form.gender)
+    if (!ageCheck.valid) {
+      showToast(ageCheck.message)
+      return
     }
     setSaving(true)
     try {
+      const fullName = [form.first_name, form.middle_name, form.last_name].filter(Boolean).join(' ')
+      const finalCommunity = form.community === 'Other' ? form.community_other : form.community
+      const finalMotherTongue = form.mother_tongue === 'Other' ? form.mother_tongue_other : form.mother_tongue
+      const { community_other, mother_tongue_other, ...formToSave } = form
+
       const { data, error } = await supabase
         .from('profiles')
         .update({
-          ...form,
-          age: parseInt(form.age),
+          ...formToSave,
+          full_name: fullName,
+          community: finalCommunity,
+          mother_tongue: finalMotherTongue,
+          age: ageCheck.age,
           partner_age_min: parseInt(form.partner_age_min) || null,
           partner_age_max: parseInt(form.partner_age_max) || null,
         })
@@ -460,20 +509,46 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
         <div className="section-label" style={{marginBottom:14}}>Personal Info</div>
 
         <div className="form-group">
-          <label className="form-label">Full Name *</label>
-          <input className="form-input" value={form.full_name} onChange={e=>set('full_name',e.target.value)} />
+          <label className="form-label">First Name *</label>
+          <input className="form-input" value={form.first_name} onChange={e=>set('first_name',e.target.value)} />
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Age *</label>
-            <input className="form-input" type="number" value={form.age} onChange={e=>set('age',e.target.value)} />
+            <label className="form-label">Middle Name</label>
+            <input className="form-input" value={form.middle_name} onChange={e=>set('middle_name',e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Religion</label>
-            <select className="form-select" value={form.religion} onChange={e=>set('religion',e.target.value)}>
-              {RELIGIONS.map(r=><option key={r}>{r}</option>)}
+            <label className="form-label">Last Name / Surname *</label>
+            <input className="form-input" value={form.last_name} onChange={e=>set('last_name',e.target.value)} />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Date of Birth *</label>
+            <input className="form-input" type="date" value={form.date_of_birth}
+              min={dobInputBounds().min} max={dobInputBounds().max}
+              onChange={e=>set('date_of_birth',e.target.value)} />
+            {form.date_of_birth && (() => {
+              const check = validateAge(form.date_of_birth, form.gender)
+              return (
+                <div style={{fontSize:12, marginTop:4, color: check.valid ? '#16a34a' : '#dc2626'}}>
+                  {check.valid ? `Age: ${check.age} years` : check.message}
+                </div>
+              )
+            })()}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Gender *</label>
+            <select className="form-select" value={form.gender} onChange={e=>set('gender',e.target.value)}>
+              <option>Male</option><option>Female</option>
             </select>
           </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Religion</label>
+          <select className="form-select" value={form.religion} onChange={e=>set('religion',e.target.value)}>
+            {RELIGIONS.map(r=><option key={r}>{r}</option>)}
+          </select>
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -485,13 +560,50 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
             <input className="form-input" value={form.state} onChange={e=>set('state',e.target.value)} />
           </div>
         </div>
-        <div className="form-group">
-          <label className="form-label">Community</label>
-          <input className="form-input" value={form.community} onChange={e=>set('community',e.target.value)} />
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Community / Caste</label>
+            <select className="form-select" value={form.community} onChange={e=>set('community',e.target.value)}>
+              <option value="">Select</option>
+              {CASTES.map(c=><option key={c}>{c}</option>)}
+            </select>
+            {form.community === 'Other' && (
+              <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"
+                value={form.community_other} onChange={e=>set('community_other',e.target.value)} />
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Mother Tongue</label>
+            <select className="form-select" value={form.mother_tongue} onChange={e=>set('mother_tongue',e.target.value)}>
+              <option value="">Select</option>
+              {MOTHER_TONGUES.map(m=><option key={m}>{m}</option>)}
+            </select>
+            {form.mother_tongue === 'Other' && (
+              <input className="form-input" style={{marginTop:8}} placeholder="Apni Mother Tongue likhein"
+                value={form.mother_tongue_other} onChange={e=>set('mother_tongue_other',e.target.value)} />
+            )}
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Height</label>
+            <select className="form-select" value={form.height} onChange={e=>set('height',e.target.value)}>
+              <option value="">Select</option>
+              {HEIGHT_RANGES.map(h=><option key={h}>{h}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Body Type</label>
+            <select className="form-select" value={form.body_type} onChange={e=>set('body_type',e.target.value)}>
+              <option>Slim</option><option>Average</option><option>Athletic</option><option>Heavy</option>
+            </select>
+          </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Mother Tongue</label>
-          <input className="form-input" value={form.mother_tongue} onChange={e=>set('mother_tongue',e.target.value)} />
+          <label className="form-label">Marital Status</label>
+          <select className="form-select" value={form.marital_status} onChange={e=>set('marital_status',e.target.value)}>
+            {MARITAL_STATUSES.map(s=><option key={s}>{s}</option>)}
+          </select>
         </div>
       </div>
 
@@ -504,8 +616,18 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
           </select>
         </div>
         <div className="form-group">
-          <label className="form-label">Occupation</label>
-          <input className="form-input" value={form.occupation} onChange={e=>set('occupation',e.target.value)} />
+          <label className="form-label">Field of Study</label>
+          <input className="form-input" value={form.field_of_study} onChange={e=>set('field_of_study',e.target.value)} />
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Occupation</label>
+            <input className="form-input" value={form.occupation} onChange={e=>set('occupation',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Employer</label>
+            <input className="form-input" value={form.employer} onChange={e=>set('employer',e.target.value)} />
+          </div>
         </div>
         <div className="form-group">
           <label className="form-label">Annual Income</label>
@@ -548,6 +670,44 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
       </div>
 
       <div className="card" style={{marginBottom:12}}>
+        <div className="section-label" style={{marginBottom:14}}>Family Background</div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Family Type</label>
+            <select className="form-select" value={form.family_type} onChange={e=>set('family_type',e.target.value)}>
+              {FAMILY_TYPES.map(f=><option key={f}>{f}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Family Values</label>
+            <select className="form-select" value={form.family_values} onChange={e=>set('family_values',e.target.value)}>
+              {FAMILY_VALUES.map(f=><option key={f}>{f}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Father's Profession</label>
+            <input className="form-input" value={form.father_profession} onChange={e=>set('father_profession',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Mother's Profession</label>
+            <input className="form-input" value={form.mother_profession} onChange={e=>set('mother_profession',e.target.value)} />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Siblings</label>
+            <input className="form-input" placeholder="e.g. 1 Brother, 1 Sister" value={form.siblings} onChange={e=>set('siblings',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Family City</label>
+            <input className="form-input" value={form.family_city} onChange={e=>set('family_city',e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:12}}>
         <div className="section-label" style={{marginBottom:14}}>Partner Preferences</div>
         <div className="form-row">
           <div className="form-group">
@@ -564,6 +724,20 @@ function EditProfileForm({ profile, user, onSave, onCancel }) {
           <select className="form-select" value={form.partner_religion} onChange={e=>set('partner_religion',e.target.value)}>
             <option value="Any">Any / Open to all</option>
             {RELIGIONS.map(r=><option key={r}>{r}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Education Preference</label>
+          <select className="form-select" value={form.partner_education} onChange={e=>set('partner_education',e.target.value)}>
+            <option value="Any">Any</option>
+            {EDUCATIONS.map(e=><option key={e}>{e}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Location Preference</label>
+          <select className="form-select" value={form.partner_location} onChange={e=>set('partner_location',e.target.value)}>
+            <option value="">Select</option>
+            {LOCATION_PREFERENCES.map(l=><option key={l}>{l}</option>)}
           </select>
         </div>
         <div className="form-group">
