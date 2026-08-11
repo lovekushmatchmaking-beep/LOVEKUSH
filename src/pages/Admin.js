@@ -17,6 +17,7 @@ export default function Admin({ staffUser }) {
   const [activeTab, setActiveTab] = useState('all')
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, blocked: 0 })
   const [selected, setSelected] = useState(null)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     loadData()
@@ -81,9 +82,16 @@ export default function Admin({ staffUser }) {
   }
 
   const filtered = profiles.filter(p => {
-    if (activeTab === 'pending') return p.profile_status === 'pending'
-    if (activeTab === 'active') return p.profile_status === 'active'
-    if (activeTab === 'blocked') return p.profile_status === 'blocked'
+    if (activeTab === 'pending' && p.profile_status !== 'pending') return false
+    if (activeTab === 'active' && p.profile_status !== 'active') return false
+    if (activeTab === 'blocked' && p.profile_status !== 'blocked') return false
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      const haystack = [p.profile_code, p.full_name, p.city, p.state, p.religion, p.occupation]
+        .filter(Boolean).join(' ').toLowerCase()
+      if (!haystack.includes(q)) return false
+    }
     return true
   })
 
@@ -110,6 +118,19 @@ export default function Admin({ staffUser }) {
               <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{s.label}</div>
             </div>
           ))}
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <input
+            type="text"
+            placeholder="Search by Profile ID, name, city, religion, occupation..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: '100%', padding: '10px 14px', borderRadius: 10,
+              border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, outline: 'none',
+            }}
+          />
         </div>
 
         <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: 0 }}>
