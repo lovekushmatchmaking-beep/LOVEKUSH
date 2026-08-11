@@ -1,5 +1,28 @@
 export const RELIGIONS = ['Hindu', 'Muslim', 'Sikh', 'Christian', 'Jain', 'Buddhist', 'Other']
 
+// STARTER LIST — bhiya, tumne bola tha ki tumhare paas alag se nikaali
+// hui Caste/Community list hai — WOH FILE MUJHE BHEJ DENA, main isko
+// tumhari poori list se replace kar dunga. Abhi ke liye ek reasonable
+// starter list daal di hai (jo North-Indian Hindu matchmaking mein
+// common hai) taaki dropdown turant kaam karna shuru kare, "Other"
+// option bhi hai taaki koi bhi blocked na ho.
+export const CASTES = [
+  'Kushwaha', 'Gupta', 'Yadav', 'Sharma', 'Shakya', 'Shekhawat', 'Rajput', 'Thakur',
+  'Brahmin', 'Jat', 'Baniya', 'Kayastha', 'Agrawal', 'Ahir', 'Bhumihar', 'Chaudhary',
+  'Gujjar', 'Jaiswal', 'Khatri', 'Kurmi', 'Lodhi', 'Maheshwari', 'Mali', 'Nai',
+  'Nishad', 'Pal', 'Prajapati', 'Sonar', 'Teli', 'Vaishya', 'Valmiki', 'Meena',
+  'Patel', 'Reddy', 'Naidu', 'Nair', 'Iyer', 'Iyengar', 'Chettiar', 'Marwari',
+  'Other',
+]
+
+// STARTER LIST — same as above, apni poori Mother Tongue list bhej dena.
+export const MOTHER_TONGUES = [
+  'Hindi', 'English', 'Punjabi', 'Gujarati', 'Marathi', 'Tamil', 'Telugu', 'Kannada',
+  'Malayalam', 'Bengali', 'Odia', 'Assamese', 'Urdu', 'Sanskrit', 'Kashmiri', 'Konkani',
+  'Sindhi', 'Bhojpuri', 'Haryanvi', 'Marwari', 'Maithili', 'Rajasthani', 'Chhattisgarhi',
+  'Garhwali', 'Kumaoni', 'Other',
+]
+
 export const EDUCATIONS = [
   'Class 10th',
   'Class 12th',
