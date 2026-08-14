@@ -15,11 +15,24 @@ import {
   RELIGIONS,
   CASTES,
   MOTHER_TONGUES,
+  COMPLEXIONS,
+  WEIGHT_RANGES,
+  NATIONALITIES,
+  MANGLIK_OPTIONS,
+  KUNDLI_AVAILABLE,
+  RELOCATION_PREFERENCES,
+  EMPLOYMENT_TYPES,
+  INDUSTRIES,
+  OWN_HOUSE_OPTIONS,
+  HOUSE_TYPES,
+  FAMILY_INCOME_RANGES,
+  PHYSICAL_DISABILITY_OPTIONS,
 } from '../constants/profileOptions'
 import { compressImage } from '../utils/compressImage'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
+import { calculateSectionCompleteness } from '../utils/completeness'
 
-const STEPS = ['Personal','Education','Lifestyle','Family','Preferences','Photos']
+const STEPS = ['Personal','Religion & Location','Education','Lifestyle','Family','Preferences','Photos']
 
 export default function CreateProfile({ user }) {
   const navigate = useNavigate()
@@ -34,15 +47,20 @@ export default function CreateProfile({ user }) {
     first_name:'', middle_name:'', last_name:'', gender:'Male', date_of_birth:'',
     city:'', state:'', country:'India', religion:'Hindu',
     community:'', community_other:'', mother_tongue:'', mother_tongue_other:'',
-    height:'', body_type:'Average',
-    marital_status:'Never Married',
-    education:'Graduation', field_of_study:'', occupation:'',
+    height:'', weight:'', complexion:'', body_type:'Average',
+    marital_status:'Never Married', nationality:'Indian',
+    physical_disability:'No', disability_details:'',
+    sub_caste:'', gotra:'', manglik:'', kundli_available:'',
+    native_place:'', current_address:'', relocation_preference:'',
+    education:'Graduation', field_of_study:'', specialization:'', occupation:'',
+    designation:'', industry:'', employment_type:'', work_location:'',
     employer:'', annual_income:'₹3–5L',
     diet:'Vegetarian', smoking:'Never', drinking:'Never',
     hobbies:'', about_me:'',
     family_type:'Nuclear', family_values:'Moderate',
     father_profession:'', mother_profession:'', siblings:'',
-    family_city:'',
+    family_city:'', own_house:'', house_type:'', property_details:'',
+    vehicle_details:'', family_income_range:'',
     partner_age_min:'', partner_age_max:'',
     partner_religion:'Any', partner_location:'Open to relocation',
     partner_education:'Any', partner_notes:''
@@ -74,20 +92,7 @@ export default function CreateProfile({ user }) {
     setPhotos(newPhotos); setPhotoFiles(newFiles)
   }
 
-  const completeness = () => {
-    let score = 0
-    if(form.first_name && form.last_name) score+=10
-    if(form.date_of_birth) score+=5
-    if(form.city) score+=5
-    if(form.about_me?.length > 30) score+=15
-    if(photos.filter(Boolean).length > 0) score+=20
-    if(form.education) score+=10
-    if(form.occupation) score+=10
-    if(form.family_type) score+=10
-    if(form.partner_age_min) score+=10
-    if(form.hobbies) score+=5
-    return Math.min(score, 100)
-  }
+  const completeness = () => calculateSectionCompleteness(form, photos.filter(Boolean).length).overall
 
   const handleSubmit = async () => {
     if(!form.first_name || !form.last_name || !form.date_of_birth || !form.city) {
@@ -124,7 +129,8 @@ export default function CreateProfile({ user }) {
           age: ageCheck.age,
           partner_age_min: parseInt(form.partner_age_min) || null,
           partner_age_max: parseInt(form.partner_age_max) || null,
-          profile_completeness: completeness()
+          profile_completeness: completeness(),
+          completeness_breakdown: calculateSectionCompleteness(form, photoFiles.filter(Boolean).length)
         })
         .select().single()
 
@@ -243,6 +249,138 @@ export default function CreateProfile({ user }) {
 
             <div className="form-row">
               <div className="form-group">
+                <label className="form-label">Height</label>
+                <select className="form-select" value={form.height} onChange={e=>set('height',e.target.value)}>
+                  <option value="">Select</option>
+                  {HEIGHT_RANGES.map(h=><option key={h}>{h}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Weight</label>
+                <select className="form-select" value={form.weight} onChange={e=>set('weight',e.target.value)}>
+                  <option value="">Select</option>
+                  {WEIGHT_RANGES.map(w=><option key={w}>{w}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Complexion</label>
+                <select className="form-select" value={form.complexion} onChange={e=>set('complexion',e.target.value)}>
+                  <option value="">Select</option>
+                  {COMPLEXIONS.map(c=><option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Body Type</label>
+                <select className="form-select" value={form.body_type} onChange={e=>set('body_type',e.target.value)}>
+                  <option>Slim</option><option>Average</option><option>Athletic</option><option>Heavy</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Marital Status</label>
+                <select className="form-select" value={form.marital_status} onChange={e=>set('marital_status',e.target.value)}>
+                  {MARITAL_STATUSES.map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nationality</label>
+                <select className="form-select" value={form.nationality} onChange={e=>set('nationality',e.target.value)}>
+                  {NATIONALITIES.map(n=><option key={n}>{n}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Physical Disability</label>
+              <div className="radio-group">
+                {PHYSICAL_DISABILITY_OPTIONS.map(o=>(
+                  <div key={o} className={'radio-option ' + (form.physical_disability===o?'selected':'')} onClick={()=>set('physical_disability',o)}>
+                    {form.physical_disability===o?'◉':'○'} {o}
+                  </div>
+                ))}
+              </div>
+              {form.physical_disability === 'Yes' && (
+                <input className="form-input" style={{marginTop:8}} placeholder="Please provide details"
+                  value={form.disability_details} onChange={e=>set('disability_details',e.target.value)} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {step===1 && (
+          <div>
+            <h2 className="page-title">Religion & Location</h2>
+            <p className="page-subtitle">Community and location help us find the right match</p>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Religion *</label>
+                <select className="form-select" value={form.religion} onChange={e=>set('religion',e.target.value)}>
+                  {RELIGIONS.map(r=><option key={r}>{r}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Mother Tongue</label>
+                <select className="form-select" value={form.mother_tongue} onChange={e=>set('mother_tongue',e.target.value)}>
+                  <option value="">Select</option>
+                  {MOTHER_TONGUES.map(m=><option key={m}>{m}</option>)}
+                </select>
+                {form.mother_tongue === 'Other' && (
+                  <input className="form-input" style={{marginTop:8}} placeholder="Apni Mother Tongue likhein"
+                    value={form.mother_tongue_other} onChange={e=>set('mother_tongue_other',e.target.value)} />
+                )}
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Community / Caste</label>
+                <select className="form-select" value={form.community} onChange={e=>set('community',e.target.value)}>
+                  <option value="">Select</option>
+                  {CASTES.map(c=><option key={c}>{c}</option>)}
+                </select>
+                {form.community === 'Other' && (
+                  <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"
+                    value={form.community_other} onChange={e=>set('community_other',e.target.value)} />
+                )}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Sub-Caste</label>
+                <input className="form-input" placeholder="Optional" value={form.sub_caste}
+                  onChange={e=>set('sub_caste',e.target.value)} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Gotra</label>
+                <input className="form-input" placeholder="Optional" value={form.gotra}
+                  onChange={e=>set('gotra',e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Manglik</label>
+                <select className="form-select" value={form.manglik} onChange={e=>set('manglik',e.target.value)}>
+                  <option value="">Select</option>
+                  {MANGLIK_OPTIONS.map(m=><option key={m}>{m}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Kundli Available?</label>
+              <select className="form-select" value={form.kundli_available} onChange={e=>set('kundli_available',e.target.value)}>
+                <option value="">Select</option>
+                {KUNDLI_AVAILABLE.map(k=><option key={k}>{k}</option>)}
+              </select>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
                 <label className="form-label">City *</label>
                 <input className="form-input" placeholder="Mumbai" value={form.city}
                   onChange={e=>set('city',e.target.value)} />
@@ -261,57 +399,29 @@ export default function CreateProfile({ user }) {
                   onChange={e=>set('country',e.target.value)} />
               </div>
               <div className="form-group">
-                <label className="form-label">Religion *</label>
-                <select className="form-select" value={form.religion} onChange={e=>set('religion',e.target.value)}>
-                  {RELIGIONS.map(r=><option key={r}>{r}</option>)}
-                </select>
+                <label className="form-label">Native Place</label>
+                <input className="form-input" placeholder="Original hometown" value={form.native_place}
+                  onChange={e=>set('native_place',e.target.value)} />
               </div>
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Community / Caste</label>
-                <select className="form-select" value={form.community} onChange={e=>set('community',e.target.value)}>
-                  <option value="">Select</option>
-                  {CASTES.map(c=><option key={c}>{c}</option>)}
-                </select>
-                {form.community === 'Other' && (
-                  <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"
-                    value={form.community_other} onChange={e=>set('community_other',e.target.value)} />
-                )}
-              </div>
-              <div className="form-group">
-                <label className="form-label">Mother Tongue</label>
-                <select className="form-select" value={form.mother_tongue} onChange={e=>set('mother_tongue',e.target.value)}>
-                  <option value="">Select</option>
-                  {MOTHER_TONGUES.map(m=><option key={m}>{m}</option>)}
-                </select>
-                {form.mother_tongue === 'Other' && (
-                  <input className="form-input" style={{marginTop:8}} placeholder="Apni Mother Tongue likhein"
-                    value={form.mother_tongue_other} onChange={e=>set('mother_tongue_other',e.target.value)} />
-                )}
-              </div>
+            <div className="form-group">
+              <label className="form-label">Current Address</label>
+              <textarea className="form-textarea" placeholder="Optional — used internally for verification"
+                value={form.current_address} onChange={e=>set('current_address',e.target.value)} />
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Height</label>
-                <select className="form-select" value={form.height} onChange={e=>set('height',e.target.value)}>
-                  <option value="">Select</option>
-                  {HEIGHT_RANGES.map(h=><option key={h}>{h}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Marital Status</label>
-                <select className="form-select" value={form.marital_status} onChange={e=>set('marital_status',e.target.value)}>
-                  {MARITAL_STATUSES.map(s=><option key={s}>{s}</option>)}
-                </select>
-              </div>
+            <div className="form-group">
+              <label className="form-label">Relocation Preference</label>
+              <select className="form-select" value={form.relocation_preference} onChange={e=>set('relocation_preference',e.target.value)}>
+                <option value="">Select</option>
+                {RELOCATION_PREFERENCES.map(r=><option key={r}>{r}</option>)}
+              </select>
             </div>
           </div>
         )}
 
-        {step===1 && (
+        {step===2 && (
           <div>
             <h2 className="page-title">Education & Career</h2>
             <p className="page-subtitle">Your professional background</p>
@@ -330,15 +440,52 @@ export default function CreateProfile({ user }) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Current Occupation *</label>
-              <input className="form-input" placeholder="Software Engineer, Doctor..." value={form.occupation}
-                onChange={e=>set('occupation',e.target.value)} />
+              <label className="form-label">Specialization</label>
+              <input className="form-input" placeholder="Optional" value={form.specialization}
+                onChange={e=>set('specialization',e.target.value)} />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Employer / Company</label>
-              <input className="form-input" placeholder="TCS, Infosys, Self-employed..." value={form.employer}
-                onChange={e=>set('employer',e.target.value)} />
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Current Occupation *</label>
+                <input className="form-input" placeholder="Software Engineer, Doctor..." value={form.occupation}
+                  onChange={e=>set('occupation',e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Designation</label>
+                <input className="form-input" placeholder="Senior Manager..." value={form.designation}
+                  onChange={e=>set('designation',e.target.value)} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Industry</label>
+                <select className="form-select" value={form.industry} onChange={e=>set('industry',e.target.value)}>
+                  <option value="">Select</option>
+                  {INDUSTRIES.map(i=><option key={i}>{i}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Employment Type</label>
+                <select className="form-select" value={form.employment_type} onChange={e=>set('employment_type',e.target.value)}>
+                  <option value="">Select</option>
+                  {EMPLOYMENT_TYPES.map(e=><option key={e}>{e}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Employer / Company</label>
+                <input className="form-input" placeholder="TCS, Infosys, Self-employed..." value={form.employer}
+                  onChange={e=>set('employer',e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Work Location</label>
+                <input className="form-input" placeholder="City where you work" value={form.work_location}
+                  onChange={e=>set('work_location',e.target.value)} />
+              </div>
             </div>
 
             <div className="form-group">
@@ -350,7 +497,7 @@ export default function CreateProfile({ user }) {
           </div>
         )}
 
-        {step===2 && (
+        {step===3 && (
           <div>
             <h2 className="page-title">Lifestyle</h2>
             <p className="page-subtitle">Help us understand you better</p>
@@ -397,7 +544,7 @@ export default function CreateProfile({ user }) {
           </div>
         )}
 
-        {step===3 && (
+        {step===4 && (
           <div>
             <h2 className="page-title">Family Background</h2>
             <p className="page-subtitle">Family details for better matching</p>
@@ -449,10 +596,47 @@ export default function CreateProfile({ user }) {
                   onChange={e=>set('family_city',e.target.value)} />
               </div>
             </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Own House</label>
+                <select className="form-select" value={form.own_house} onChange={e=>set('own_house',e.target.value)}>
+                  <option value="">Select</option>
+                  {OWN_HOUSE_OPTIONS.map(o=><option key={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">House Type</label>
+                <select className="form-select" value={form.house_type} onChange={e=>set('house_type',e.target.value)}>
+                  <option value="">Select</option>
+                  {HOUSE_TYPES.map(h=><option key={h}>{h}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Family Income Range</label>
+              <select className="form-select" value={form.family_income_range} onChange={e=>set('family_income_range',e.target.value)}>
+                <option value="">Select</option>
+                {FAMILY_INCOME_RANGES.map(f=><option key={f}>{f}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Property Details</label>
+              <input className="form-input" placeholder="Optional" value={form.property_details}
+                onChange={e=>set('property_details',e.target.value)} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Vehicle Details</label>
+              <input className="form-input" placeholder="Optional" value={form.vehicle_details}
+                onChange={e=>set('vehicle_details',e.target.value)} />
+            </div>
           </div>
         )}
 
-        {step===4 && (
+        {step===5 && (
           <div>
             <h2 className="page-title">Partner Preferences</h2>
             <p className="page-subtitle">More flexibility = more matches</p>
@@ -501,7 +685,7 @@ export default function CreateProfile({ user }) {
           </div>
         )}
 
-        {step===5 && (
+        {step===6 && (
           <div>
             <h2 className="page-title">Your Photos</h2>
             <p className="page-subtitle">Add up to 6 photos. First photo is your profile picture.</p>
@@ -558,7 +742,7 @@ export default function CreateProfile({ user }) {
               if(step===0&&!form.last_name) return showToast('Please enter your last name')
               if(step===0&&!form.date_of_birth) return showToast('Please enter your date of birth')
               if(step===0&&form.date_of_birth&&!validateAge(form.date_of_birth,form.gender).valid) return showToast(validateAge(form.date_of_birth,form.gender).message)
-              if(step===0&&!form.city) return showToast('Please enter your city')
+              if(step===1&&!form.city) return showToast('Please enter your city')
               setStep(s=>s+1)
             }}>
               Continue →
