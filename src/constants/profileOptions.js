@@ -60,3 +60,33 @@ export const LOCATION_PREFERENCES = [
   'Open to relocation',
   'Global',
 ]
+
+// ===================== PHASE 1 EXPANSION — naye fields ke liye =====================
+
+export const COMPLEXIONS = ['Very Fair', 'Fair', 'Wheatish', 'Dark', 'Prefer not to say']
+
+export const WEIGHT_RANGES = ['Below 45kg', '45–55kg', '55–65kg', '65–75kg', '75–85kg', 'Above 85kg']
+
+export const NATIONALITIES = ['Indian', 'NRI - USA', 'NRI - UK', 'NRI - Canada', 'NRI - Australia', 'NRI - UAE/Gulf', 'NRI - Other', 'Other']
+
+export const MANGLIK_OPTIONS = ['Manglik', 'Non-Manglik', "Don't Know"]
+
+export const KUNDLI_AVAILABLE = ['Yes', 'No', 'Will arrange if needed']
+
+export const RELOCATION_PREFERENCES = ['Not willing to relocate', 'Open to relocation within India', 'Open to relocation abroad', 'Flexible']
+
+export const EMPLOYMENT_TYPES = ['Government', 'Private Sector', 'Business / Self-Employed', 'Not Working', 'Student', 'Retired']
+
+export const INDUSTRIES = [
+  'IT / Software', 'Banking / Finance', 'Healthcare / Medical', 'Education', 'Government / Public Sector',
+  'Engineering / Manufacturing', 'Legal', 'Retail / Business', 'Media / Entertainment', 'Hospitality',
+  'Agriculture', 'Real Estate', 'Defence / Armed Forces', 'Other',
+]
+
+export const OWN_HOUSE_OPTIONS = ['Own House', 'Rented', 'Family House']
+
+export const HOUSE_TYPES = ['Independent House', 'Apartment/Flat', 'Farmhouse', 'Other']
+
+export const FAMILY_INCOME_RANGES = ['Below ₹5L', '₹5–10L', '₹10–20L', '₹20–50L', '₹50L+']
+
+export const PHYSICAL_DISABILITY_OPTIONS = ['No', 'Yes']
