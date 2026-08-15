@@ -73,23 +73,53 @@ export default function CreateProfile({ user }) {
     setTimeout(()=>setToast(''),3000)
   }
 
+  const [photoErrors, setPhotoErrors] = useState(Array(6).fill(null))
+  const [compressingIdx, setCompressingIdx] = useState(null)
+
   const handlePhotoSelect = async (idx, file) => {
     if(!file) return
+
+    // VALIDATE — pehle koi check hi nahi tha
+    const newErrors = [...photoErrors]
+    if (!file.type.startsWith('image/')) {
+      newErrors[idx] = 'Please select an image file (JPG, PNG, etc.)'
+      setPhotoErrors(newErrors)
+      return
+    }
+    if (file.size > 15 * 1024 * 1024) { // 15MB raw limit, compress karega uske baad chhota ho jaayega
+      newErrors[idx] = 'Image too large (max 15MB). Please choose a smaller photo.'
+      setPhotoErrors(newErrors)
+      return
+    }
+    newErrors[idx] = null
+    setPhotoErrors(newErrors)
+
     // Show preview immediately
     const url = URL.createObjectURL(file)
     const newPhotos = [...photos]; newPhotos[idx] = url
     setPhotos(newPhotos)
 
-    // Compress in background — user ko pata nahi chalega
-    const compressed = await compressImage(file)
-    const newFiles = [...photoFiles]; newFiles[idx] = compressed
-    setPhotoFiles(newFiles)
+    // Compress in background
+    setCompressingIdx(idx)
+    try {
+      const compressed = await compressImage(file)
+      const newFiles = [...photoFiles]; newFiles[idx] = compressed
+      setPhotoFiles(newFiles)
+    } catch (err) {
+      const errs = [...photoErrors]
+      errs[idx] = 'Could not process this image. Please try another.'
+      setPhotoErrors(errs)
+      const revertPhotos = [...photos]; revertPhotos[idx] = null
+      setPhotos(revertPhotos)
+    }
+    setCompressingIdx(null)
   }
 
   const removePhoto = (idx) => {
     const newPhotos = [...photos]; newPhotos[idx] = null
     const newFiles = [...photoFiles]; newFiles[idx] = null
-    setPhotos(newPhotos); setPhotoFiles(newFiles)
+    const newErrors = [...photoErrors]; newErrors[idx] = null
+    setPhotos(newPhotos); setPhotoFiles(newFiles); setPhotoErrors(newErrors)
   }
 
   const completeness = () => calculateSectionCompleteness(form, photos.filter(Boolean).length).overall
@@ -700,7 +730,10 @@ export default function CreateProfile({ user }) {
                   onClick={()=>!photo&&fileRefs.current[idx].current.click()}>
                   {photo ? (
                     <>
-                      <img src={photo} alt="" />
+                      <img src={photo} alt="" style={{opacity: compressingIdx===idx ? 0.5 : 1}} />
+                      {compressingIdx===idx && (
+                        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#fff',background:'rgba(0,0,0,0.3)'}}>Processing...</div>
+                      )}
                       <button className="remove-btn" onClick={e=>{e.stopPropagation();removePhoto(idx)}}>✕</button>
                       {idx===0&&<div style={{position:'absolute',bottom:4,left:4,background:'rgba(0,0,0,0.7)',color:'#fff',fontSize:9,padding:'2px 6px',borderRadius:4,letterSpacing:'0.1em'}}>MAIN</div>}
                     </>
@@ -711,10 +744,18 @@ export default function CreateProfile({ user }) {
                     </>
                   )}
                   <input ref={fileRefs.current[idx]} type="file" accept="image/*" style={{display:'none'}}
-                    onChange={e=>handlePhotoSelect(idx,e.target.files[0])} />
+                    onChange={e=>{handlePhotoSelect(idx,e.target.files[0]); e.target.value=''}} />
                 </div>
               ))}
             </div>
+
+            {photoErrors.some(Boolean) && (
+              <div style={{marginBottom:16}}>
+                {photoErrors.map((err,idx)=>err && (
+                  <div key={idx} style={{fontSize:12,color:'#dc2626',marginBottom:4}}>Photo {idx+1}: {err}</div>
+                ))}
+              </div>
+            )}
 
             <div style={{marginBottom:24}}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
@@ -748,8 +789,8 @@ export default function CreateProfile({ user }) {
               Continue →
             </button>
           ) : (
-            <button className="btn btn-black" style={{flex:2}} onClick={handleSubmit} disabled={saving}>
-              {saving ? 'Submitting...' : '✓ Submit Profile'}
+            <button className="btn btn-black" style={{flex:2}} onClick={handleSubmit} disabled={saving || compressingIdx!==null}>
+              {saving ? 'Submitting...' : compressingIdx!==null ? 'Processing photo...' : '✓ Submit Profile'}
             </button>
           )}
         </div>
