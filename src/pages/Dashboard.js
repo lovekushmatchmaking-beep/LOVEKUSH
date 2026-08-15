@@ -60,7 +60,8 @@ export default function Dashboard({ user }) {
         setMatches(ranked.map(r => ({
           ...r.profile,
           matchScore: r.score,
-          matchReasons: r.reasons,
+          matchStrengths: r.strengths,
+          matchNeedsDiscussion: r.needsDiscussion,
           primaryPhotoPath: photoPathByProfile[r.profile.id] || null,
         })))
       } else {
@@ -303,33 +304,7 @@ export default function Dashboard({ user }) {
             ) : (
               <div style={{display:'flex',flexDirection:'column',gap:12}}>
                 {matches.map((m)=>(
-                  <div key={m.id} style={{display:'flex',gap:14,alignItems:'center',padding:'14px',background:'#f5f5f5',borderRadius:14}}>
-                    <div style={{width:56,height:56,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0}}>
-                      {m.primaryPhotoPath
-                        ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
-                        : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>👤</div>
-                      }
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
-                        <div style={{fontWeight:600,fontSize:15}}>{m.full_name}</div>
-                        {typeof m.matchScore === 'number' && (
-                          <span style={{fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:20,background: m.matchScore>=70?'#f0fdf4':m.matchScore>=40?'#fff8e1':'#f5f5f5', color: m.matchScore>=70?'#16a34a':m.matchScore>=40?'#b45309':'#8e8e8e'}}>
-                            {m.matchScore}% match
-                          </span>
-                        )}
-                      </div>
-                      <div style={{fontSize:12,color:'#8e8e8e'}}>{m.age} years • {m.city}</div>
-                      <div style={{fontSize:11,color:'#8e8e8e'}}>{m.education} • {m.occupation}</div>
-                      {m.matchReasons && m.matchReasons.length > 0 && (
-                        <div style={{fontSize:10,color:'#aaa',marginTop:3}}>{m.matchReasons.slice(0,2).join(' · ')}</div>
-                      )}
-                    </div>
-                    <button className="btn btn-black" style={{fontSize:11,padding:'6px 14px'}}
-                      onClick={()=>setActiveTab('messages')}>
-                      Connect
-                    </button>
-                  </div>
+                  <MatchCard key={m.id} match={m} onConnect={()=>setActiveTab('messages')} />
                 ))}
               </div>
             )}
@@ -426,6 +401,65 @@ export default function Dashboard({ user }) {
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+// Match card — score ke saath "Why this match?" expand karke poora
+// breakdown dikhata hai (Strong Matches ✓ / Needs Discussion △) — fake
+// percentage nahi, actual matching.js se aaya hua real explanation.
+function MatchCard({ match: m, onConnect }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div style={{background:'#f5f5f5',borderRadius:14,overflow:'hidden'}}>
+      <div style={{display:'flex',gap:14,alignItems:'center',padding:'14px'}}>
+        <div style={{width:56,height:56,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0}}>
+          {m.primaryPhotoPath
+            ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+            : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>👤</div>
+          }
+        </div>
+        <div style={{flex:1,cursor:'pointer'}} onClick={()=>setExpanded(!expanded)}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+            <div style={{fontWeight:600,fontSize:15}}>{m.full_name}</div>
+            {typeof m.matchScore === 'number' && (
+              <span style={{fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:20,background: m.matchScore>=70?'#f0fdf4':m.matchScore>=40?'#fff8e1':'#f5f5f5', color: m.matchScore>=70?'#16a34a':m.matchScore>=40?'#b45309':'#8e8e8e'}}>
+                {m.matchScore}% match
+              </span>
+            )}
+          </div>
+          <div style={{fontSize:12,color:'#8e8e8e'}}>{m.age} years • {m.city}</div>
+          <div style={{fontSize:11,color:'#8e8e8e'}}>{m.education} • {m.occupation}</div>
+          <div style={{fontSize:10,color:'#4a5568',marginTop:3,textDecoration:'underline'}}>
+            {expanded ? 'Hide details' : 'Why this match?'}
+          </div>
+        </div>
+        <button className="btn btn-black" style={{fontSize:11,padding:'6px 14px'}} onClick={onConnect}>
+          Connect
+        </button>
+      </div>
+
+      {expanded && (
+        <div style={{padding:'0 14px 14px 84px'}}>
+          {m.matchStrengths && m.matchStrengths.length > 0 && (
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:11,fontWeight:600,color:'#16a34a',marginBottom:4}}>Strong Matches</div>
+              {m.matchStrengths.map((s,i)=>(
+                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>✓ {s}</div>
+              ))}
+            </div>
+          )}
+          {m.matchNeedsDiscussion && m.matchNeedsDiscussion.length > 0 && (
+            <div>
+              <div style={{fontSize:11,fontWeight:600,color:'#b45309',marginBottom:4}}>Needs Discussion</div>
+              {m.matchNeedsDiscussion.map((s,i)=>(
+                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>△ {s}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
