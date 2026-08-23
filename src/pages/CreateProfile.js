@@ -34,7 +34,7 @@ import { calculateSectionCompleteness } from '../utils/completeness'
 
 const STEPS = ['Personal','Religion & Location','Education','Lifestyle','Family','Preferences','Photos']
 
-export default function CreateProfile({ user }) {
+export default function CreateProfile({ user, adminMode, onComplete }) {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -44,6 +44,7 @@ export default function CreateProfile({ user }) {
   const [toast, setToast] = useState('')
 
   const [form, setForm] = useState({
+    client_phone:'', client_email:'',
     first_name:'', middle_name:'', last_name:'', gender:'Male', date_of_birth:'',
     city:'', state:'', country:'India', religion:'Hindu',
     community:'', community_other:'', mother_tongue:'', mother_tongue_other:'',
@@ -150,7 +151,10 @@ export default function CreateProfile({ user }) {
       const { data: profile, error: pErr } = await supabase
         .from('profiles')
         .insert({
-          user_id: user.id,
+          user_id: adminMode ? null : user.id,
+          is_admin_managed: !!adminMode,
+          managed_by_staff_id: adminMode ? user.id : null,
+          profile_status: adminMode ? 'pending' : 'pending', // staff abhi bhi Approve karega (Admin list mein dikhega)
           profile_code: code,
           ...formToSave,
           full_name: fullName,
@@ -193,12 +197,17 @@ export default function CreateProfile({ user }) {
         }
       }
 
+      const finish = () => {
+        if (adminMode && onComplete) onComplete(profile)
+        else navigate('/dashboard')
+      }
+
       if (photoErrors.length > 0) {
         showToast('Profile created, but ' + photoErrors.length + ' photo(s) failed: ' + photoErrors.join(' | '))
-        setTimeout(()=>navigate('/dashboard'), 3500)
+        setTimeout(finish, 3500)
       } else {
         showToast('Profile created! Code: ' + code)
-        setTimeout(()=>navigate('/dashboard'), 1500)
+        setTimeout(finish, 1500)
       }
     } catch(err) {
       showToast('Error: ' + err.message)
@@ -233,7 +242,25 @@ export default function CreateProfile({ user }) {
         {step===0 && (
           <div>
             <h2 className="page-title">Personal Details</h2>
-            <p className="page-subtitle">Tell us about yourself</p>
+            <p className="page-subtitle">{adminMode ? "Enter the client's details" : 'Tell us about yourself'}</p>
+
+            {adminMode && (
+              <div style={{background:'#fff8e1',borderRadius:12,padding:14,marginBottom:20}}>
+                <div style={{fontSize:12,fontWeight:600,marginBottom:10}}>Client Contact (internal — used to share matches, never shown on public profile)</div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Client Phone / WhatsApp</label>
+                    <input className="form-input" placeholder="9876543210" value={form.client_phone}
+                      onChange={e=>set('client_phone',e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Client Email</label>
+                    <input className="form-input" placeholder="client@email.com" value={form.client_email}
+                      onChange={e=>set('client_email',e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">First Name *</label>
