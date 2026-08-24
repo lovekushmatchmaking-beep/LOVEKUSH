@@ -154,7 +154,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           user_id: adminMode ? null : user.id,
           is_admin_managed: !!adminMode,
           managed_by_staff_id: adminMode ? user.id : null,
-          profile_status: adminMode ? 'pending' : 'pending', // staff abhi bhi Approve karega (Admin list mein dikhega)
+          profile_status: adminMode ? 'active' : 'pending', // Admin khud bana/verify kar raha hai, isliye seedha Active — customer-submitted profiles abhi bhi review ke liye Pending rehti hain
           profile_code: code,
           ...formToSave,
           full_name: fullName,
