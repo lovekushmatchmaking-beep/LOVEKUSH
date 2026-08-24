@@ -16,13 +16,38 @@ export default function Register() {
     if(form.password !== form.confirm) return setError('Passwords do not match')
     if(form.password.length < 6) return setError('Password must be at least 6 characters')
     setLoading(true)
-    const { error } = await supabase.auth.signUp({
+    const { data: signUpData, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
     })
+    if(error) { setLoading(false); return setError(error.message) }
+
+    // Agar Admin ne pehle se is email ke liye ek profile bana rakhi hai
+    // (Admin-Assisted Matchmaking se), usse yahan "claim" kar lete hain —
+    // taaki dobara khaali profile na bane, jo already bhari hui hai wahi
+    // ab is naye account se link ho jaaye.
+    const newUserId = signUpData?.user?.id
+    let claimedExisting = false
+    if (newUserId) {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .is('user_id', null)
+        .eq('client_email', form.email)
+        .eq('is_admin_managed', true)
+        .maybeSingle()
+
+      if (existingProfile) {
+        const { error: claimError } = await supabase
+          .from('profiles')
+          .update({ user_id: newUserId })
+          .eq('id', existingProfile.id)
+        if (!claimError) claimedExisting = true
+      }
+    }
+
     setLoading(false)
-    if(error) return setError(error.message)
-    navigate('/create-profile')
+    navigate(claimedExisting ? '/dashboard' : '/create-profile')
   }
 
   return (
