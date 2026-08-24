@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
 import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/profileOptions'
 import CreateProfile from './CreateProfile'
+import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
 import { buildMaskedShareText, buildWaMeLink, buildMailtoLink } from '../utils/shareProfile'
 
@@ -25,7 +26,8 @@ export default function Admin({ staffUser }) {
   const [activeTab, setActiveTab] = useState('all')
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, blocked: 0 })
   const [selected, setSelected] = useState(null)
-  const [view, setView] = useState('list') // 'list' | 'createClient' | 'findMatches'
+  const [view, setView] = useState('list') // 'list' | 'createClient' | 'findMatches' | 'editProfile'
+  const [editingProfile, setEditingProfile] = useState(null)
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
   const [matchResults, setMatchResults] = useState([])
   const [matchesLoading, setMatchesLoading] = useState(false)
@@ -236,6 +238,17 @@ export default function Admin({ staffUser }) {
         </div>
       )}
 
+      {view === 'editProfile' && editingProfile && (
+        <div style={{maxWidth:800,margin:'0 auto',padding:'20px'}}>
+          <EditProfileForm
+            profile={editingProfile}
+            user={{ id: staffUser.user_id }}
+            onSave={()=>{ setView('list'); setEditingProfile(null); runQuery(0) }}
+            onCancel={()=>{ setView('list'); setEditingProfile(null) }}
+          />
+        </div>
+      )}
+
       {view === 'findMatches' && matchesFor && (
         <FindMatchesView
           profile={matchesFor}
@@ -413,6 +426,8 @@ export default function Admin({ staffUser }) {
                         <button className="btn btn-outline btn-sm"
                           onClick={e => { e.stopPropagation(); updateStatus(p.id, 'pending') }}>↩ Set Pending</button>
                       )}
+                      <button className="btn btn-outline btn-sm"
+                        onClick={e => { e.stopPropagation(); setEditingProfile(p); setView('editProfile') }}>✎ Edit</button>
                       <button className="btn btn-outline btn-sm"
                         onClick={e => { e.stopPropagation(); findMatchesForProfile(p) }}>🔍 Find Matches</button>
                     </div>
