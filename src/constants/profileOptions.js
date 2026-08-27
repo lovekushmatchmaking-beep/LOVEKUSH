@@ -34,13 +34,13 @@ export const EDUCATIONS = [
 
 export const INCOME_RANGES = ['No income', 'Below ₹1L', '₹1–3L', '₹3–5L', '₹5–10L', 'Above ₹10L']
 
-export const DIETS = ['Vegetarian', 'Eggetarian', 'Non-Vegetarian', 'Vegan', 'Jain']
+export const DIETS = ['Vegetarian', 'Non-Vegetarian', 'Occasionally Non-Vegetarian', 'Eggetarian', 'Jain', 'Vegan']
 
 export const HABITS = ['Never', 'Occasionally', 'Yes']
 
 export const FAMILY_TYPES = ['Nuclear', 'Joint', 'Extended']
 
-export const FAMILY_VALUES = ['Traditional', 'Moderate', 'Liberal']
+export const FAMILY_VALUES = ['Orthodox', 'Conservative', 'Moderate', 'Liberal']
 
 export const HEIGHT_RANGES = [
   'Below 5\'0"',
@@ -51,7 +51,7 @@ export const HEIGHT_RANGES = [
   'Above 6\'0"',
 ]
 
-export const MARITAL_STATUSES = ['Never Married', 'Divorced', 'Widowed', 'Separated']
+export const MARITAL_STATUSES = ['Never Married', 'Divorced', 'Widowed', 'Separated', 'Awaiting Divorce', 'Annulled']
 
 export const LOCATION_PREFERENCES = [
   'Same city',
@@ -90,3 +90,65 @@ export const HOUSE_TYPES = ['Independent House', 'Apartment/Flat', 'Farmhouse', 
 export const FAMILY_INCOME_RANGES = ['Below ₹5L', '₹5–10L', '₹10–20L', '₹20–50L', '₹50L+']
 
 export const PHYSICAL_DISABILITY_OPTIONS = ['No', 'Yes']
+
+// ===================== PHASE 7 — Shaadi.com/Jeevansathi research se =====================
+
+export const PROFESSION_CATEGORIES = [
+  'Accounting, Banking & Finance', 'Administration & HR', 'Advertising, Media & Entertainment',
+  'Agriculture', 'Airline & Aviation', 'Architecture & Design', 'Artists, Animators & Web Designers',
+  'Beauty, Fashion & Jewellery Designers', 'BPO, KPO & Customer Support', 'Civil Services / Law Enforcement',
+  'Corporate Professionals', 'Defense', 'Education & Training', 'Engineering', 'Hotel & Hospitality',
+  'IT & Software Engineering', 'Legal', 'Medical & Healthcare', 'Merchant Navy', 'Not Working',
+  'Sales & Marketing', 'Science', 'Others',
+]
+
+export const WORKING_WITH_OPTIONS = ['Private Company', 'Government / Public Sector', 'Defense / Civil Services', 'Business / Self Employed', 'Not Working']
+
+export const HEALTH_INFO_OPTIONS = ['No Health Problems', 'HIV Positive', 'Diabetes', 'Low BP', 'High BP', 'Heart Ailments', 'Other']
+
+export const BLOOD_GROUPS = ["Don't Know", 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+
+export const PROFILE_MANAGED_BY = ['Self', 'Parent / Guardian', 'Sibling', 'Relative', 'Other']
+
+export const FAMILY_STATUS_OPTIONS = ['Rich / Affluent', 'Upper Middle Class', 'Middle Class']
+
+export const LIVING_WITH_PARENTS_OPTIONS = ['Yes', 'No', 'Not Applicable']
+
+export const HOBBIES_INTERESTS = {
+  Creative: ['Writing', 'Cooking', 'Singing', 'Photography', 'Playing instruments', 'Painting', 'DIY crafts', 'Dancing', 'Acting', 'Poetry', 'Gardening', 'Blogging', 'Content creation', 'Designing', 'Doodling'],
+  Fun: ['Movies', 'Music', 'Travelling', 'Reading', 'Sports', 'Social media', 'Gaming', 'Binge-watching', 'Biking', 'Clubbing', 'Shopping', 'Theater & Events', 'Anime', 'Stand-ups'],
+  Fitness: ['Running', 'Cycling', 'Yoga & Meditation', 'Walking', 'Working out', 'Trekking', 'Aerobics/Zumba', 'Swimming'],
+  Other: ['Pets', 'Foodie', 'Vegan', 'News & Politics', 'Social service', 'Entrepreneurship', 'Home decor', 'Investments', 'Fashion & beauty'],
+}
+export const HOBBIES_MAX_SELECT = 5
+
+export const CUISINES = [
+  'North Indian', 'South Indian', 'Punjabi', 'Gujarati', 'Rajasthani', 'Bengali', 'Konkani',
+  'Chinese', 'Continental', 'Mughlai', 'Italian', 'Arabic', 'Thai', 'Sushi', 'Mexican',
+  'Lebanese', 'Latin American', 'Spanish', 'Fast Food',
+]
+
+export const SPORTS_LIST = [
+  'Cricket', 'Football', 'Basketball', 'Tennis', 'Badminton', 'Swimming / Water Sports',
+  'Jogging / Walking', 'Cycling', 'Yoga / Meditation', 'Gym / Weight Training', 'Chess',
+  'Carrom', 'Card Games', 'Table Tennis', 'Adventure Sports',
+]
+
+// Fine-grained height dropdown, feet+inches WITH cm — Shaadi.com jaisa
+export function generateHeightOptions() {
+  const options = []
+  for (let totalInches = 53; totalInches <= 84; totalInches++) { // 4'5" to 7'0"
+    const feet = Math.floor(totalInches / 12)
+    const inches = totalInches % 12
+    const cm = Math.round(totalInches * 2.54)
+    options.push(`${feet}ft ${inches}in — ${cm}cm`)
+  }
+  return options
+}
+export const HEIGHT_OPTIONS_DETAILED = generateHeightOptions()
+
+// NOTE: "Not Filled" ≠ "No" — koi bhi field jo user ne bhari nahi hai,
+// khaali/blank hi rehni chahiye database mein (kabhi bhi false/No
+// auto-set nahi karna). Poore CreateProfile.js/EditProfileForm mein
+// yeh already follow ho raha hai — sab dropdowns ka default
+// <option value="">Select</option> hai, "No" nahi.
