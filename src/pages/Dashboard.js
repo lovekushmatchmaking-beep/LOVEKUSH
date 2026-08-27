@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, MOTHER_TONGUES, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS } from '../constants/profileOptions'
+import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, MOTHER_TONGUES, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
 import SignedImage from '../components/SignedImage'
+import MultiSelectChips from '../components/MultiSelectChips'
 
 export default function Dashboard({ user }) {
   const navigate = useNavigate()
@@ -745,6 +746,21 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     marital_status: profile.marital_status || 'Never Married',
     nationality: profile.nationality || 'Indian',
     physical_disability: profile.physical_disability || 'No',
+    blood_group: profile.blood_group || '',
+    health_info: profile.health_info || '',
+    birth_time: profile.birth_time || '',
+    birth_place: profile.birth_place || '',
+    astrology_consent: profile.astrology_consent || false,
+    horoscope_match_required: profile.horoscope_match_required || '',
+    profession: profile.profession || '',
+    working_with: profile.working_with || '',
+    hobbies_interests: profile.hobbies_interests || [],
+    cuisines: profile.cuisines || [],
+    sports: profile.sports || [],
+    profile_managed_by: profile.profile_managed_by || '',
+    family_status: profile.family_status || '',
+    living_with_parents: profile.living_with_parents || '',
+    alternate_email: profile.alternate_email || '',
     disability_details: profile.disability_details || '',
     sub_caste: profile.sub_caste || '',
     gotra: profile.gotra || '',
@@ -948,6 +964,50 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
               value={form.disability_details} onChange={e=>set('disability_details',e.target.value)} />
           )}
         </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Blood Group</label>
+            <select className="form-select" value={form.blood_group} onChange={e=>set('blood_group',e.target.value)}>
+              <option value="">Select</option>
+              {BLOOD_GROUPS.map(b=><option key={b}>{b}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Health Information</label>
+            <select className="form-select" value={form.health_info} onChange={e=>set('health_info',e.target.value)}>
+              <option value="">Select</option>
+              {HEALTH_INFO_OPTIONS.map(h=><option key={h}>{h}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-label" style={{marginBottom:14}}>Horoscope</div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Birth Time</label>
+            <input className="form-input" type="time" value={form.birth_time} onChange={e=>set('birth_time',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Birth Place</label>
+            <input className="form-input" value={form.birth_place} onChange={e=>set('birth_place',e.target.value)} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Horoscope Match Required?</label>
+          <select className="form-select" value={form.horoscope_match_required} onChange={e=>set('horoscope_match_required',e.target.value)}>
+            <option value="">Select</option>
+            <option>Yes</option><option>No</option><option>Flexible</option>
+          </select>
+        </div>
+        <div className="form-group" style={{display:'flex',alignItems:'flex-start',gap:8}}>
+          <input type="checkbox" id="astro_consent_edit" checked={form.astrology_consent}
+            onChange={e=>set('astrology_consent',e.target.checked)} style={{marginTop:3}} />
+          <label htmlFor="astro_consent_edit" style={{fontSize:12,color:'#555',cursor:'pointer'}}>
+            I consent to LOVEKUSH collecting, processing and analysing my astrology/birth details for kundli-matching purposes.
+          </label>
+        </div>
       </div>
 
       <div className="card" style={{marginBottom:12}}>
@@ -1089,6 +1149,22 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <input className="form-input" value={form.work_location} onChange={e=>set('work_location',e.target.value)} />
           </div>
         </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Profession Category</label>
+            <select className="form-select" value={form.profession} onChange={e=>set('profession',e.target.value)}>
+              <option value="">Select</option>
+              {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Working With</label>
+            <select className="form-select" value={form.working_with} onChange={e=>set('working_with',e.target.value)}>
+              <option value="">Select</option>
+              {WORKING_WITH_OPTIONS.map(w=><option key={w}>{w}</option>)}
+            </select>
+          </div>
+        </div>
         <div className="form-group">
           <label className="form-label">Annual Income</label>
           <select className="form-select" value={form.annual_income} onChange={e=>set('annual_income',e.target.value)}>
@@ -1120,8 +1196,21 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Hobbies</label>
+          <label className="form-label">Hobbies (short text)</label>
           <input className="form-input" value={form.hobbies} onChange={e=>set('hobbies',e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Interests (select up to {HOBBIES_MAX_SELECT})</label>
+          <MultiSelectChips groups={HOBBIES_INTERESTS} selected={form.hobbies_interests}
+            onChange={(v)=>set('hobbies_interests',v)} maxSelect={HOBBIES_MAX_SELECT} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Favourite Cuisines</label>
+          <MultiSelectChips options={CUISINES} selected={form.cuisines} onChange={(v)=>set('cuisines',v)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Sports & Activities</label>
+          <MultiSelectChips options={SPORTS_LIST} selected={form.sports} onChange={(v)=>set('sports',v)} />
         </div>
         <div className="form-group">
           <label className="form-label">About Me</label>
@@ -1195,6 +1284,35 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
         <div className="form-group">
           <label className="form-label">Vehicle Details</label>
           <input className="form-input" value={form.vehicle_details} onChange={e=>set('vehicle_details',e.target.value)} />
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Family Status</label>
+            <select className="form-select" value={form.family_status} onChange={e=>set('family_status',e.target.value)}>
+              <option value="">Select</option>
+              {FAMILY_STATUS_OPTIONS.map(f=><option key={f}>{f}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Living With Parents?</label>
+            <select className="form-select" value={form.living_with_parents} onChange={e=>set('living_with_parents',e.target.value)}>
+              <option value="">Select</option>
+              {LIVING_WITH_PARENTS_OPTIONS.map(l=><option key={l}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Profile Managed By</label>
+            <select className="form-select" value={form.profile_managed_by} onChange={e=>set('profile_managed_by',e.target.value)}>
+              <option value="">Select</option>
+              {PROFILE_MANAGED_BY.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Alternate Email</label>
+            <input className="form-input" value={form.alternate_email} onChange={e=>set('alternate_email',e.target.value)} />
+          </div>
         </div>
       </div>
 
