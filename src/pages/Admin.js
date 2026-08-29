@@ -6,7 +6,8 @@ import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/pr
 import CreateProfile from './CreateProfile'
 import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
-import { buildMaskedShareText, buildWaMeLink, buildMailtoLink } from '../utils/shareProfile'
+import { buildWaMeLink, buildMailtoLink } from '../utils/shareProfile'
+import { generateShareLink, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
 
 // SEARCH DESIGN NOTE: yeh search ab DATABASE se query karta hai (Supabase
 // .ilike()/.eq()/.gte() ke saath), poore profiles table ko browser mein
@@ -26,7 +27,7 @@ export default function Admin({ staffUser }) {
   const [activeTab, setActiveTab] = useState('all')
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, blocked: 0 })
   const [selected, setSelected] = useState(null)
-  const [view, setView] = useState('list') // 'list' | 'createClient' | 'findMatches' | 'editProfile'
+  const [view, setView] = useState('list') // 'list' | 'createClient' | 'findMatches' | 'editProfile' | 'shareLinks'
   const [editingProfile, setEditingProfile] = useState(null)
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
   const [matchResults, setMatchResults] = useState([])
@@ -249,18 +250,24 @@ export default function Admin({ staffUser }) {
         </div>
       )}
 
+      {view === 'shareLinks' && (
+        <ShareLinksView staffUserId={staffUser.user_id} onBack={()=>setView('list')} />
+      )}
+
       {view === 'findMatches' && matchesFor && (
         <FindMatchesView
           profile={matchesFor}
           results={matchResults}
           loading={matchesLoading}
+          staffUserId={staffUser.user_id}
           onBack={()=>{setView('list'); setMatchesFor(null); setMatchResults([])}}
         />
       )}
 
       {view === 'list' && (
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('shareLinks')}>🔗 My Share Links</button>
           <button className="btn btn-black btn-sm" onClick={()=>setView('createClient')}>+ Create Client Profile</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
@@ -450,8 +457,19 @@ export default function Admin({ staffUser }) {
 }
 
 // ===== FIND MATCHES VIEW — reuses existing matching.js, adds masked sharing =====
-function FindMatchesView({ profile, results, loading, onBack }) {
+function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
   const [expandedId, setExpandedId] = useState(null)
+  const [linkFor, setLinkFor] = useState({}) // otherId -> { url, generating, error }
+
+  const handleGenerateLink = async (otherProfileId) => {
+    setLinkFor(prev => ({ ...prev, [otherProfileId]: { generating: true } }))
+    try {
+      const link = await generateShareLink(otherProfileId, staffUserId)
+      setLinkFor(prev => ({ ...prev, [otherProfileId]: { url: link.url } }))
+    } catch (err) {
+      setLinkFor(prev => ({ ...prev, [otherProfileId]: { error: err.message } }))
+    }
+  }
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
@@ -474,10 +492,11 @@ function FindMatchesView({ profile, results, loading, onBack }) {
         <div style={{display:'flex',flexDirection:'column',gap:10}}>
           {results.map(r => {
             const other = r.profile
-            const shareText = buildMaskedShareText(other)
-            const waLink = buildWaMeLink(profile.client_phone, `Hi! Found a match for you on LOVEKUSH:\n\n${shareText}`)
-            const mailLink = buildMailtoLink(profile.client_email, 'A match for you — LOVEKUSH', `Hi,\n\nWe found a match for you:\n\n${shareText}\n\nRegards,\nLOVEKUSH Global Matchmaking Services`)
             const isExpanded = expandedId === other.id
+            const linkState = linkFor[other.id]
+            const shareMsg = linkState?.url ? `Hi! Found a match for you on LOVEKUSH:\n\n${linkState.url}` : ''
+            const waLink = linkState?.url ? buildWaMeLink(profile.client_phone, shareMsg) : null
+            const mailLink = linkState?.url ? buildMailtoLink(profile.client_email, 'A match for you — LOVEKUSH', `Hi,\n\nWe found a match for you. View secure profile:\n${linkState.url}\n\n(This link expires in 7 days)\n\nRegards,\nLOVEKUSH Global Matchmaking Services`) : null
 
             return (
               <div key={other.id} style={{border:'1px solid rgba(0,0,0,0.08)',borderRadius:12,padding:14}}>
@@ -517,14 +536,106 @@ function FindMatchesView({ profile, results, loading, onBack }) {
                   </div>
                 )}
 
-                <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
-                  {waLink ? (
-                    <a href={waLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm">📱 Share via WhatsApp</a>
+                <div style={{marginTop:10}}>
+                  {!linkState?.url ? (
+                    <button className="btn btn-black btn-sm" disabled={linkState?.generating}
+                      onClick={()=>handleGenerateLink(other.id)}>
+                      {linkState?.generating ? 'Generating...' : '🔗 Generate Secure Share Link'}
+                    </button>
                   ) : (
-                    <span style={{fontSize:11,color:'#8e8e8e'}}>Add client phone to enable WhatsApp share</span>
+                    <div>
+                      <div style={{fontSize:11,color:'#16a34a',marginBottom:6}}>
+                        ✓ Link ready (expires in 7 days, one-click revoke available in "My Share Links")
+                      </div>
+                      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                        {waLink ? (
+                          <a href={waLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm">📱 Send via WhatsApp</a>
+                        ) : (
+                          <span style={{fontSize:11,color:'#8e8e8e'}}>Add client phone to enable WhatsApp send</span>
+                        )}
+                        {mailLink && <a href={mailLink} className="btn btn-outline btn-sm">✉ Send via Email</a>}
+                      </div>
+                    </div>
                   )}
-                  {mailLink && (
-                    <a href={mailLink} className="btn btn-outline btn-sm">✉ Share via Email</a>
+                  {linkState?.error && <div style={{fontSize:11,color:'#dc2626',marginTop:6}}>{linkState.error}</div>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ===== SHARE LINKS MANAGEMENT — view kitni baar khula, revoke karo =====
+function ShareLinksView({ staffUserId, onBack }) {
+  const [links, setLinks] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const data = await getMyShareLinks(staffUserId)
+      setLinks(data)
+    } catch (err) {
+      console.error(err.message)
+    }
+    setLoading(false)
+  }
+
+  const handleRevoke = async (linkId) => {
+    try {
+      await revokeShareLink(linkId)
+      load()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const copyLink = (token) => {
+    navigator.clipboard?.writeText(`${window.location.origin}/share/${token}`)
+    alert('Link copied!')
+  }
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,marginBottom:20}}>My Share Links</h2>
+
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : links.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
+          No share links created yet. Generate one from "Find Matches" for any profile.
+        </div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {links.map(l => {
+            const isExpired = new Date(l.expires_at) < new Date()
+            const status = l.revoked ? 'Revoked' : isExpired ? 'Expired' : 'Active'
+            const statusColor = l.revoked ? '#8e8e8e' : isExpired ? '#b45309' : '#16a34a'
+            return (
+              <div key={l.id} style={{border:'1px solid rgba(0,0,0,0.08)',borderRadius:12,padding:14}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                  <div>
+                    <div style={{fontSize:12,fontFamily:'monospace',color:'#8e8e8e'}}>/{l.token.slice(0,12)}...</div>
+                    <div style={{fontSize:11,color:statusColor,fontWeight:600,marginTop:2}}>{status}</div>
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:12,color:'#8e8e8e'}}>{l.view_count} view{l.view_count!==1?'s':''}</div>
+                    <div style={{fontSize:10,color:'#bbb'}}>
+                      {l.revoked ? 'Revoked' : `Expires ${new Date(l.expires_at).toLocaleDateString('en-IN')}`}
+                    </div>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:8,marginTop:10}}>
+                  <button className="btn btn-outline btn-sm" onClick={()=>copyLink(l.token)}>📋 Copy Link</button>
+                  {!l.revoked && !isExpired && (
+                    <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
+                      onClick={()=>handleRevoke(l.id)}>✕ Revoke</button>
                   )}
                 </div>
               </div>
