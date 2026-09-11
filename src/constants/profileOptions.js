@@ -115,12 +115,30 @@ export const FAMILY_STATUS_OPTIONS = ['Rich / Affluent', 'Upper Middle Class', '
 export const LIVING_WITH_PARENTS_OPTIONS = ['Yes', 'No', 'Not Applicable']
 
 export const HOBBIES_INTERESTS = {
-  Creative: ['Writing', 'Cooking', 'Singing', 'Photography', 'Playing instruments', 'Painting', 'DIY crafts', 'Dancing', 'Acting', 'Poetry', 'Gardening', 'Blogging', 'Content creation', 'Designing', 'Doodling'],
-  Fun: ['Movies', 'Music', 'Travelling', 'Reading', 'Sports', 'Social media', 'Gaming', 'Binge-watching', 'Biking', 'Clubbing', 'Shopping', 'Theater & Events', 'Anime', 'Stand-ups'],
-  Fitness: ['Running', 'Cycling', 'Yoga & Meditation', 'Walking', 'Working out', 'Trekking', 'Aerobics/Zumba', 'Swimming'],
-  Other: ['Pets', 'Foodie', 'Vegan', 'News & Politics', 'Social service', 'Entrepreneurship', 'Home decor', 'Investments', 'Fashion & beauty'],
+  Creative: ['Collecting Stamps', 'Collecting Coins', 'Collecting Antiques', 'Art / Handicraft', 'Painting', 'Cooking', 'Photography', 'Film-making', 'Model Building', 'Gardening / Landscaping', 'Playing Musical Instruments', 'Singing', 'Dancing', 'Acting', 'Writing', 'Blogging'],
+  'Reading & Learning': ['Reading / Book Clubs', 'Learning New Languages', 'Solving Crosswords / Puzzles', 'Astrology / Palmistry / Numerology', 'Graphology'],
+  Entertainment: ['Listening to Music', 'Movies', 'Theatre', 'Watching Television', 'Video / Computer Games', 'Ham Radio'],
+  'Sports & Outdoor': ['Sports - Outdoor', 'Sports - Indoor', 'Trekking / Adventure Sports', 'Fishing', 'Bird Watching', 'Travel / Sightseeing'],
+  'Wellness & Social': ['Health & Fitness', 'Yoga / Meditation', 'Alternative Healing', 'Taking Care of Pets', 'Volunteering / Social Service', 'Politics', 'Net Surfing'],
 }
 export const HOBBIES_MAX_SELECT = 5
+
+export const FAVOURITE_MUSIC = [
+  'Classical - Hindustani', 'Classical - Carnatic', 'Classical - Western', 'Instrumental - Indian',
+  'Instrumental - Western', 'Old Film Songs', 'Latest Film Songs', 'Ghazals', 'Qawalis',
+  'Bhajans / Devotional', 'Sufi Music', 'Indipop', 'Pop', 'Disco', 'House Music', 'Techno',
+  'Hip-Hop', 'Rap', 'Jazz', 'Blues', 'Reggae', 'Heavy Metal', 'Acid Rock',
+]
+
+export const FAVOURITE_BOOKS = [
+  'Classic Literature', 'Biographies', 'History', 'Poetry', 'Romance', 'Thriller / Suspense',
+  'Humour', 'Science Fiction', 'Fantasy', 'Business / Occupational', 'Philosophy / Spiritual',
+  'Self-help', 'Short Stories', 'Comics', 'Magazines & Newspapers',
+]
+
+export const DRESS_STYLES = [
+  'Classic Indian', 'Trendy', 'Classic Western', 'Designer', 'Casual',
+]
 
 export const CUISINES = [
   'North Indian', 'South Indian', 'Punjabi', 'Gujarati', 'Rajasthani', 'Bengali', 'Konkani',
@@ -152,3 +170,27 @@ export const HEIGHT_OPTIONS_DETAILED = generateHeightOptions()
 // auto-set nahi karna). Poore CreateProfile.js/EditProfileForm mein
 // yeh already follow ho raha hai — sab dropdowns ka default
 // <option value="">Select</option> hai, "No" nahi.
+
+// ===================== PHASE 9 — Jeevansathi/Shaadi.com deeper research =====================
+
+export const TIME_OF_BIRTH_ACCURACY = ['I know my exact time of birth', 'I know my approximate time of birth', "Don't know"]
+
+export const CASTE_NO_BAR_OPTIONS = ['Yes', 'No']
+
+// "Privacy level" — kis field ko kaun dekh sakta hai (Company/College/
+// Income/Contact ke liye same 5 levels use hote hain)
+export const PRIVACY_LEVELS = ['Public', 'Members Only', 'Accepted Connections Only', 'Admin Only', 'Hidden']
+
+// Family Financial Status — jaisa research mein exact categories mile
+// (income-range ke saath), FAMILY_INCOME_RANGES se zyada precise hai
+export const FAMILY_FINANCIAL_STATUS = [
+  { label: 'Elite', desc: 'Large business or exceptional professional background', range: 'Above ₹70 Lakhs' },
+  { label: 'High', desc: 'Mid-sized business or leadership positions', range: '₹30–70 Lakhs' },
+  { label: 'Middle', desc: 'Small business or office jobs', range: '₹10–30 Lakhs' },
+  { label: 'Aspiring', desc: 'Limited means, striving for better lifestyle', range: 'Up to ₹10 Lakhs' },
+]
+
+export const WORKING_AS_OPTIONS = [
+  'Team Member / Staff', 'Team Lead / Supervisor', 'Manager', 'Senior Manager', 'Director / VP',
+  'CXO / Founder', 'Business Owner', 'Consultant', 'Freelancer',
+]
