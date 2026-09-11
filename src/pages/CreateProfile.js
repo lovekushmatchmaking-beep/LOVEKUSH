@@ -38,6 +38,14 @@ import {
   HOBBIES_MAX_SELECT,
   CUISINES,
   SPORTS_LIST,
+  TIME_OF_BIRTH_ACCURACY,
+  CASTE_NO_BAR_OPTIONS,
+  PRIVACY_LEVELS,
+  FAMILY_FINANCIAL_STATUS,
+  WORKING_AS_OPTIONS,
+  FAVOURITE_MUSIC,
+  FAVOURITE_BOOKS,
+  DRESS_STYLES,
 } from '../constants/profileOptions'
 import MultiSelectChips from '../components/MultiSelectChips'
 import { compressImage } from '../utils/compressImage'
@@ -62,6 +70,12 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     profession:'', working_with:'',
     hobbies_interests:[], cuisines:[], sports:[],
     profile_managed_by:'', family_status:'', living_with_parents:'',
+    working_as:'', zip_code:'', ethnic_origin:'',
+    country_of_birth:'', time_of_birth_accuracy:'',
+    caste_no_bar:'', favourite_music:[], favourite_books:[], dress_style:'',
+    family_financial_status:'',
+    company_privacy:'Members Only', college_privacy:'Members Only',
+    income_privacy:'Hidden', contact_privacy:'Accepted Connections Only',
     first_name:'', middle_name:'', last_name:'', gender:'Male', date_of_birth:'',
     city:'', state:'', country:'India', religion:'Hindu',
     community:'', community_other:'', mother_tongue:'', mother_tongue_other:'',
@@ -463,6 +477,15 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             </div>
 
             <div className="form-group">
+              <label className="form-label">Caste No Bar?</label>
+              <select className="form-select" value={form.caste_no_bar} onChange={e=>set('caste_no_bar',e.target.value)}>
+                <option value="">Select</option>
+                {CASTE_NO_BAR_OPTIONS.map(c=><option key={c}>{c}</option>)}
+              </select>
+              <div className="form-hint">"Yes" ka matlab aap doosri caste ke profiles bhi consider karenge</div>
+            </div>
+
+            <div className="form-group">
               <label className="form-label">Kundli Available?</label>
               <select className="form-select" value={form.kundli_available} onChange={e=>set('kundli_available',e.target.value)}>
                 <option value="">Select</option>
@@ -477,8 +500,22 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                 <div style={{fontSize:11,color:'#8e8e8e',marginTop:4}}>Optional — exact time nahi pata to khaali chhod do</div>
               </div>
               <div className="form-group">
-                <label className="form-label">Birth Place</label>
+                <label className="form-label">Time of Birth Accuracy</label>
+                <select className="form-select" value={form.time_of_birth_accuracy} onChange={e=>set('time_of_birth_accuracy',e.target.value)}>
+                  <option value="">Select</option>
+                  {TIME_OF_BIRTH_ACCURACY.map(t=><option key={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Birth Place (City)</label>
                 <input className="form-input" placeholder="City where born" value={form.birth_place} onChange={e=>set('birth_place',e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Country of Birth</label>
+                <input className="form-input" placeholder="India" value={form.country_of_birth} onChange={e=>set('country_of_birth',e.target.value)} />
               </div>
             </div>
 
@@ -532,6 +569,17 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                 value={form.current_address} onChange={e=>set('current_address',e.target.value)} />
             </div>
 
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Zip / PIN Code</label>
+                <input className="form-input" value={form.zip_code} onChange={e=>set('zip_code',e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Ethnic Origin</label>
+                <input className="form-input" placeholder="e.g. Indian" value={form.ethnic_origin} onChange={e=>set('ethnic_origin',e.target.value)} />
+              </div>
+            </div>
+
             <div className="form-group">
               <label className="form-label">Relocation Preference</label>
               <select className="form-select" value={form.relocation_preference} onChange={e=>set('relocation_preference',e.target.value)}>
@@ -564,6 +612,13 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               <label className="form-label">Specialization</label>
               <input className="form-input" placeholder="Optional" value={form.specialization}
                 onChange={e=>set('specialization',e.target.value)} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">College/Institution Name — who can see it?</label>
+              <select className="form-select" value={form.college_privacy} onChange={e=>set('college_privacy',e.target.value)}>
+                {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+              </select>
             </div>
 
             <div className="form-row">
@@ -626,10 +681,32 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               </div>
             </div>
 
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Working As</label>
+                <select className="form-select" value={form.working_as} onChange={e=>set('working_as',e.target.value)}>
+                  <option value="">Select</option>
+                  {WORKING_AS_OPTIONS.map(w=><option key={w}>{w}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Company Name — who can see it?</label>
+                <select className="form-select" value={form.company_privacy} onChange={e=>set('company_privacy',e.target.value)}>
+                  {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+
             <div className="form-group">
               <label className="form-label">Annual Income</label>
               <select className="form-select" value={form.annual_income} onChange={e=>set('annual_income',e.target.value)}>
                 {INCOME_RANGES.map(i=><option key={i}>{i}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Income — who can see it?</label>
+              <select className="form-select" value={form.income_privacy} onChange={e=>set('income_privacy',e.target.value)}>
+                {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
               </select>
             </div>
           </div>
@@ -699,6 +776,24 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                 selected={form.sports}
                 onChange={(v)=>set('sports',v)}
               />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Favourite Music</label>
+              <MultiSelectChips options={FAVOURITE_MUSIC} selected={form.favourite_music} onChange={(v)=>set('favourite_music',v)} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Favourite Books</label>
+              <MultiSelectChips options={FAVOURITE_BOOKS} selected={form.favourite_books} onChange={(v)=>set('favourite_books',v)} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Dress Style</label>
+              <select className="form-select" value={form.dress_style} onChange={e=>set('dress_style',e.target.value)}>
+                <option value="">Select</option>
+                {DRESS_STYLES.map(d=><option key={d}>{d}</option>)}
+              </select>
             </div>
 
             <div className="form-group">
@@ -809,10 +904,26 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                 </select>
               </div>
               <div className="form-group">
+                <label className="form-label">Family Financial Status</label>
+                <select className="form-select" value={form.family_financial_status} onChange={e=>set('family_financial_status',e.target.value)}>
+                  <option value="">Select</option>
+                  {FAMILY_FINANCIAL_STATUS.map(f=><option key={f.label} value={f.label}>{f.label} ({f.range})</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
                 <label className="form-label">Living With Parents?</label>
                 <select className="form-select" value={form.living_with_parents} onChange={e=>set('living_with_parents',e.target.value)}>
                   <option value="">Select</option>
                   {LIVING_WITH_PARENTS_OPTIONS.map(l=><option key={l}>{l}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Contact Details — who can see it?</label>
+                <select className="form-select" value={form.contact_privacy} onChange={e=>set('contact_privacy',e.target.value)}>
+                  {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
                 </select>
               </div>
             </div>
