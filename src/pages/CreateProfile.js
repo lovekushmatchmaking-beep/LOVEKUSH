@@ -14,6 +14,7 @@ import {
   MARITAL_STATUSES,
   RELIGIONS,
   CASTES,
+  GOTRAS,
   MOTHER_TONGUES,
   COMPLEXIONS,
   WEIGHT_RANGES,
@@ -82,7 +83,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     height:'', weight:'', complexion:'', body_type:'Average',
     marital_status:'Never Married', nationality:'Indian',
     physical_disability:'No', disability_details:'',
-    sub_caste:'', gotra:'', manglik:'', kundli_available:'',
+    sub_caste:'', gotra:'', gotra_other:'', manglik:'', kundli_available:'',
     native_place:'', current_address:'', relocation_preference:'',
     education:'Graduation', field_of_study:'', specialization:'', occupation:'',
     designation:'', industry:'', employment_type:'', work_location:'',
@@ -173,11 +174,12 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       const code = generateProfileCode(form.gender, form.religion)
       const finalCommunity = form.community === 'Other' ? form.community_other : form.community
       const finalMotherTongue = form.mother_tongue === 'Other' ? form.mother_tongue_other : form.mother_tongue
+      const finalGotra = form.gotra === 'Other' ? form.gotra_other : form.gotra
 
-      // community_other/mother_tongue_other sirf UI helper fields hain
+      // community_other/mother_tongue_other/gotra_other sirf UI helper fields hain
       // — "profiles" table mein aisa koi column nahi hai, isliye insert
       // se pehle inhe nikaal dete hain (warna database error aayega).
-      const { community_other, mother_tongue_other, ...formToSave } = form
+      const { community_other, mother_tongue_other, gotra_other, ...formToSave } = form
 
       const { data: profile, error: pErr } = await supabase
         .from('profiles')
@@ -191,6 +193,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           full_name: fullName,
           community: finalCommunity,
           mother_tongue: finalMotherTongue,
+          gotra: finalGotra,
           age: ageCheck.age,
           partner_age_min: parseInt(form.partner_age_min) || null,
           partner_age_max: parseInt(form.partner_age_max) || null,
@@ -464,8 +467,14 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Gotra</label>
-                <input className="form-input" placeholder="Optional" value={form.gotra}
-                  onChange={e=>set('gotra',e.target.value)} />
+                <select className="form-select" value={form.gotra} onChange={e=>set('gotra',e.target.value)}>
+                  <option value="">Select</option>
+                  {GOTRAS.map(g=><option key={g}>{g}</option>)}
+                </select>
+                {form.gotra === 'Other' && (
+                  <input className="form-input" style={{marginTop:8}} placeholder="Apna Gotra likhein"
+                    value={form.gotra_other} onChange={e=>set('gotra_other',e.target.value)} />
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Manglik</label>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, MOTHER_TONGUES, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
+import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
@@ -737,6 +737,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     religion: profile.religion || '',
     community: profile.community || '',
     community_other: '',
+    gotra_other: '',
     mother_tongue: profile.mother_tongue || '',
     mother_tongue_other: '',
     height: profile.height || '',
@@ -840,7 +841,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
       const fullName = [form.first_name, form.middle_name, form.last_name].filter(Boolean).join(' ')
       const finalCommunity = form.community === 'Other' ? form.community_other : form.community
       const finalMotherTongue = form.mother_tongue === 'Other' ? form.mother_tongue_other : form.mother_tongue
-      const { community_other, mother_tongue_other, ...formToSave } = form
+      const finalGotra = form.gotra === 'Other' ? form.gotra_other : form.gotra
+      const { community_other, mother_tongue_other, gotra_other, ...formToSave } = form
 
       const { count: photoCount } = await supabase
         .from('photos')
@@ -856,6 +858,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           full_name: fullName,
           community: finalCommunity,
           mother_tongue: finalMotherTongue,
+          gotra: finalGotra,
           age: ageCheck.age,
           partner_age_min: parseInt(form.partner_age_min) || null,
           partner_age_max: parseInt(form.partner_age_max) || null,
@@ -1086,7 +1089,14 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           </div>
           <div className="form-group">
             <label className="form-label">Gotra</label>
-            <input className="form-input" value={form.gotra} onChange={e=>set('gotra',e.target.value)} />
+            <select className="form-select" value={form.gotra} onChange={e=>set('gotra',e.target.value)}>
+              <option value="">Select</option>
+              {GOTRAS.map(g=><option key={g}>{g}</option>)}
+            </select>
+            {form.gotra === 'Other' && (
+              <input className="form-input" style={{marginTop:8}} placeholder="Apna Gotra likhein"
+                value={form.gotra_other} onChange={e=>set('gotra_other',e.target.value)} />
+            )}
           </div>
         </div>
         <div className="form-row">
