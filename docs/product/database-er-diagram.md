@@ -36,6 +36,10 @@ state text
 country text
 religion text
 community text
+community_privacy text        -- default 'Members Only'
+islamic_denomination text     -- religion === 'Muslim' only (Sunni/Shia/etc.)
+islamic_school_of_thought text -- Sunni Madhab (Hanafi/Shafi/Maliki/Hanbali)
+islamic_shia_branch text      -- Shia branch (Ithna Ashari/Ismaili/Zaydi/etc.)
 mother_tongue text
 height text
 marital_status text

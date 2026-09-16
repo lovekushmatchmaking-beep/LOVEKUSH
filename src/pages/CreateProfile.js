@@ -16,6 +16,12 @@ import {
   CASTES,
   GOTRAS,
   MOTHER_TONGUES,
+  ISLAMIC_DENOMINATIONS,
+  SUNNI_SCHOOLS_OF_THOUGHT,
+  SHIA_BRANCHES,
+  ISLAMIC_COMMUNITIES,
+  SENSITIVE_COMMUNITIES,
+  SENSITIVE_COMMUNITY_NOTE,
   COMPLEXIONS,
   WEIGHT_RANGES,
   NATIONALITIES,
@@ -80,6 +86,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     first_name:'', middle_name:'', last_name:'', gender:'Male', date_of_birth:'',
     city:'', state:'', country:'India', religion:'Hindu',
     community:'', community_other:'', mother_tongue:'', mother_tongue_other:'',
+    islamic_denomination:'', islamic_school_of_thought:'', islamic_shia_branch:'',
+    community_privacy:'Members Only',
     height:'', weight:'', complexion:'', body_type:'Average',
     marital_status:'Never Married', nationality:'Indian',
     physical_disability:'No', disability_details:'',
@@ -100,6 +108,14 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   })
 
   const set = (k,v) => setForm(p=>({...p,[k]:v}))
+
+  const setCommunity = (v) => setForm(p=>({
+    ...p,
+    community: v,
+    community_privacy: (SENSITIVE_COMMUNITIES.includes(v) && p.community_privacy === 'Members Only')
+      ? 'Accepted Connections Only'
+      : p.community_privacy,
+  }))
 
   const showToast = (msg) => {
     setToast(msg)
@@ -445,16 +461,52 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               </div>
             </div>
 
+            {form.religion === 'Muslim' && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Denomination / Sect</label>
+                  <select className="form-select" value={form.islamic_denomination}
+                    onChange={e=>set('islamic_denomination',e.target.value)}>
+                    <option value="">Select</option>
+                    {ISLAMIC_DENOMINATIONS.map(d=><option key={d}>{d}</option>)}
+                  </select>
+                </div>
+                {form.islamic_denomination === 'Sunni' && (
+                  <div className="form-group">
+                    <label className="form-label">School of Thought (Madhab)</label>
+                    <select className="form-select" value={form.islamic_school_of_thought}
+                      onChange={e=>set('islamic_school_of_thought',e.target.value)}>
+                      <option value="">Select</option>
+                      {SUNNI_SCHOOLS_OF_THOUGHT.map(s=><option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                )}
+                {form.islamic_denomination === 'Shia' && (
+                  <div className="form-group">
+                    <label className="form-label">Shia Branch</label>
+                    <select className="form-select" value={form.islamic_shia_branch}
+                      onChange={e=>set('islamic_shia_branch',e.target.value)}>
+                      <option value="">Select</option>
+                      {SHIA_BRANCHES.map(s=><option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Community / Caste</label>
-                <select className="form-select" value={form.community} onChange={e=>set('community',e.target.value)}>
+                <select className="form-select" value={form.community} onChange={e=>setCommunity(e.target.value)}>
                   <option value="">Select</option>
-                  {CASTES.map(c=><option key={c}>{c}</option>)}
+                  {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES : CASTES).map(c=><option key={c}>{c}</option>)}
                 </select>
                 {form.community === 'Other' && (
                   <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"
                     value={form.community_other} onChange={e=>set('community_other',e.target.value)} />
+                )}
+                {SENSITIVE_COMMUNITIES.includes(form.community) && (
+                  <div className="form-hint">{SENSITIVE_COMMUNITY_NOTE}</div>
                 )}
               </div>
               <div className="form-group">
@@ -462,6 +514,14 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                 <input className="form-input" placeholder="Optional" value={form.sub_caste}
                   onChange={e=>set('sub_caste',e.target.value)} />
               </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Community Privacy</label>
+              <select className="form-select" value={form.community_privacy}
+                onChange={e=>set('community_privacy',e.target.value)}>
+                {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+              </select>
             </div>
 
             <div className="form-row">
