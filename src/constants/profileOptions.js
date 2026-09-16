@@ -2032,6 +2032,59 @@ export const CASTE_NO_BAR_OPTIONS = ['Yes', 'No']
 // Income/Contact ke liye same 5 levels use hote hain)
 export const PRIVACY_LEVELS = ['Public', 'Members Only', 'Accepted Connections Only', 'Admin Only', 'Hidden']
 
+// ===================== ISLAM — Denomination / Sect / Community =====================
+// Sirf religion === 'Muslim' hone par CreateProfile.js/Dashboard.js mein
+// yeh cascading flow dikhta hai: Denomination -> School of Thought (Sunni)
+// ya Shia Branch (Shia) -> Community (ISLAMIC_COMMUNITIES, CASTES ki jagah).
+
+export const ISLAMIC_DENOMINATIONS = [
+  'Sunni',
+  'Shia',
+  'Ibadi',
+  'Ahmadiyya',
+  'Other denomination',
+  'Just Muslim (no specific denomination)',
+  'Prefer not to specify',
+]
+
+export const SUNNI_SCHOOLS_OF_THOUGHT = [
+  'Hanafi',
+  'Shafi',
+  'Maliki',
+  'Hanbali',
+  'Not specific to any school',
+  'Prefer not to specify',
+]
+
+export const SHIA_BRANCHES = [
+  'Ithna Ashari (Twelver)',
+  'Ismaili',
+  'Zaydi',
+  'Other Shia branch',
+  'Prefer not to specify',
+]
+
+// 50 communities — Islam-specific "Community/Caste" dropdown, replaces
+// CASTES when religion === 'Muslim'. "Other" free-text fallback already
+// handled by the existing community_other pattern.
+export const ISLAMIC_COMMUNITIES = [
+  'Syed', 'Sheikh', 'Ansari', 'Pathan', 'Qureshi', 'Mughal', 'Rajput', 'Malik',
+  'Siddiqui', 'Bohra (Dawoodi)', 'Arab', 'Turkish', 'Persian', 'Bengali Muslim',
+  'Punjabi Muslim', 'Egyptian Arab', 'Indonesian', 'Pakistani', 'Malay',
+  'Kashmiri Muslim', 'Afghan', 'Baloch', 'Sindhi Muslim', 'Javanese',
+  'Moroccan Arab', 'Saudi', 'Iraqi Arab', 'Syrian Arab', 'Lebanese',
+  'Palestinian', 'Somali', 'Nigerian Muslim', 'Sudanese Arab', 'Yemeni',
+  'Uzbek', 'Kazakh', 'Tajik', 'Uyghur', 'Tatar', 'Bosniak', 'Albanian Muslim',
+  'Chechen', 'Swahili', 'Hausa', 'Fulani', 'Rohingya', 'Kurdish',
+  'African American Muslim', 'Gujarati Muslim', 'Mapila', 'Other',
+]
+
+// Communities jinke liye UI mein extra-privacy inline-note dikhana hai
+// jab user inhe select kare (denomination-level sensitivity jaise
+// Ahmadiyya Step-2 mein hi handle ho jaati hai — yeh sirf community-level).
+export const SENSITIVE_COMMUNITIES = ['Bohra (Dawoodi)', 'Rohingya', 'Uyghur']
+export const SENSITIVE_COMMUNITY_NOTE = 'Yeh community ke liye extra privacy options available hain — aap chahein to apni profile mein isse zyada control mein rakh sakte hain.'
+
 // Family Financial Status — jaisa research mein exact categories mile
 // (income-range ke saath), FAMILY_INCOME_RANGES se zyada precise hai
 export const FAMILY_FINANCIAL_STATUS = [

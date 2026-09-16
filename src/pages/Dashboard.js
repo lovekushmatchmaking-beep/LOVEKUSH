@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
+import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
+  ISLAMIC_DENOMINATIONS, SUNNI_SCHOOLS_OF_THOUGHT, SHIA_BRANCHES, ISLAMIC_COMMUNITIES,
+  SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
@@ -737,6 +739,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     religion: profile.religion || '',
     community: profile.community || '',
     community_other: '',
+    community_privacy: profile.community_privacy || 'Members Only',
+    islamic_denomination: profile.islamic_denomination || '',
+    islamic_school_of_thought: profile.islamic_school_of_thought || '',
+    islamic_shia_branch: profile.islamic_shia_branch || '',
     gotra_other: '',
     mother_tongue: profile.mother_tongue || '',
     mother_tongue_other: '',
@@ -821,6 +827,14 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
   const [toast, setToast] = useState('')
 
   const set = (k,v) => setForm(p=>({...p,[k]:v}))
+
+  const setCommunity = (v) => setForm(p=>({
+    ...p,
+    community: v,
+    community_privacy: (SENSITIVE_COMMUNITIES.includes(v) && p.community_privacy === 'Members Only')
+      ? 'Accepted Connections Only'
+      : p.community_privacy,
+  }))
 
   const showToast = (msg) => {
     setToast(msg)
@@ -1058,16 +1072,51 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <input className="form-input" value={form.state} onChange={e=>set('state',e.target.value)} />
           </div>
         </div>
+        {form.religion === 'Muslim' && (
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Denomination / Sect</label>
+              <select className="form-select" value={form.islamic_denomination}
+                onChange={e=>set('islamic_denomination',e.target.value)}>
+                <option value="">Select</option>
+                {ISLAMIC_DENOMINATIONS.map(d=><option key={d}>{d}</option>)}
+              </select>
+            </div>
+            {form.islamic_denomination === 'Sunni' && (
+              <div className="form-group">
+                <label className="form-label">School of Thought (Madhab)</label>
+                <select className="form-select" value={form.islamic_school_of_thought}
+                  onChange={e=>set('islamic_school_of_thought',e.target.value)}>
+                  <option value="">Select</option>
+                  {SUNNI_SCHOOLS_OF_THOUGHT.map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
+            {form.islamic_denomination === 'Shia' && (
+              <div className="form-group">
+                <label className="form-label">Shia Branch</label>
+                <select className="form-select" value={form.islamic_shia_branch}
+                  onChange={e=>set('islamic_shia_branch',e.target.value)}>
+                  <option value="">Select</option>
+                  {SHIA_BRANCHES.map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Community / Caste</label>
-            <select className="form-select" value={form.community} onChange={e=>set('community',e.target.value)}>
+            <select className="form-select" value={form.community} onChange={e=>setCommunity(e.target.value)}>
               <option value="">Select</option>
-              {CASTES.map(c=><option key={c}>{c}</option>)}
+              {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES : CASTES).map(c=><option key={c}>{c}</option>)}
             </select>
             {form.community === 'Other' && (
               <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"
                 value={form.community_other} onChange={e=>set('community_other',e.target.value)} />
+            )}
+            {SENSITIVE_COMMUNITIES.includes(form.community) && (
+              <div className="form-hint">{SENSITIVE_COMMUNITY_NOTE}</div>
             )}
           </div>
           <div className="form-group">
@@ -1081,6 +1130,13 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
                 value={form.mother_tongue_other} onChange={e=>set('mother_tongue_other',e.target.value)} />
             )}
           </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Community Privacy</label>
+          <select className="form-select" value={form.community_privacy}
+            onChange={e=>set('community_privacy',e.target.value)}>
+            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+          </select>
         </div>
         <div className="form-row">
           <div className="form-group">
