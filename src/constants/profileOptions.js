@@ -2115,6 +2115,83 @@ export const ISLAMIC_SUB_CASTE_DIVISIONS = [
 export const SENSITIVE_COMMUNITIES = ['Alavi Bohra', 'Dawoodi Bohra', 'Sunni Bohra', 'Rohingya', 'Uyghur']
 export const SENSITIVE_COMMUNITY_NOTE = 'Yeh community ke liye extra privacy options available hain — aap chahein to apni profile mein isse zyada control mein rakh sakte hain.'
 
+// ===================== CHRISTIAN — Denomination / Community =====================
+// Sirf religion === 'Christian' hone par CreateProfile.js/Dashboard.js mein
+// Denomination dropdown (grouped by parent_group via <optgroup>) aur
+// Community dropdown (CHRISTIAN_COMMUNITIES, CASTES/ISLAMIC_COMMUNITIES ki
+// jagah) dikhta hai. Same lightweight flat-array pattern jaisa Hindu/Muslim
+// ke liye already hai — koi master table/FK/RPC nahi.
+export const CHRISTIAN_DENOMINATION_GROUPS = [
+  {
+    group: 'Catholic',
+    options: [
+      'Roman Catholic',
+      'Syro-Malabar Catholic',
+      'Syro-Malankara Catholic',
+      'East Indian Catholic',
+      'Catholic - Knanaya',
+      'Catholic - Syrian',
+    ],
+  },
+  {
+    group: 'Orthodox / Syrian',
+    options: [
+      'Malankara Orthodox Syrian',
+      'Jacobite',
+      'Knanaya Jacobite',
+      'Chaldean Syrian',
+      'Syrian Orthodox',
+    ],
+  },
+  {
+    group: 'Mar Thoma',
+    options: [
+      'Mar Thoma',
+      'St. Thomas Evangelical',
+      'Malabar Independent Syrian Church',
+    ],
+  },
+  {
+    group: 'CSI / CNI',
+    options: [
+      'Church of South India',
+      'Church of North India',
+    ],
+  },
+  {
+    group: 'Protestant',
+    options: [
+      'Protestant', 'Anglican', 'Baptist', 'Brethren', 'Born Again',
+      'Calvinist', 'Congregational', 'Evangelical', 'Lutheran', 'Methodist',
+      'Mennonite', 'Moravian', 'Presbyterian', 'Reformed Baptist',
+      'Pentecostal', 'Apostolic', 'Adventist', 'Assembly of God',
+      'Church of God', 'Church of Christ',
+    ],
+  },
+  {
+    group: 'Other',
+    options: [
+      "Jehovah's Witnesses",
+      'Latter-day Saints',
+      'Melkite',
+      'Others',
+      "Don't know denomination",
+      "Don't wish to specify",
+    ],
+  },
+]
+
+export const CHRISTIAN_COMMUNITIES = [
+  'Knanaya',
+  'Anglo-Indian',
+  'Nadar Christian',
+  'Mangalorean Christian',
+  'Dalit Christian',
+  'Others',
+  "Don't know community",
+  "Don't wish to specify",
+]
+
 // Family Financial Status — jaisa research mein exact categories mile
 // (income-range ke saath), FAMILY_INCOME_RANGES se zyada precise hai
 export const FAMILY_FINANCIAL_STATUS = [
