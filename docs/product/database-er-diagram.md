@@ -41,6 +41,7 @@ islamic_denomination text     -- religion === 'Muslim' only (Sunni/Shia/etc.)
 islamic_school_of_thought text -- Sunni Madhab (Hanafi/Shafi/Maliki/Hanbali)
 islamic_shia_branch text      -- Shia branch (Ithna Ashari/Ismaili/Zaydi/etc.)
 islamic_sub_caste_division text -- optional 3rd tier below Community (e.g. Sheikh -> Farooqui/Hashmi)
+christian_denomination text   -- religion === 'Christian' only (Catholic/Orthodox/Protestant/etc. groups)
 mother_tongue text
 height text
 marital_status text

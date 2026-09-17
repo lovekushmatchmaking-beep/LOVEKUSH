@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
   ISLAMIC_DENOMINATIONS, SUNNI_SCHOOLS_OF_THOUGHT, SHIA_BRANCHES, ISLAMIC_COMMUNITIES,
-  ISLAMIC_SUB_CASTE_DIVISIONS, SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
+  ISLAMIC_SUB_CASTE_DIVISIONS, SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE,
+  CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
@@ -744,6 +745,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     islamic_school_of_thought: profile.islamic_school_of_thought || '',
     islamic_shia_branch: profile.islamic_shia_branch || '',
     islamic_sub_caste_division: profile.islamic_sub_caste_division || 'Not Applicable',
+    christian_denomination: profile.christian_denomination || '',
     gotra_other: '',
     mother_tongue: profile.mother_tongue || '',
     mother_tongue_other: '',
@@ -1105,12 +1107,28 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             )}
           </div>
         )}
+        {form.religion === 'Christian' && (
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Denomination</label>
+              <select className="form-select" value={form.christian_denomination}
+                onChange={e=>set('christian_denomination',e.target.value)}>
+                <option value="">Select</option>
+                {CHRISTIAN_DENOMINATION_GROUPS.map(g=>(
+                  <optgroup key={g.group} label={g.group}>
+                    {g.options.map(d=><option key={d}>{d}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Community / Caste</label>
             <select className="form-select" value={form.community} onChange={e=>setCommunity(e.target.value)}>
               <option value="">Select</option>
-              {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES : CASTES).map(c=><option key={c}>{c}</option>)}
+              {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES : form.religion === 'Christian' ? CHRISTIAN_COMMUNITIES : CASTES).map(c=><option key={c}>{c}</option>)}
             </select>
             {form.community === 'Other' && (
               <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"

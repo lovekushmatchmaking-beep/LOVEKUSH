@@ -46,6 +46,7 @@ export function passesHardFilters(me, other) {
 const WEIGHTS = {
   community: 20, education: 12, incomeOccupation: 12, location: 12,
   age: 10, familyType: 8, diet: 8, manglik: 8, motherTongue: 5, lifestyle: 5,
+  christianDenomination: 10,
 }
 
 function scoreCategory(condition, points, strengthText, discussText) {
@@ -78,6 +79,15 @@ export function computeMatchScore(me, other) {
       strengths.push('Different Gotra')
     } else {
       needsDiscussion.push('⚠ Same Gotra — verify with family before proceeding')
+    }
+  }
+
+  // Christian denomination — same-denomination match is a bonus, additive only
+  if (me.religion === 'Christian' && other.religion === 'Christian' && me.christian_denomination && other.christian_denomination) {
+    possible += WEIGHTS.christianDenomination
+    if (me.christian_denomination === other.christian_denomination) {
+      earned += WEIGHTS.christianDenomination
+      strengths.push('Same denomination (' + me.christian_denomination + ')')
     }
   }
 

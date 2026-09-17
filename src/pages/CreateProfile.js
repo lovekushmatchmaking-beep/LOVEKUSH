@@ -21,6 +21,8 @@ import {
   SHIA_BRANCHES,
   ISLAMIC_COMMUNITIES,
   ISLAMIC_SUB_CASTE_DIVISIONS,
+  CHRISTIAN_DENOMINATION_GROUPS,
+  CHRISTIAN_COMMUNITIES,
   SENSITIVE_COMMUNITIES,
   SENSITIVE_COMMUNITY_NOTE,
   COMPLEXIONS,
@@ -89,6 +91,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     community:'', community_other:'', mother_tongue:'', mother_tongue_other:'',
     islamic_denomination:'', islamic_school_of_thought:'', islamic_shia_branch:'',
     islamic_sub_caste_division:'Not Applicable',
+    christian_denomination:'',
     community_privacy:'Members Only',
     height:'', weight:'', complexion:'', body_type:'Average',
     marital_status:'Never Married', nationality:'Indian',
@@ -496,12 +499,29 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               </div>
             )}
 
+            {form.religion === 'Christian' && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Denomination</label>
+                  <select className="form-select" value={form.christian_denomination}
+                    onChange={e=>set('christian_denomination',e.target.value)}>
+                    <option value="">Select</option>
+                    {CHRISTIAN_DENOMINATION_GROUPS.map(g=>(
+                      <optgroup key={g.group} label={g.group}>
+                        {g.options.map(d=><option key={d}>{d}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Community / Caste</label>
                 <select className="form-select" value={form.community} onChange={e=>setCommunity(e.target.value)}>
                   <option value="">Select</option>
-                  {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES : CASTES).map(c=><option key={c}>{c}</option>)}
+                  {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES : form.religion === 'Christian' ? CHRISTIAN_COMMUNITIES : CASTES).map(c=><option key={c}>{c}</option>)}
                 </select>
                 {form.community === 'Other' && (
                   <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"
