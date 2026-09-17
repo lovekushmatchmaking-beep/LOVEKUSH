@@ -20,6 +20,7 @@ import {
   SUNNI_SCHOOLS_OF_THOUGHT,
   SHIA_BRANCHES,
   ISLAMIC_COMMUNITIES,
+  ISLAMIC_SUB_CASTE_DIVISIONS,
   SENSITIVE_COMMUNITIES,
   SENSITIVE_COMMUNITY_NOTE,
   COMPLEXIONS,
@@ -87,6 +88,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     city:'', state:'', country:'India', religion:'Hindu',
     community:'', community_other:'', mother_tongue:'', mother_tongue_other:'',
     islamic_denomination:'', islamic_school_of_thought:'', islamic_shia_branch:'',
+    islamic_sub_caste_division:'Not Applicable',
     community_privacy:'Members Only',
     height:'', weight:'', complexion:'', body_type:'Average',
     marital_status:'Never Married', nationality:'Indian',
@@ -515,6 +517,17 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                   onChange={e=>set('sub_caste',e.target.value)} />
               </div>
             </div>
+
+            {form.religion === 'Muslim' && (
+              <div className="form-group">
+                <label className="form-label">Sub-Caste / Division</label>
+                <select className="form-select" value={form.islamic_sub_caste_division}
+                  onChange={e=>set('islamic_sub_caste_division',e.target.value)}>
+                  {ISLAMIC_SUB_CASTE_DIVISIONS.map(s=><option key={s}>{s}</option>)}
+                </select>
+                <div className="form-hint">Optional — sab communities ke liye applicable nahi hota</div>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">Community Privacy</label>

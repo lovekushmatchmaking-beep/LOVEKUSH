@@ -2064,25 +2064,55 @@ export const SHIA_BRANCHES = [
   'Prefer not to specify',
 ]
 
-// 50 communities — Islam-specific "Community/Caste" dropdown, replaces
-// CASTES when religion === 'Muslim'. "Other" free-text fallback already
-// handled by the existing community_other pattern.
+// Islam-specific "Community/Caste" dropdown, replaces CASTES when
+// religion === 'Muslim'. "Other" free-text fallback already handled by
+// the existing community_other pattern. Cross-checked against
+// BharatMatrimony's production list (July 2026): ONE shared list is used
+// for both Sunni and Shia (not duplicated per-sect) — the UI never
+// branches this list by denomination, only Step 2's Denomination select
+// itself does.
 export const ISLAMIC_COMMUNITIES = [
-  'Syed', 'Sheikh', 'Ansari', 'Pathan', 'Qureshi', 'Mughal', 'Rajput', 'Malik',
-  'Siddiqui', 'Bohra (Dawoodi)', 'Arab', 'Turkish', 'Persian', 'Bengali Muslim',
-  'Punjabi Muslim', 'Egyptian Arab', 'Indonesian', 'Pakistani', 'Malay',
-  'Kashmiri Muslim', 'Afghan', 'Baloch', 'Sindhi Muslim', 'Javanese',
-  'Moroccan Arab', 'Saudi', 'Iraqi Arab', 'Syrian Arab', 'Lebanese',
-  'Palestinian', 'Somali', 'Nigerian Muslim', 'Sudanese Arab', 'Yemeni',
-  'Uzbek', 'Kazakh', 'Tajik', 'Uyghur', 'Tatar', 'Bosniak', 'Albanian Muslim',
+  // India-specific matrimonial-standard castes
+  'Ansari', 'Arain', 'Awan', 'Barhai', 'Chikwa', 'Dekkani', 'Dhunia',
+  'Dudekula', 'Hajjam', 'Hanafi', 'Jat', 'Kabaria', 'Khoja', 'Kumhar',
+  'Lebbai', 'Malik', 'Manihar', 'Mapila', 'Maraicar', 'Memon', 'Mughal',
+  'Pathan', 'Qureshi', 'Rajput', 'Rowther', 'Shafi', 'Sheikh',
+  'Sheikh Syed', 'Siddiqui', 'Syed', 'Teli', 'Unspecified',
+  // Bohra split into 3 distinct sub-groups
+  'Alavi Bohra', 'Dawoodi Bohra', 'Sunni Bohra',
+  // Broader regional/ethnic (global reach)
+  'Arab', 'Turkish', 'Persian', 'Bengali Muslim', 'Punjabi Muslim',
+  'Egyptian Arab', 'Indonesian', 'Pakistani', 'Malay', 'Kashmiri Muslim',
+  'Afghan', 'Baloch', 'Sindhi Muslim', 'Javanese', 'Moroccan Arab',
+  'Saudi', 'Iraqi Arab', 'Syrian Arab', 'Lebanese', 'Palestinian',
+  'Somali', 'Nigerian Muslim', 'Sudanese Arab', 'Yemeni', 'Uzbek',
+  'Kazakh', 'Tajik', 'Uyghur', 'Tatar', 'Bosniak', 'Albanian Muslim',
   'Chechen', 'Swahili', 'Hausa', 'Fulani', 'Rohingya', 'Kurdish',
-  'African American Muslim', 'Gujarati Muslim', 'Mapila', 'Other',
+  'African American Muslim', 'Gujarati Muslim',
+  'Other',
+]
+
+// Optional third tier below Community — a more specific division within
+// some communities (e.g. Sheikh -> Farooqui/Hashmi/Qazi). Not applicable
+// to every community, so this stays optional with a neutral default.
+export const ISLAMIC_SUB_CASTE_DIVISIONS = [
+  'Dhobi', 'Farooqui', 'Gada', 'Gadri Ghosi', 'Gaddi', 'Ganchi', 'Gujar',
+  'Hashmi', 'Iraqi Kalal', 'Kamboj', 'Khatri', 'Khotta', 'Konkani',
+  'Kulhaiya', 'Laskar', 'Mansoori', 'Pinjara', 'Meitei Pangal', 'Meo',
+  'Molla', 'Mondal', 'Munshi', 'Nagori', 'Nashya Sheikh', 'Nawayath',
+  'Punjabi Shamsi', 'Qaimkhani', 'Qazi', 'Quadriya', 'Rahmani',
+  'Rangrez', 'Sabaag', 'Rayeen', 'Saifi', 'Salmani', 'Sandhi', 'Sardar',
+  'Sarkar', 'Shah Alvi', 'Shershabadia', 'Shikalgara', 'Soni', 'Soomro',
+  'Sri Lankan', 'Talukdar', 'Tamboli', 'Thangal', 'Tyagi', 'Araki',
+  'Abbasi', 'Assamese Muslim', 'Attar', 'Bagwan', 'Bangladeshi', 'Beary',
+  'Bhat', 'Chhipa', 'Choudhary', 'Darzi', 'Idrisi Sheikh',
+  'Not Applicable', 'Other',
 ]
 
 // Communities jinke liye UI mein extra-privacy inline-note dikhana hai
 // jab user inhe select kare (denomination-level sensitivity jaise
 // Ahmadiyya Step-2 mein hi handle ho jaati hai — yeh sirf community-level).
-export const SENSITIVE_COMMUNITIES = ['Bohra (Dawoodi)', 'Rohingya', 'Uyghur']
+export const SENSITIVE_COMMUNITIES = ['Alavi Bohra', 'Dawoodi Bohra', 'Sunni Bohra', 'Rohingya', 'Uyghur']
 export const SENSITIVE_COMMUNITY_NOTE = 'Yeh community ke liye extra privacy options available hain — aap chahein to apni profile mein isse zyada control mein rakh sakte hain.'
 
 // Family Financial Status — jaisa research mein exact categories mile

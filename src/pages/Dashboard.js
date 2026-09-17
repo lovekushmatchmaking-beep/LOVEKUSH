@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
   ISLAMIC_DENOMINATIONS, SUNNI_SCHOOLS_OF_THOUGHT, SHIA_BRANCHES, ISLAMIC_COMMUNITIES,
-  SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
+  ISLAMIC_SUB_CASTE_DIVISIONS, SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
@@ -743,6 +743,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     islamic_denomination: profile.islamic_denomination || '',
     islamic_school_of_thought: profile.islamic_school_of_thought || '',
     islamic_shia_branch: profile.islamic_shia_branch || '',
+    islamic_sub_caste_division: profile.islamic_sub_caste_division || 'Not Applicable',
     gotra_other: '',
     mother_tongue: profile.mother_tongue || '',
     mother_tongue_other: '',
@@ -1131,6 +1132,16 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             )}
           </div>
         </div>
+        {form.religion === 'Muslim' && (
+          <div className="form-group">
+            <label className="form-label">Sub-Caste / Division</label>
+            <select className="form-select" value={form.islamic_sub_caste_division}
+              onChange={e=>set('islamic_sub_caste_division',e.target.value)}>
+              {ISLAMIC_SUB_CASTE_DIVISIONS.map(s=><option key={s}>{s}</option>)}
+            </select>
+            <div className="form-hint">Optional — sab communities ke liye applicable nahi hota</div>
+          </div>
+        )}
         <div className="form-group">
           <label className="form-label">Community Privacy</label>
           <select className="form-select" value={form.community_privacy}
