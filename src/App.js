@@ -4,6 +4,8 @@ import { supabase } from './supabase'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import CreateProfile from './pages/CreateProfile'
 import Dashboard from './pages/Dashboard'
 import Admin from './pages/Admin'
@@ -62,6 +64,11 @@ export default function App() {
         <Route path="/" element={<Landing user={user} />} />
         <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
         <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
+        <Route path="/forgot-password" element={!user ? <ForgotPassword /> : <Navigate to="/dashboard" />} />
+        {/* /reset-password ko !user se gate nahi karte — recovery link khud
+            hi ek temporary session bana deta hai, jisse "user" set ho jaata
+            hai, isliye yahan "user hai to redirect" wala pattern nahi chalega */}
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/create-profile" element={user ? <CreateProfile user={user} /> : <Navigate to="/login" />} />
         <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
         <Route
