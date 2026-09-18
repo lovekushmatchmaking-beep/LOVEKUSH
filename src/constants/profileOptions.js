@@ -1891,6 +1891,62 @@ export const EDUCATIONS = [
   'Doctorate',
 ]
 
+// "Degree" — specific qualification (B.Tech, MBBS, LLB, Ph.D, etc.),
+// distinct from the coarse EDUCATIONS dropdown above. Grouped object so
+// CreateProfile.js/Dashboard.js can render it as <optgroup> sections,
+// with a search box on top filtering across all groups.
+export const DEGREE_OPTIONS = {
+  'Engineering': ['B.E / B.Tech', 'M.E / M.Tech', 'M.S Engineering',
+    'B.Eng (Hons)', 'M.Eng (Hons)', 'Engineering Diploma', 'AE', 'AET',
+    'A.M.E.', 'B.Plan', 'M.Plan', 'B.Tech LL.B.'],
+
+  'Medicine & Healthcare': ['MBBS', 'BDS', 'BPT', 'BAMS', 'BHMS',
+    'B.Pharma', 'BVSc', 'BSN / BScN', 'MDS', 'MCh', 'M.D.',
+    'M.S Medicine', 'MPT', 'DM', 'M.Pharma', 'MVSc', 'MMed',
+    'PGD Medicine', 'ADN', 'ANM', 'B.O.Th', 'B.P.E.S', 'B.P.Ed',
+    'BCVT', 'BMLT', 'BMRIT', 'BMRT', 'BNYS', 'BOPTM', 'BOT', 'BPH',
+    'BPMT', 'BPO', 'BRDIT', 'BUMS', 'D.P.Ed', 'D.Pharm', 'DMLT',
+    'GNM', 'M.Optom.', 'MPH'],
+
+  'Law': ['BL / LLB', 'ML / LLM', 'LLB (Hons)', 'ALA', 'B.A. LL.B.',
+    'B.A. LL.B. (Hons)', 'B.Com LL.B.', 'B.L.S. LL.B.', 'BBA LL.B.',
+    'BBA LL.B. (Hons)', 'M.B.L.', 'LL.D.'],
+
+  'Doctorate': ['Ph.D', 'M.Phil', 'D.Litt', 'LL.D.', 'Pharm.D', 'Doctorate'],
+
+  'Science': ['B.Sc', 'M.Sc', 'BSc (Hons)', 'DipSc', 'AS', 'AAS',
+    'B.Agri.', 'B.Sc. (Post Basic)', 'B.Voc', 'M.Voc'],
+
+  'Computer / IT': ['BCA', 'B.IT', 'BCS', 'BA Computer Science',
+    'MCA', 'PGDCA', 'IT Diploma', 'ADIT', 'ADCA', 'DCA', 'MCM'],
+
+  'Management': ['BBA', 'BHM', 'BBM', 'MBA', 'PGDM', 'ABA', 'ADBus',
+    'B.H.A.', 'BAM', 'BFM', 'BFT', 'BHMCT', 'BHMTT', 'BMS', 'CWM',
+    'Executive MBA', 'FPM', 'MAM', 'MBM', 'MHA', 'MHRM', 'MIB',
+    'MMM', 'MMS', 'MTA', 'MTM'],
+
+  'Finance / Commerce': ['B.Com', 'CA / CPA', 'CFA', 'CS',
+    'BSc / BFin', 'M.Com', 'MSc / MFin / MS', 'BCom (Hons)',
+    'PGD Finance', 'BBE', 'BBI', 'CFP', 'CIA', 'ICWA', 'MBE',
+    'MBF', 'MFC', 'MFM'],
+
+  'Arts / Design / Humanities': ['B.A', 'B.Ed', 'BJMC', 'BFA',
+    'B.Arch', 'B.Des', 'BMM', 'MFA', 'M.Ed', 'M.A', 'MSW', 'MJMC',
+    'M.Arch', 'M.Des', 'BA (Hons)', 'B.Arch (Hons)', 'DFA', 'D.Ed',
+    'D.Arch', 'AA', 'AFA', 'B.El.Ed', 'B.F.Sc.', 'B.FAD', 'B.FTech',
+    'B.J.', 'B.Lib.I.Sc.', 'B.Lib.Sc.', 'B.Litt', 'B.M.C.',
+    'B.M.M.M.C.', 'B.Mus.', 'BCT & CA', 'BID', 'BPA', 'BSW', 'BVA',
+    'D.El.Ed', 'D.Voc', 'ETT', 'M.F.Sc.', 'M.FTech', 'M.H.Sc.',
+    'M.Lib.I.Sc.', 'M.Lib.Sc.', 'M.M.C.', 'M.O.L.', 'M.P.Ed', 'MID',
+    'MPA', 'MVA', 'P.P.T.T.C', 'TTC'],
+
+  'General': ['Bachelor', 'Master', 'Diploma', 'Honours', 'Associate'],
+
+  'Non-Graduate': ['High School', 'Less than High School', 'Trade School'],
+
+  'System': ['Others / Not in list', "Don't wish to specify"],
+}
+
 export const INCOME_RANGES = ['No income', 'Below ₹1L', '₹1–3L', '₹3–5L', '₹5–10L', 'Above ₹10L']
 
 export const DIETS = ['Vegetarian', 'Non-Vegetarian', 'Occasionally Non-Vegetarian', 'Eggetarian', 'Jain', 'Vegan']

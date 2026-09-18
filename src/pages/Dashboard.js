@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
+import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
   ISLAMIC_DENOMINATIONS, SUNNI_SCHOOLS_OF_THOUGHT, SHIA_BRANCHES, ISLAMIC_COMMUNITIES,
   ISLAMIC_SUB_CASTE_DIVISIONS, SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE,
   CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES,
@@ -799,6 +799,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     current_address: profile.current_address || '',
     relocation_preference: profile.relocation_preference || '',
     education: profile.education || '',
+    degree: profile.degree || '', degree_other: '',
     field_of_study: profile.field_of_study || '',
     specialization: profile.specialization || '',
     occupation: profile.occupation || '',
@@ -833,6 +834,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
   })
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
+  const [degreeSearch, setDegreeSearch] = useState('')
 
   const set = (k,v) => setForm(p=>({...p,[k]:v}))
 
@@ -878,6 +880,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
       const finalMotherTongue = form.mother_tongue === 'Other' ? form.mother_tongue_other : form.mother_tongue
       const gotraIsOther = form.gotra === 'Other' || form.gotra === 'Others / Not in list'
       const finalGotra = gotraIsOther ? (form.gotra_other || form.custom_caste_text_gotra) : form.gotra
+      const degreeIsOther = form.degree === 'Others / Not in list'
+      const finalDegree = degreeIsOther ? form.degree_other : form.degree
 
       const denominationValue = form.islamic_denomination || form.christian_denomination || form.religion_denomination || null
 
@@ -891,6 +895,12 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
         suggestCaste({
           religion: form.religion, denomination: denominationValue,
           suggested_name: form.gotra_other || form.custom_caste_text_gotra, field_type: 'gotra',
+        })
+      }
+      if (degreeIsOther && form.degree_other) {
+        suggestCaste({
+          religion: form.religion, denomination: denominationValue,
+          suggested_name: form.degree_other, field_type: 'degree',
         })
       }
 
@@ -911,6 +921,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           community: finalCommunity,
           mother_tongue: finalMotherTongue,
           gotra: finalGotra,
+          degree: finalDegree,
           age: ageCheck.age,
           partner_age_min: parseInt(form.partner_age_min) || null,
           partner_age_max: parseInt(form.partner_age_max) || null,
@@ -1317,6 +1328,26 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           <select className="form-select" value={form.education} onChange={e=>set('education',e.target.value)}>
             {EDUCATIONS.map(e=><option key={e}>{e}</option>)}
           </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Degree</label>
+          <input className="form-input" style={{marginBottom:6}} placeholder="Search degree (e.g. MBBS, B.Tech)..."
+            value={degreeSearch} onChange={e=>setDegreeSearch(e.target.value)} />
+          <select className="form-select" value={form.degree} onChange={e=>set('degree',e.target.value)}>
+            <option value="">Select</option>
+            {Object.entries(DEGREE_OPTIONS).map(([cat, options]) => {
+              const filtered = options.filter(d => d.toLowerCase().includes(degreeSearch.toLowerCase()))
+              return filtered.length > 0 && (
+                <optgroup key={cat} label={cat}>
+                  {filtered.map(d=><option key={d}>{d}</option>)}
+                </optgroup>
+              )
+            })}
+          </select>
+          {form.degree === 'Others / Not in list' && (
+            <input className="form-input" style={{marginTop:8}} placeholder="Apni degree likhein"
+              value={form.degree_other} onChange={e=>set('degree_other',e.target.value)} />
+          )}
         </div>
         <div className="form-group">
           <label className="form-label">Field of Study</label>

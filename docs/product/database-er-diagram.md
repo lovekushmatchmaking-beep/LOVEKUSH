@@ -49,6 +49,8 @@ mother_tongue text
 height text
 marital_status text
 education text
+degree text                   -- specific qualification (B.Tech/MBBS/LLB/etc.), grouped dropdown in DEGREE_OPTIONS
+degree_other text              -- free-text "Others / Not in list" entry for degree
 field_of_study text
 occupation text
 employer text

@@ -5,6 +5,7 @@ import { supabase, generateProfileCode } from '../supabase'
 import {
   DIETS,
   EDUCATIONS,
+  DEGREE_OPTIONS,
   FAMILY_TYPES,
   FAMILY_VALUES,
   HABITS,
@@ -75,6 +76,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   const [photoFiles, setPhotoFiles] = useState(Array(6).fill(null))
   const fileRefs = useRef(Array(6).fill(null).map(()=>React.createRef()))
   const [toast, setToast] = useState('')
+  const [degreeSearch, setDegreeSearch] = useState('')
 
   const [form, setForm] = useState({
     client_phone:'', client_email:'', alternate_email:'',
@@ -103,7 +105,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     physical_disability:'No', disability_details:'',
     sub_caste:'', gotra:'', gotra_other:'', manglik:'', kundli_available:'',
     native_place:'', current_address:'', relocation_preference:'',
-    education:'Graduation', field_of_study:'', specialization:'', occupation:'',
+    education:'Graduation', degree:'', degree_other:'', field_of_study:'', specialization:'', occupation:'',
     designation:'', industry:'', employment_type:'', work_location:'',
     employer:'', annual_income:'₹3–5L',
     diet:'Vegetarian', smoking:'Never', drinking:'Never',
@@ -215,6 +217,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       const finalMotherTongue = form.mother_tongue === 'Other' ? form.mother_tongue_other : form.mother_tongue
       const gotraIsOther = form.gotra === 'Other' || form.gotra === 'Others / Not in list'
       const finalGotra = gotraIsOther ? (form.gotra_other || form.custom_caste_text_gotra) : form.gotra
+      const degreeIsOther = form.degree === 'Others / Not in list'
+      const finalDegree = degreeIsOther ? form.degree_other : form.degree
 
       const denominationValue = form.islamic_denomination || form.christian_denomination || form.religion_denomination || null
 
@@ -230,10 +234,17 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           suggested_name: form.gotra_other || form.custom_caste_text_gotra, field_type: 'gotra',
         })
       }
+      if (degreeIsOther && form.degree_other) {
+        suggestCaste({
+          religion: form.religion, denomination: denominationValue,
+          suggested_name: form.degree_other, field_type: 'degree',
+        })
+      }
 
-      // community_other/mother_tongue_other/gotra_other/custom_caste_text*
+      // community_other/mother_tongue_other/gotra_other/custom_caste_text_gotra
       // sirf UI helper fields hain — "profiles" table mein aisa koi column
-      // nahi hai (custom_caste_text ke alawa), isliye insert se pehle inhe
+      // nahi hai (custom_caste_text aur degree_other real columns hain,
+      // isliye unhe yahan nahi nikaala), isliye insert se pehle inhe
       // nikaal dete hain (warna database error aayega).
       const { community_other, mother_tongue_other, gotra_other, custom_caste_text_gotra, ...formToSave } = form
 
@@ -250,6 +261,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           community: finalCommunity,
           mother_tongue: finalMotherTongue,
           gotra: finalGotra,
+          degree: finalDegree,
           age: ageCheck.age,
           partner_age_min: parseInt(form.partner_age_min) || null,
           partner_age_max: parseInt(form.partner_age_max) || null,
@@ -779,6 +791,27 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               <select className="form-select" value={form.education} onChange={e=>set('education',e.target.value)}>
                 {EDUCATIONS.map(e=><option key={e}>{e}</option>)}
               </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Degree</label>
+              <input className="form-input" style={{marginBottom:6}} placeholder="Search degree (e.g. MBBS, B.Tech)..."
+                value={degreeSearch} onChange={e=>setDegreeSearch(e.target.value)} />
+              <select className="form-select" value={form.degree} onChange={e=>set('degree',e.target.value)}>
+                <option value="">Select</option>
+                {Object.entries(DEGREE_OPTIONS).map(([cat, options]) => {
+                  const filtered = options.filter(d => d.toLowerCase().includes(degreeSearch.toLowerCase()))
+                  return filtered.length > 0 && (
+                    <optgroup key={cat} label={cat}>
+                      {filtered.map(d=><option key={d}>{d}</option>)}
+                    </optgroup>
+                  )
+                })}
+              </select>
+              {form.degree === 'Others / Not in list' && (
+                <input className="form-input" style={{marginTop:8}} placeholder="Apni degree likhein"
+                  value={form.degree_other} onChange={e=>set('degree_other',e.target.value)} />
+              )}
             </div>
 
             <div className="form-group">
