@@ -73,13 +73,13 @@ export function computeMatchScore(me, other) {
     }
   }
 
-  // Gotra — different gotra is a POSITIVE (culturally preferred), same is a flag
-  if (me.gotra && other.gotra) {
-    if (me.gotra !== other.gotra) {
-      strengths.push('Different Gotra')
-    } else {
+  // Gotra — same gotra is a WARNING (traditional same-gotra rule), different is
+  // neutral (no bonus/penalty). "Don't wish to specify" is ignored entirely.
+  if (me.gotra && other.gotra && me.gotra !== "Don't wish to specify" && other.gotra !== "Don't wish to specify") {
+    if (me.gotra === other.gotra) {
       needsDiscussion.push('⚠ Same Gotra — verify with family before proceeding')
     }
+    // different gotra: intentionally no strength/discussion entry — neutral
   }
 
   // Christian denomination — same-denomination match is a bonus, additive only

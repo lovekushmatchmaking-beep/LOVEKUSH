@@ -42,6 +42,9 @@ islamic_school_of_thought text -- Sunni Madhab (Hanafi/Shafi/Maliki/Hanbali)
 islamic_shia_branch text      -- Shia branch (Ithna Ashari/Ismaili/Zaydi/etc.)
 islamic_sub_caste_division text -- optional 3rd tier below Community (e.g. Sheikh -> Farooqui/Hashmi)
 christian_denomination text   -- religion === 'Christian' only (Catholic/Orthodox/Protestant/etc. groups)
+religion_denomination text    -- generic Denomination/Tradition field for Jain/Sikh/Buddhist/Zoroastrian/Jewish/Shinto/Taoist
+religion_denomination_2 text  -- Zoroastrian's second field only (Religious Calendar)
+custom_caste_text text        -- free-text "Others / Not in list" entry for community/caste
 mother_tongue text
 height text
 marital_status text
@@ -110,6 +113,27 @@ entity_id uuid
 metadata jsonb
 created_at timestamptz
 ```
+
+### caste_suggestions
+
+```text
+id uuid pk
+religion text
+denomination text
+suggested_name text
+field_type text        -- 'caste' | 'denomination' | 'community' | 'gotra'
+submitted_by_profile_id uuid fk profiles.id
+times_suggested int
+status text             -- default 'pending' -> 'approved' / 'rejected'
+admin_notes text
+created_at timestamptz
+updated_at timestamptz
+unique(religion, suggested_name)
+```
+"Others / Not in list" entries (community/caste/gotra) captured here for
+admin review — see Admin panel's "Caste Suggestions" section. Increment
+on duplicate handled by the `upsert_caste_suggestion` Postgres function
+(atomic insert-or-increment), not client-side RLS.
 
 ## Future ERD
 

@@ -1,4 +1,12 @@
-export const RELIGIONS = ['Hindu', 'Muslim', 'Sikh', 'Christian', 'Jain', 'Buddhist', 'Other']
+export const RELIGIONS = [
+  'Hindu', 'Muslim', 'Sikh', 'Christian', 'Jain', 'Buddhist',
+  'Zoroastrian', 'Jewish', 'Shinto', 'Taoist',
+  "Baha'i", 'Confucianism', 'Druze', 'Yazidism', 'Rastafari', 'Tenrikyo',
+  'Pagan', 'Unitarian Universalism', 'New Religious Movements',
+  'Indigenous / Traditional', 'Samaritanism',
+  'Atheist', 'Agnostic', 'Spiritual but not Religious', 'Secular / Humanist', 'No Religion',
+  'Other',
+]
 
 export const CASTES = [
   "Ad Dharmi",
@@ -2191,6 +2199,166 @@ export const CHRISTIAN_COMMUNITIES = [
   "Don't know community",
   "Don't wish to specify",
 ]
+
+// ===================== OTHER RELIGIONS — Denomination/Tradition + Community =====================
+// Same lightweight flat-array pattern as Hindu/Muslim/Christian above.
+// RELIGION_HIERARCHY drives ONE generic, data-driven UI block (used for
+// every religion below) instead of a hand-written block per religion —
+// Muslim aur Christian apne existing hand-written cascading blocks pe
+// hi rehte hain (unhe yahan touch nahi kiya), yeh sirf naye religions
+// ke liye hai.
+
+export const JAIN_SECTS = ['Shwetambar', 'Digambar', "Don't wish to specify"]
+
+export const JAIN_COMMUNITIES = [
+  'Agarwal', 'Asati', 'Ayodhyavasi', 'Bagherwal', 'Bania', 'Barhiya',
+  'Charanagare', 'Chaturtha', 'Dhakada', 'Gahoi / Grihapati',
+  'Golalare / Kharaua', 'Golapurva', 'Golsinghare', 'Harada',
+  'Humad / Humbad', 'Jaiswal', 'Kambhoja', 'Kasar', 'Kathanere',
+  'Khandelwal', 'Kutchi', 'KVO', 'Lamechu', 'Nema', 'Oswal',
+  'Padmavati Porwal', 'Palliwal', 'Panchama', 'Parmar',
+  'Parwar / Paravara', 'Porwal', 'Saitwal', 'Samanar / Nayinar',
+  'Samiya', 'Sarak', 'Shrimal', 'Upadhyaya', 'Vaishya', 'Veerwal',
+  'Intercaste', 'Others / Not in list', "Don't wish to specify",
+]
+
+// Jain-only gotra list — Hindu's existing GOTRAS (287 entries, shipped
+// separately) is NOT touched or reused here.
+export const JAIN_GOTRAS = [
+  'Atri', 'Bharadwaj', 'Bhrigu', 'Chandravanshi', 'Gautam',
+  'Garg', 'Jamadagni', 'Kaashyap / Kashyap', 'Katyayan',
+  'Kaundinya', 'Krittika', 'Kulish', 'Kundal', 'Mandavya',
+  'Maudgalya', 'Parashara', 'Shandilya', 'Shrivatsa',
+  'Suryadhwaj', 'Upamanyu', 'Vashisht / Vashistha',
+  'Vatsa', 'Vishwamitra',
+  'Others / Not in list', "Don't wish to specify", 'Gotra not applicable',
+]
+
+export const SIKH_RELIGIOUS_IDENTITY = ['Gursikh', 'Kesadhari', "Don't wish to specify"]
+
+export const SIKH_COMMUNITIES = [
+  'Ahluwalia', 'Arora', 'Bhatia', 'Bhatra', 'Ghumar',
+  'Jat - Achara', 'Jat - Bhakar', 'Jat - Dhatarwal', 'Jat - Janu',
+  'Jat - Kuntal', 'Jat - Poria', 'Jat - Sheokhand', 'Jat - Tangar',
+  'Kamboj', 'Kashyap Rajput',
+  'Khatri - Batta', 'Khatri - Bindra', 'Khatri - Dhingara', 'Khatri - Mehra / Malhotra',
+  'Labana / Lubana', 'Mazhabi', 'Nai', 'Prajapati', 'Rai Sikh',
+  'Rajput - Kalyanot', 'Rajput - Karadiya / Nadoda', 'Rajput - Mair Rajput Swarnkar',
+  'Rajput - Pathania', 'Rajput - Rawat', 'Rajput - Sengar', 'Rajput - Verma',
+  'Ramdasia', 'Ramgarhia', 'Ravidasia', 'Saini', 'Tonk Kshatriya',
+  'Intercaste', 'Others / Not in list', "Don't wish to specify",
+]
+
+export const BUDDHIST_TRADITIONS = [
+  'Navayana / Ambedkarite Buddhist', 'Marathi Buddhist',
+  'Tibetan / Himalayan Buddhist', 'Theravada Buddhist',
+  'Mahayana Buddhist', 'Vajrayana Buddhist',
+  'Other Buddhist Tradition', "Don't wish to specify",
+]
+
+export const BUDDHIST_COMMUNITIES = [
+  'Mahar', 'Marathi Buddhist', 'Navnath',
+  'Tibetan / Himalayan Community', 'Newar Buddhist',
+  'Inter-community', 'Others / Not in list', "Don't wish to specify",
+]
+
+export const ZOROASTRIAN_COMMUNITY = [
+  'Parsi', 'Irani Zoroastrian', 'Other Zoroastrian',
+  'Inter-community', "Don't wish to specify",
+]
+
+export const ZOROASTRIAN_CALENDAR = [
+  'Shahenshahi', 'Kadmi / Qadimi', 'Fasli', "Don't wish to specify",
+]
+
+export const JEWISH_DENOMINATIONS = [
+  'Orthodox Judaism', 'Conservative Judaism', 'Reform Judaism',
+  'Reconstructionist Judaism', 'Karaite Judaism', 'Jewish Renewal',
+  'Secular / Cultural Jewish', 'Just Jewish / Non-denominational',
+  "Don't wish to specify",
+]
+
+export const JEWISH_COMMUNITIES = [
+  'Bene Israel', 'Cochin Jewish', 'Baghdadi Jewish', 'Bene Menashe',
+  'Bene Ephraim', 'Paradesi Jewish', 'Ashkenazi Jewish', 'Sephardi Jewish',
+  'Mizrahi Jewish', 'Yemenite Jewish', 'Bukharan Jewish', 'Georgian Jewish',
+  'Ethiopian Jewish', 'Romaniote Jewish', 'Mountain Jewish',
+  'Inter-community', 'Others / Not in list', "Don't wish to specify",
+]
+
+export const SHINTO_TRADITIONS = [
+  'Shrine Shinto', 'Sect Shinto', 'Folk Shinto',
+  'Shinto-Buddhist', 'Other Shinto Tradition', "Don't wish to specify",
+]
+
+export const SHINTO_COMMUNITIES = [
+  'Japanese', 'Ryukyuan / Okinawan',
+  'Others / Not in list', "Don't wish to specify",
+]
+
+export const TAOIST_TRADITIONS = [
+  'Zhengyi / Orthodox Unity', 'Quanzhen / Complete Reality',
+  'Shangqing', 'Lingbao', 'Folk / Popular Taoism',
+  'Other Taoist Tradition', "Don't wish to specify",
+]
+
+export const TAOIST_COMMUNITIES = [
+  'Chinese', 'Taiwanese', 'Southeast Asian Chinese',
+  'Other Chinese Diaspora', 'Others / Not in list', "Don't wish to specify",
+]
+
+// Generic community-only religions — no denomination field, just this
+// 2-option list (Others / Not in list, Don't wish to specify).
+export const GENERIC_COMMUNITY_OPTIONS = ['Others / Not in list', "Don't wish to specify"]
+
+const GENERIC_COMMUNITY_RELIGIONS = [
+  "Baha'i", 'Confucianism', 'Druze', 'Yazidism', 'Rastafari', 'Tenrikyo',
+  'Pagan', 'Unitarian Universalism', 'New Religious Movements',
+  'Indigenous / Traditional', 'Samaritanism',
+]
+
+// "No Religion" group — hide Denomination + Community fields entirely.
+export const NO_RELIGION_VALUES = [
+  'Atheist', 'Agnostic', 'Spiritual but not Religious', 'Secular / Humanist', 'No Religion',
+]
+
+// Drives the generic, data-driven Denomination/Community UI block for
+// every religion below (Hindu/Muslim/Christian keep their own existing
+// hand-written blocks and are NOT in this lookup).
+export const RELIGION_HIERARCHY = {
+  Jain: {
+    denomination: { label: 'Sect', options: JAIN_SECTS },
+    community: { label: 'Community', options: JAIN_COMMUNITIES },
+  },
+  Sikh: {
+    denomination: { label: 'Religious Identity', options: SIKH_RELIGIOUS_IDENTITY },
+    community: { label: 'Community', options: SIKH_COMMUNITIES },
+  },
+  Buddhist: {
+    denomination: { label: 'Tradition', options: BUDDHIST_TRADITIONS },
+    community: { label: 'Community', options: BUDDHIST_COMMUNITIES },
+  },
+  Zoroastrian: {
+    denomination: { label: 'Community', options: ZOROASTRIAN_COMMUNITY },
+    community: { label: 'Religious Calendar', options: ZOROASTRIAN_CALENDAR },
+  },
+  Jewish: {
+    denomination: { label: 'Denomination', options: JEWISH_DENOMINATIONS },
+    community: { label: 'Community / Heritage', options: JEWISH_COMMUNITIES },
+  },
+  Shinto: {
+    denomination: { label: 'Tradition', options: SHINTO_TRADITIONS },
+    community: { label: 'Community', options: SHINTO_COMMUNITIES },
+  },
+  Taoist: {
+    denomination: { label: 'Tradition', options: TAOIST_TRADITIONS },
+    community: { label: 'Community', options: TAOIST_COMMUNITIES },
+  },
+  ...Object.fromEntries(GENERIC_COMMUNITY_RELIGIONS.map(r => [
+    r,
+    { community: { label: 'Community', options: GENERIC_COMMUNITY_OPTIONS } },
+  ])),
+}
 
 // Family Financial Status — jaisa research mein exact categories mile
 // (income-range ke saath), FAMILY_INCOME_RANGES se zyada precise hai
