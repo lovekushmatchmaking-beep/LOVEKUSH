@@ -53,6 +53,10 @@ export default function Login() {
               value={form.password} onChange={e=>set('password',e.target.value)} required />
           </div>
 
+          <div style={{textAlign:'right',marginBottom:16,marginTop:-8}}>
+            <Link to="/forgot-password" style={{fontSize:13,color:'#8e8e8e',textDecoration:'none'}}>Forgot password?</Link>
+          </div>
+
           {error && <div className="form-error" style={{marginBottom:12}}>{error}</div>}
 
           <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading} style={{marginBottom:12}}>
