@@ -31,6 +31,15 @@ export default function App() {
       else { setStaffUser(null); setLoading(false) }
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Safety net: agar kisi bhi wajah se (misconfigured redirect URL,
+      // purana email link, etc.) recovery session kisi aur page par
+      // land ho jaaye, use zabardasti /reset-password par bhej dete
+      // hain — taaki koi user galti se "logged in dikhe lekin password
+      // reset ka option na mile" wali situation mein na fase.
+      if (_event === 'PASSWORD_RECOVERY' && window.location.pathname !== '/reset-password') {
+        window.location.replace('/reset-password')
+        return
+      }
       setUser(session?.user ?? null)
       if (session?.user) checkStaffStatus(session.user.id)
       else setStaffUser(null)
