@@ -5,7 +5,8 @@ import { supabase } from '../supabase'
 import { DIETS, EDUCATIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
   ISLAMIC_DENOMINATIONS, SUNNI_SCHOOLS_OF_THOUGHT, SHIA_BRANCHES, ISLAMIC_COMMUNITIES,
   ISLAMIC_SUB_CASTE_DIVISIONS, SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE,
-  CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
+  CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES,
+  RELIGION_HIERARCHY, NO_RELIGION_VALUES, JAIN_GOTRAS, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
@@ -746,6 +747,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     islamic_shia_branch: profile.islamic_shia_branch || '',
     islamic_sub_caste_division: profile.islamic_sub_caste_division || 'Not Applicable',
     christian_denomination: profile.christian_denomination || '',
+    religion_denomination: profile.religion_denomination || '',
+    religion_denomination_2: profile.religion_denomination_2 || '',
+    custom_caste_text: profile.custom_caste_text || '',
+    custom_caste_text_gotra: '',
     gotra_other: '',
     mother_tongue: profile.mother_tongue || '',
     mother_tongue_other: '',
@@ -839,6 +844,18 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
       : p.community_privacy,
   }))
 
+  // "Others / Not in list" (community/gotra) — fire-and-forget, doesn't
+  // block save. Increments times_suggested if the same name was already
+  // suggested for this religion.
+  const suggestCaste = ({ religion, denomination, suggested_name, field_type }) => {
+    if (!suggested_name) return
+    supabase.rpc('upsert_caste_suggestion', {
+      p_religion: religion, p_denomination: denomination || null,
+      p_suggested_name: suggested_name, p_field_type: field_type,
+      p_submitted_by: profile.id || null,
+    }).then(({ error }) => { if (error) console.error(error.message) })
+  }
+
   const showToast = (msg) => {
     setToast(msg)
     setTimeout(()=>setToast(''),3000)
@@ -856,10 +873,28 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     setSaving(true)
     try {
       const fullName = [form.first_name, form.middle_name, form.last_name].filter(Boolean).join(' ')
-      const finalCommunity = form.community === 'Other' ? form.community_other : form.community
+      const communityIsOther = form.community === 'Other' || form.community === 'Others / Not in list'
+      const finalCommunity = communityIsOther ? (form.community_other || form.custom_caste_text) : form.community
       const finalMotherTongue = form.mother_tongue === 'Other' ? form.mother_tongue_other : form.mother_tongue
-      const finalGotra = form.gotra === 'Other' ? form.gotra_other : form.gotra
-      const { community_other, mother_tongue_other, gotra_other, ...formToSave } = form
+      const gotraIsOther = form.gotra === 'Other' || form.gotra === 'Others / Not in list'
+      const finalGotra = gotraIsOther ? (form.gotra_other || form.custom_caste_text_gotra) : form.gotra
+
+      const denominationValue = form.islamic_denomination || form.christian_denomination || form.religion_denomination || null
+
+      if (communityIsOther && (form.community_other || form.custom_caste_text)) {
+        suggestCaste({
+          religion: form.religion, denomination: denominationValue,
+          suggested_name: form.community_other || form.custom_caste_text, field_type: 'caste',
+        })
+      }
+      if (gotraIsOther && (form.gotra_other || form.custom_caste_text_gotra)) {
+        suggestCaste({
+          religion: form.religion, denomination: denominationValue,
+          suggested_name: form.gotra_other || form.custom_caste_text_gotra, field_type: 'gotra',
+        })
+      }
+
+      const { community_other, mother_tongue_other, gotra_other, custom_caste_text_gotra, ...formToSave } = form
 
       const { count: photoCount } = await supabase
         .from('photos')
@@ -1123,21 +1158,54 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             </div>
           </div>
         )}
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Community / Caste</label>
-            <select className="form-select" value={form.community} onChange={e=>setCommunity(e.target.value)}>
-              <option value="">Select</option>
-              {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES : form.religion === 'Christian' ? CHRISTIAN_COMMUNITIES : CASTES).map(c=><option key={c}>{c}</option>)}
-            </select>
-            {form.community === 'Other' && (
-              <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"
-                value={form.community_other} onChange={e=>set('community_other',e.target.value)} />
+        {RELIGION_HIERARCHY[form.religion] && (
+          <div className="form-row">
+            {RELIGION_HIERARCHY[form.religion].denomination && (
+              <div className="form-group">
+                <label className="form-label">{RELIGION_HIERARCHY[form.religion].denomination.label}</label>
+                <select className="form-select" value={form.religion_denomination}
+                  onChange={e=>set('religion_denomination',e.target.value)}>
+                  <option value="">Select</option>
+                  {RELIGION_HIERARCHY[form.religion].denomination.options.map(d=><option key={d}>{d}</option>)}
+                </select>
+              </div>
             )}
-            {SENSITIVE_COMMUNITIES.includes(form.community) && (
-              <div className="form-hint">{SENSITIVE_COMMUNITY_NOTE}</div>
+            {form.religion === 'Zoroastrian' && (
+              <div className="form-group">
+                <label className="form-label">{RELIGION_HIERARCHY[form.religion].community.label}</label>
+                <select className="form-select" value={form.religion_denomination_2}
+                  onChange={e=>set('religion_denomination_2',e.target.value)}>
+                  <option value="">Select</option>
+                  {RELIGION_HIERARCHY[form.religion].community.options.map(d=><option key={d}>{d}</option>)}
+                </select>
+              </div>
             )}
           </div>
+        )}
+        <div className="form-row">
+          {!NO_RELIGION_VALUES.includes(form.religion) && form.religion !== 'Zoroastrian' && (
+            <div className="form-group">
+              <label className="form-label">{RELIGION_HIERARCHY[form.religion]?.community.label || 'Community / Caste'}</label>
+              <select className="form-select" value={form.community} onChange={e=>setCommunity(e.target.value)}>
+                <option value="">Select</option>
+                {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES
+                  : form.religion === 'Christian' ? CHRISTIAN_COMMUNITIES
+                  : RELIGION_HIERARCHY[form.religion]?.community.options
+                  || CASTES).map(c=><option key={c}>{c}</option>)}
+              </select>
+              {form.community === 'Other' && (
+                <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"
+                  value={form.community_other} onChange={e=>set('community_other',e.target.value)} />
+              )}
+              {form.community === 'Others / Not in list' && (
+                <input className="form-input" style={{marginTop:8}} placeholder="Apni jati/community ka naam likhein"
+                  value={form.custom_caste_text} onChange={e=>set('custom_caste_text',e.target.value)} />
+              )}
+              {SENSITIVE_COMMUNITIES.includes(form.community) && (
+                <div className="form-hint">{SENSITIVE_COMMUNITY_NOTE}</div>
+              )}
+            </div>
+          )}
           <div className="form-group">
             <label className="form-label">Mother Tongue</label>
             <select className="form-select" value={form.mother_tongue} onChange={e=>set('mother_tongue',e.target.value)}>
@@ -1172,17 +1240,23 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <label className="form-label">Sub-Caste</label>
             <input className="form-input" value={form.sub_caste} onChange={e=>set('sub_caste',e.target.value)} />
           </div>
-          <div className="form-group">
-            <label className="form-label">Gotra</label>
-            <select className="form-select" value={form.gotra} onChange={e=>set('gotra',e.target.value)}>
-              <option value="">Select</option>
-              {GOTRAS.map(g=><option key={g}>{g}</option>)}
-            </select>
-            {form.gotra === 'Other' && (
-              <input className="form-input" style={{marginTop:8}} placeholder="Apna Gotra likhein"
-                value={form.gotra_other} onChange={e=>set('gotra_other',e.target.value)} />
-            )}
-          </div>
+          {(form.religion === 'Hindu' || form.religion === 'Jain') && (
+            <div className="form-group">
+              <label className="form-label">Gotra</label>
+              <select className="form-select" value={form.gotra} onChange={e=>set('gotra',e.target.value)}>
+                <option value="">Select</option>
+                {(form.religion === 'Hindu' ? GOTRAS : JAIN_GOTRAS).map(g=><option key={g}>{g}</option>)}
+              </select>
+              {form.gotra === 'Other' && (
+                <input className="form-input" style={{marginTop:8}} placeholder="Apna Gotra likhein"
+                  value={form.gotra_other} onChange={e=>set('gotra_other',e.target.value)} />
+              )}
+              {form.gotra === 'Others / Not in list' && (
+                <input className="form-input" style={{marginTop:8}} placeholder="Apna Gotra likhein"
+                  value={form.custom_caste_text_gotra} onChange={e=>set('custom_caste_text_gotra',e.target.value)} />
+              )}
+            </div>
+          )}
         </div>
         <div className="form-row">
           <div className="form-group">

@@ -254,6 +254,10 @@ export default function Admin({ staffUser }) {
         <ShareLinksView staffUserId={staffUser.user_id} onBack={()=>setView('list')} />
       )}
 
+      {view === 'casteSuggestions' && (
+        <CasteSuggestionsView onBack={()=>setView('list')} />
+      )}
+
       {view === 'findMatches' && matchesFor && (
         <FindMatchesView
           profile={matchesFor}
@@ -267,6 +271,7 @@ export default function Admin({ staffUser }) {
       {view === 'list' && (
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('casteSuggestions')}>📋 Caste Suggestions</button>
           <button className="btn btn-outline btn-sm" onClick={()=>setView('shareLinks')}>🔗 My Share Links</button>
           <button className="btn btn-black btn-sm" onClick={()=>setView('createClient')}>+ Create Client Profile</button>
         </div>
@@ -641,6 +646,81 @@ function ShareLinksView({ staffUserId, onBack }) {
               </div>
             )
           })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CasteSuggestionsView({ onBack }) {
+  const [suggestions, setSuggestions] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('caste_suggestions')
+        .select('*')
+        .eq('status', 'pending')
+        .order('times_suggested', { ascending: false })
+      if (error) throw error
+      setSuggestions(data || [])
+    } catch (err) {
+      console.error(err.message)
+    }
+    setLoading(false)
+  }
+
+  const handleAction = async (id, status) => {
+    try {
+      const { error } = await supabase.from('caste_suggestions').update({ status }).eq('id', id)
+      if (error) throw error
+      load()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,marginBottom:20}}>Caste Suggestions</h2>
+
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : suggestions.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
+          No pending suggestions right now.
+        </div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {suggestions.map(s => (
+            <div key={s.id} style={{border:'1px solid rgba(0,0,0,0.08)',borderRadius:12,padding:14}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:600}}>{s.suggested_name}</div>
+                  <div style={{fontSize:12,color:'#8e8e8e',marginTop:2}}>
+                    {s.religion}{s.denomination ? ' · ' + s.denomination : ''} · <span style={{textTransform:'capitalize'}}>{s.field_type}</span>
+                  </div>
+                  <div style={{fontSize:10,color:'#bbb',marginTop:2}}>
+                    {new Date(s.created_at).toLocaleDateString('en-IN')}
+                  </div>
+                </div>
+                <div style={{textAlign:'right'}}>
+                  <div style={{fontSize:12,color:'#8e8e8e'}}>Suggested {s.times_suggested}x</div>
+                </div>
+              </div>
+              <div style={{display:'flex',gap:8,marginTop:10}}>
+                <button className="btn btn-outline btn-sm" style={{color:'#16a34a',borderColor:'#16a34a'}}
+                  onClick={()=>handleAction(s.id, 'approved')}>✅ Approve</button>
+                <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
+                  onClick={()=>handleAction(s.id, 'rejected')}>✕ Reject</button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
