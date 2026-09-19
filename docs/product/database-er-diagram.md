@@ -87,7 +87,9 @@ partner_age_max int
 partner_religion text
 partner_community_ids text[]  -- multi-select; may include 'Any Community / No Bar' flag (skips community filtering in matching.js)
 partner_location text
-partner_education text
+partner_education text          -- legacy single-select, kept for backward compat, no longer shown in UI
+partner_degree_preferences text[]              -- multi-select, DEGREE_OPTIONS grouped values; empty = no preference
+partner_education_level_preferences text[]     -- multi-select, EDUCATIONS values; empty = no preference
 partner_notes text
 submitted_at timestamptz
 reviewed_at timestamptz
