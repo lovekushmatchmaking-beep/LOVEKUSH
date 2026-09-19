@@ -30,6 +30,7 @@ import {
   SENSITIVE_COMMUNITIES,
   SENSITIVE_COMMUNITY_NOTE,
   COMPLEXIONS,
+  BODY_TYPES,
   WEIGHT_RANGES,
   NATIONALITIES,
   MANGLIK_OPTIONS,
@@ -434,7 +435,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               <div className="form-group">
                 <label className="form-label">Body Type</label>
                 <select className="form-select" value={form.body_type} onChange={e=>set('body_type',e.target.value)}>
-                  <option>Slim</option><option>Average</option><option>Athletic</option><option>Heavy</option>
+                  <option value="">Select</option>
+                  {BODY_TYPES.map(b=><option key={b}>{b}</option>)}
                 </select>
               </div>
             </div>
