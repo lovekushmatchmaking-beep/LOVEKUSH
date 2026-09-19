@@ -1947,7 +1947,37 @@ export const DEGREE_OPTIONS = {
   'System': ['Others / Not in list', "Don't wish to specify"],
 }
 
-export const INCOME_RANGES = ['No income', 'Below ₹1L', '₹1–3L', '₹3–5L', '₹5–10L', 'Above ₹10L']
+export const INCOME_RANGES = [
+  'Below ₹2L/year', '₹2–5L', '₹5–10L', '₹10–20L', '₹20–35L', '₹35–50L',
+  '₹50L–₹1Cr', '₹1Cr+', 'Prefer not to specify',
+]
+
+// ===================== ASSETS — Property / Vehicle / Business =====================
+// Simplified structured fields replacing the old free-text "Property
+// Details"/"Vehicle Details" inputs. Old property_details/vehicle_details
+// columns are kept (backward compat) but no longer written to by the UI.
+
+export const PROPERTY_TYPES = [
+  'Independent House / Detached House', 'Villa', 'Bungalow', 'Duplex House',
+  'Triplex House', 'Townhouse / Row House', 'Semi-Detached House',
+  'Terraced House', 'Apartment / Flat', 'Condominium / Condo',
+  'Studio Apartment', 'Penthouse', 'Builder Floor / Independent Floor',
+  'Farmhouse', 'Cottage', 'Ancestral / Heritage House',
+  'Village / Rural House', 'Haveli / Mansion', 'Mobile / Manufactured Home',
+  'Other Residential Property', 'None', 'Prefer not to specify',
+]
+
+export const PROPERTY_OWNERSHIP = ['Self Owned', 'Family Owned', 'Jointly Owned', 'Rented', 'Other', 'Prefer not to specify']
+
+export const VEHICLE_OWNERSHIP = [
+  'No Vehicle', 'Two-Wheeler', 'Car', 'Car + Two-Wheeler',
+  'Multiple Vehicles', 'Commercial Vehicle', 'Prefer not to specify',
+]
+
+export const BUSINESS_ASSET_TYPES = [
+  'Own Business', 'Family Business', 'Shop', 'Commercial Property',
+  'Agricultural Land', 'Other', 'None', 'Prefer not to specify',
+]
 
 export const DIETS = ['Vegetarian', 'Non-Vegetarian', 'Occasionally Non-Vegetarian', 'Eggetarian', 'Jain', 'Vegan']
 

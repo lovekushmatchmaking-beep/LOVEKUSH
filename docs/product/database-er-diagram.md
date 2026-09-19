@@ -65,6 +65,18 @@ family_values text
 father_profession text
 mother_profession text
 siblings text
+property_type text            -- structured, replaces old property_details UI (column kept for backward compat)
+property_ownership text
+property_city text
+property_state text
+property_country text
+property_size text
+property_privacy text         -- default 'Members Only'
+vehicle_ownership text        -- structured, replaces old vehicle_details UI (column kept for backward compat)
+vehicle_model text            -- optional free-text model name (e.g. "Hyundai Creta")
+business_asset_type text
+business_detail text
+business_privacy text         -- default 'Hidden'
 family_city text
 partner_age_min int
 partner_age_max int
