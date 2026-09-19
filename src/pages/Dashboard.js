@@ -260,7 +260,8 @@ export default function Dashboard({ user }) {
                     ['Family Values', profile.family_values],
                     ["Father's Profession", profile.father_profession],
                     ["Mother's Profession", profile.mother_profession],
-                    ['Siblings', profile.siblings],
+                    ['Brothers', profile.brothers_count ? profile.brothers_count + ' (' + (profile.brothers_married_count || 0) + ' married)' : null],
+                    ['Sisters', profile.sisters_count ? profile.sisters_count + ' (' + (profile.sisters_married_count || 0) + ' married)' : null],
                     ['Family City', profile.family_city],
                     ['Own House', profile.own_house],
                     ['House Type', profile.house_type],
@@ -828,6 +829,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     father_profession: profile.father_profession || '',
     mother_profession: profile.mother_profession || '',
     siblings: profile.siblings || '',
+    brothers_count: profile.brothers_count || 0, brothers_married_count: profile.brothers_married_count || 0,
+    sisters_count: profile.sisters_count || 0, sisters_married_count: profile.sisters_married_count || 0,
     family_city: profile.family_city || '',
     own_house: profile.own_house || '',
     house_type: profile.house_type || '',
@@ -874,6 +877,24 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     } else {
       set('partner_community_ids', newSelected)
     }
+  }
+
+  // Brothers/Sisters counts — hardcoded 0-10 range mein clamp karte hain
+  // (sirf HTML max attribute pe bharosa nahi karte, kyunki user type karke
+  // usse bypass kar sakta hai), aur married count kabhi total count se
+  // zyada nahi ho sakta.
+  const setSiblingCount = (field, rawValue) => {
+    let n = parseInt(rawValue, 10)
+    if (isNaN(n) || n < 0) n = 0
+    if (n > 10) n = 10
+    setForm(p => {
+      const next = { ...p, [field]: n }
+      if (field === 'brothers_count' && next.brothers_married_count > n) next.brothers_married_count = n
+      if (field === 'sisters_count' && next.sisters_married_count > n) next.sisters_married_count = n
+      if (field === 'brothers_married_count' && n > p.brothers_count) next.brothers_married_count = p.brothers_count
+      if (field === 'sisters_married_count' && n > p.sisters_count) next.sisters_married_count = p.sisters_count
+      return next
+    })
   }
 
   // "Others / Not in list" (community/gotra) — fire-and-forget, doesn't
@@ -1563,13 +1584,31 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Siblings</label>
-            <input className="form-input" placeholder="e.g. 1 Brother, 1 Sister" value={form.siblings} onChange={e=>set('siblings',e.target.value)} />
+            <label className="form-label">Brothers</label>
+            <input className="form-input" type="number" min="0" max="10" value={form.brothers_count}
+              onChange={e=>setSiblingCount('brothers_count',e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Family City</label>
-            <input className="form-input" value={form.family_city} onChange={e=>set('family_city',e.target.value)} />
+            <label className="form-label">Brothers Married</label>
+            <input className="form-input" type="number" min="0" max={form.brothers_count} value={form.brothers_married_count}
+              onChange={e=>setSiblingCount('brothers_married_count',e.target.value)} />
           </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Sisters</label>
+            <input className="form-input" type="number" min="0" max="10" value={form.sisters_count}
+              onChange={e=>setSiblingCount('sisters_count',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Sisters Married</label>
+            <input className="form-input" type="number" min="0" max={form.sisters_count} value={form.sisters_married_count}
+              onChange={e=>setSiblingCount('sisters_married_count',e.target.value)} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Family City</label>
+          <input className="form-input" value={form.family_city} onChange={e=>set('family_city',e.target.value)} />
         </div>
         <div className="form-row">
           <div className="form-group">
