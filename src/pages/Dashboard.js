@@ -6,7 +6,8 @@ import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CA
   ISLAMIC_DENOMINATIONS, SUNNI_SCHOOLS_OF_THOUGHT, SHIA_BRANCHES, ISLAMIC_COMMUNITIES,
   ISLAMIC_SUB_CASTE_DIVISIONS, SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE,
   CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES,
-  RELIGION_HIERARCHY, NO_RELIGION_VALUES, JAIN_GOTRAS, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, BODY_TYPES, WEIGHT_RANGES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
+  RELIGION_HIERARCHY, NO_RELIGION_VALUES, JAIN_GOTRAS, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, BODY_TYPES, WEIGHT_RANGES,
+  PROPERTY_TYPES, PROPERTY_OWNERSHIP, VEHICLE_OWNERSHIP, BUSINESS_ASSET_TYPES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
@@ -263,8 +264,14 @@ export default function Dashboard({ user }) {
                     ['Own House', profile.own_house],
                     ['House Type', profile.house_type],
                     ['Family Income Range', profile.family_income_range],
-                    ['Property Details', profile.property_details],
-                    ['Vehicle Details', profile.vehicle_details],
+                    ['Property Type', profile.property_type],
+                    ['Property Ownership', profile.property_ownership],
+                    ['Property Location', [profile.property_city, profile.property_state].filter(Boolean).join(', ')],
+                    ['Property Size', profile.property_size],
+                    ['Vehicle Ownership', profile.vehicle_ownership],
+                    ['Vehicle Details', profile.vehicle_model],
+                    ['Business / Commercial Asset', profile.business_asset_type],
+                    ['Business Detail', profile.business_detail],
                   ].filter(([,v])=>v).map(([k,v])=>(
                     <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
                       <span style={{color:'#8e8e8e'}}>{k}</span>
@@ -822,8 +829,13 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     family_city: profile.family_city || '',
     own_house: profile.own_house || '',
     house_type: profile.house_type || '',
-    property_details: profile.property_details || '',
-    vehicle_details: profile.vehicle_details || '',
+    property_type: profile.property_type || '', property_ownership: profile.property_ownership || '',
+    property_city: profile.property_city || '', property_state: profile.property_state || '',
+    property_country: profile.property_country || 'India', property_size: profile.property_size || '',
+    property_privacy: profile.property_privacy || 'Members Only',
+    vehicle_ownership: profile.vehicle_ownership || '', vehicle_model: profile.vehicle_model || '',
+    business_asset_type: profile.business_asset_type || '', business_detail: profile.business_detail || '',
+    business_privacy: profile.business_privacy || 'Hidden',
     family_income_range: profile.family_income_range || '',
     partner_age_min: profile.partner_age_min || '',
     partner_age_max: profile.partner_age_max || '',
@@ -1564,13 +1576,79 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             {FAMILY_INCOME_RANGES.map(f=><option key={f}>{f}</option>)}
           </select>
         </div>
-        <div className="form-group">
-          <label className="form-label">Property Details</label>
-          <input className="form-input" value={form.property_details} onChange={e=>set('property_details',e.target.value)} />
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Property Type</label>
+            <select className="form-select" value={form.property_type} onChange={e=>set('property_type',e.target.value)}>
+              <option value="">Select</option>
+              {PROPERTY_TYPES.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Property Ownership</label>
+            <select className="form-select" value={form.property_ownership} onChange={e=>set('property_ownership',e.target.value)}>
+              <option value="">Select</option>
+              {PROPERTY_OWNERSHIP.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Property City</label>
+            <input className="form-input" value={form.property_city} onChange={e=>set('property_city',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Property State</label>
+            <input className="form-input" value={form.property_state} onChange={e=>set('property_state',e.target.value)} />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Property Country</label>
+            <input className="form-input" value={form.property_country} onChange={e=>set('property_country',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Property Size</label>
+            <input className="form-input" placeholder="Optional, e.g. 1200 sq.ft" value={form.property_size} onChange={e=>set('property_size',e.target.value)} />
+          </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Vehicle Details</label>
-          <input className="form-input" value={form.vehicle_details} onChange={e=>set('vehicle_details',e.target.value)} />
+          <label className="form-label">Property Privacy</label>
+          <select className="form-select" value={form.property_privacy} onChange={e=>set('property_privacy',e.target.value)}>
+            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Vehicle Ownership</label>
+            <select className="form-select" value={form.vehicle_ownership} onChange={e=>set('vehicle_ownership',e.target.value)}>
+              <option value="">Select</option>
+              {VEHICLE_OWNERSHIP.map(v=><option key={v}>{v}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Vehicle Details</label>
+            <input className="form-input" placeholder="Optional, e.g. Hyundai Creta" value={form.vehicle_model} onChange={e=>set('vehicle_model',e.target.value)} />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Business / Commercial Asset</label>
+            <select className="form-select" value={form.business_asset_type} onChange={e=>set('business_asset_type',e.target.value)}>
+              <option value="">Select</option>
+              {BUSINESS_ASSET_TYPES.map(b=><option key={b}>{b}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Business Detail</label>
+            <input className="form-input" placeholder="Optional, e.g. Garment Business" value={form.business_detail} onChange={e=>set('business_detail',e.target.value)} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Business Privacy</label>
+          <select className="form-select" value={form.business_privacy} onChange={e=>set('business_privacy',e.target.value)}>
+            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+          </select>
         </div>
         <div className="form-row">
           <div className="form-group">

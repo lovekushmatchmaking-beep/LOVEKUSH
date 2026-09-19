@@ -31,6 +31,10 @@ import {
   SENSITIVE_COMMUNITY_NOTE,
   COMPLEXIONS,
   BODY_TYPES,
+  PROPERTY_TYPES,
+  PROPERTY_OWNERSHIP,
+  VEHICLE_OWNERSHIP,
+  BUSINESS_ASSET_TYPES,
   WEIGHT_RANGES,
   NATIONALITIES,
   MANGLIK_OPTIONS,
@@ -91,6 +95,10 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     caste_no_bar:'', favourite_music:[], favourite_books:[], dress_style:'',
     family_financial_status:'',
     company_privacy:'Members Only', college_privacy:'Members Only',
+    property_type:'', property_ownership:'', property_city:'', property_state:'', property_country:'India',
+    property_size:'', property_privacy:'Members Only',
+    vehicle_ownership:'', vehicle_model:'',
+    business_asset_type:'', business_detail:'', business_privacy:'Hidden',
     income_privacy:'Hidden', contact_privacy:'Accepted Connections Only',
     first_name:'', middle_name:'', last_name:'', gender:'Male', date_of_birth:'',
     city:'', state:'', country:'India', religion:'Hindu',
@@ -1097,16 +1105,91 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               </select>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Property Details</label>
-              <input className="form-input" placeholder="Optional" value={form.property_details}
-                onChange={e=>set('property_details',e.target.value)} />
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Property Type</label>
+                <select className="form-select" value={form.property_type} onChange={e=>set('property_type',e.target.value)}>
+                  <option value="">Select</option>
+                  {PROPERTY_TYPES.map(p=><option key={p}>{p}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Property Ownership</label>
+                <select className="form-select" value={form.property_ownership} onChange={e=>set('property_ownership',e.target.value)}>
+                  <option value="">Select</option>
+                  {PROPERTY_OWNERSHIP.map(p=><option key={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Property City</label>
+                <input className="form-input" placeholder="Optional" value={form.property_city}
+                  onChange={e=>set('property_city',e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Property State</label>
+                <input className="form-input" placeholder="Optional" value={form.property_state}
+                  onChange={e=>set('property_state',e.target.value)} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Property Country</label>
+                <input className="form-input" value={form.property_country}
+                  onChange={e=>set('property_country',e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Property Size</label>
+                <input className="form-input" placeholder="Optional, e.g. 1200 sq.ft" value={form.property_size}
+                  onChange={e=>set('property_size',e.target.value)} />
+              </div>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Vehicle Details</label>
-              <input className="form-input" placeholder="Optional" value={form.vehicle_details}
-                onChange={e=>set('vehicle_details',e.target.value)} />
+              <label className="form-label">Property Privacy</label>
+              <select className="form-select" value={form.property_privacy} onChange={e=>set('property_privacy',e.target.value)}>
+                {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+              </select>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Vehicle Ownership</label>
+                <select className="form-select" value={form.vehicle_ownership} onChange={e=>set('vehicle_ownership',e.target.value)}>
+                  <option value="">Select</option>
+                  {VEHICLE_OWNERSHIP.map(v=><option key={v}>{v}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Vehicle Details</label>
+                <input className="form-input" placeholder="Optional, e.g. Hyundai Creta" value={form.vehicle_model}
+                  onChange={e=>set('vehicle_model',e.target.value)} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Business / Commercial Asset</label>
+                <select className="form-select" value={form.business_asset_type} onChange={e=>set('business_asset_type',e.target.value)}>
+                  <option value="">Select</option>
+                  {BUSINESS_ASSET_TYPES.map(b=><option key={b}>{b}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Business Detail</label>
+                <input className="form-input" placeholder="Optional, e.g. Garment Business" value={form.business_detail}
+                  onChange={e=>set('business_detail',e.target.value)} />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Business Privacy</label>
+              <select className="form-select" value={form.business_privacy} onChange={e=>set('business_privacy',e.target.value)}>
+                {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+              </select>
             </div>
 
             <div className="form-row">
