@@ -289,7 +289,8 @@ export default function Dashboard({ user }) {
                     ['Age Range', profile.partner_age_min && profile.partner_age_max ? profile.partner_age_min + ' - ' + profile.partner_age_max + ' years' : null],
                     ['Religion', profile.partner_religion],
                     ['Preferred Community', Array.isArray(profile.partner_community_ids) ? profile.partner_community_ids.join(', ') : null],
-                    ['Education', profile.partner_education],
+                    ['Education Level', Array.isArray(profile.partner_education_level_preferences) && profile.partner_education_level_preferences.length ? profile.partner_education_level_preferences.join(', ') : null],
+                    ['Degree', Array.isArray(profile.partner_degree_preferences) && profile.partner_degree_preferences.length ? profile.partner_degree_preferences.join(', ') : null],
                     ['Location', profile.partner_location],
                     ['Notes', profile.partner_notes],
                   ].filter(([,v])=>v).map(([k,v])=>(
@@ -848,6 +849,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     partner_community_ids: profile.partner_community_ids || [],
     partner_location: profile.partner_location || '',
     partner_education: profile.partner_education || 'Any',
+    partner_degree_preferences: profile.partner_degree_preferences || [],
+    partner_education_level_preferences: profile.partner_education_level_preferences || [],
     partner_notes: profile.partner_notes || '',
   })
   const [saving, setSaving] = useState(false)
@@ -1791,11 +1794,16 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           </div>
         )}
         <div className="form-group">
-          <label className="form-label">Education Preference</label>
-          <select className="form-select" value={form.partner_education} onChange={e=>set('partner_education',e.target.value)}>
-            <option value="Any">Any</option>
-            {EDUCATIONS.map(e=><option key={e}>{e}</option>)}
-          </select>
+          <label className="form-label">Education Level Preference</label>
+          <MultiSelectChips options={EDUCATIONS} selected={form.partner_education_level_preferences}
+            onChange={v=>set('partner_education_level_preferences',v)} />
+          <div className="form-hint">Khaali chhodne par sab education levels acceptable maane jaayenge</div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Degree Preference</label>
+          <MultiSelectChips groups={DEGREE_OPTIONS} selected={form.partner_degree_preferences}
+            onChange={v=>set('partner_degree_preferences',v)} />
+          <div className="form-hint">Khaali chhodne par sab degrees acceptable maani jaayengi</div>
         </div>
         <div className="form-group">
           <label className="form-label">Location Preference</label>

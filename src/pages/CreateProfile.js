@@ -128,7 +128,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     vehicle_details:'', family_income_range:'',
     partner_age_min:'', partner_age_max:'',
     partner_religion:'Any', partner_community_ids:[], partner_location:'Open to relocation',
-    partner_education:'Any', partner_notes:''
+    partner_education:'Any', partner_degree_preferences:[], partner_education_level_preferences:[],
+    partner_notes:''
   })
 
   const set = (k,v) => setForm(p=>({...p,[k]:v}))
@@ -1350,11 +1351,17 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Education Preference</label>
-              <select className="form-select" value={form.partner_education} onChange={e=>set('partner_education',e.target.value)}>
-                <option value="Any">Any</option>
-                {EDUCATIONS.map(e=><option key={e}>{e}</option>)}
-              </select>
+              <label className="form-label">Education Level Preference</label>
+              <MultiSelectChips options={EDUCATIONS} selected={form.partner_education_level_preferences}
+                onChange={v=>set('partner_education_level_preferences',v)} />
+              <div className="form-hint">Khaali chhodne par sab education levels acceptable maane jaayenge</div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Degree Preference</label>
+              <MultiSelectChips groups={DEGREE_OPTIONS} selected={form.partner_degree_preferences}
+                onChange={v=>set('partner_degree_preferences',v)} />
+              <div className="form-hint">Khaali chhodne par sab degrees acceptable maani jaayengi</div>
             </div>
 
             <div className="form-group">
