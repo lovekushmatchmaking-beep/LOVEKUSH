@@ -22,6 +22,18 @@ export function passesHardFilters(me, other) {
   if (meWantsReligion && me.partner_religion !== other.religion) return false
   if (otherWantsReligion && other.partner_religion !== me.religion) return false
 
+  // Community preference — dono taraf se. "Any Community / No Bar",
+  // "Inter-community", "Others" aur "Don't wish to specify" koi actual
+  // caste/community naam nahi hain, isliye inme se koi bhi selected ho
+  // aur koi REAL community naam saath mein select na ho, to community
+  // filtering skip ho jaati hai (no restriction). Agar real community
+  // naam bhi selected hain, sirf unhi se match hoga.
+  const NON_SPECIFIC = ['Any Community / No Bar', 'Inter-community', 'Others', "Don't wish to specify"]
+  const meSpecificCommunities = (me.partner_community_ids || []).filter(c => !NON_SPECIFIC.includes(c))
+  const otherSpecificCommunities = (other.partner_community_ids || []).filter(c => !NON_SPECIFIC.includes(c))
+  if (meSpecificCommunities.length > 0 && !meSpecificCommunities.includes(other.community)) return false
+  if (otherSpecificCommunities.length > 0 && !otherSpecificCommunities.includes(me.community)) return false
+
   // Marital Status compatibility — Never-Married sirf Never-Married se,
   // Divorced/Widowed aapas mein. Yeh Indian matrimonial mein standard
   // hard-rule hai (jaisa Lovekush ke GAS system mein bhi tha).
