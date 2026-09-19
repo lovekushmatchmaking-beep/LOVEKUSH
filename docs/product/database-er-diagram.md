@@ -64,7 +64,11 @@ family_type text
 family_values text
 father_profession text
 mother_profession text
-siblings text
+siblings text                  -- legacy free-text, kept for backward compat, no longer shown in UI
+brothers_count int             -- 0-10, clamped client-side
+brothers_married_count int     -- clamped to <= brothers_count
+sisters_count int              -- 0-10, clamped client-side
+sisters_married_count int      -- clamped to <= sisters_count
 property_type text            -- structured, replaces old property_details UI (column kept for backward compat)
 property_ownership text
 property_city text
