@@ -73,7 +73,7 @@ import { compressImage } from '../utils/compressImage'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { calculateSectionCompleteness } from '../utils/completeness'
 
-const STEPS = ['Personal','Religion & Location','Education','Lifestyle','Family','Preferences','Photos']
+const STEPS = ['Personal','Religion & Community','Location','Education','Lifestyle','Family','Preferences','Photos']
 
 export default function CreateProfile({ user, adminMode, onComplete }) {
   const navigate = useNavigate()
@@ -537,8 +537,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
 
         {step===1 && (
           <div>
-            <h2 className="page-title">Religion & Location</h2>
-            <p className="page-subtitle">Community and location help us find the right match</p>
+            <h2 className="page-title">Religion & Community</h2>
+            <p className="page-subtitle">Community details help us find the right match</p>
 
             <div className="form-row">
               <div className="form-group">
@@ -775,6 +775,14 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               </label>
             </div>
 
+          </div>
+        )}
+
+        {step===2 && (
+          <div>
+            <h2 className="page-title">Location Details</h2>
+            <p className="page-subtitle">Where you live and where you're from</p>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">City *</label>
@@ -828,7 +836,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           </div>
         )}
 
-        {step===2 && (
+        {step===3 && (
           <div>
             <h2 className="page-title">Education & Career</h2>
             <p className="page-subtitle">Your professional background</p>
@@ -971,7 +979,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           </div>
         )}
 
-        {step===3 && (
+        {step===4 && (
           <div>
             <h2 className="page-title">Lifestyle</h2>
             <p className="page-subtitle">Help us understand you better</p>
@@ -1064,7 +1072,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           </div>
         )}
 
-        {step===4 && (
+        {step===5 && (
           <div>
             <h2 className="page-title">Family Background</h2>
             <p className="page-subtitle">Family details for better matching</p>
@@ -1298,7 +1306,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           </div>
         )}
 
-        {step===5 && (
+        {step===6 && (
           <div>
             <h2 className="page-title">Partner Preferences</h2>
             <p className="page-subtitle">More flexibility = more matches</p>
@@ -1372,7 +1380,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           </div>
         )}
 
-        {step===6 && (
+        {step===7 && (
           <div>
             <h2 className="page-title">Your Photos</h2>
             <p className="page-subtitle">Add up to 6 photos. First photo is your profile picture.</p>
@@ -1440,7 +1448,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               if(step===0&&!form.last_name) return showToast('Please enter your last name')
               if(step===0&&!form.date_of_birth) return showToast('Please enter your date of birth')
               if(step===0&&form.date_of_birth&&!validateAge(form.date_of_birth,form.gender).valid) return showToast(validateAge(form.date_of_birth,form.gender).message)
-              if(step===1&&!form.city) return showToast('Please enter your city')
+              if(step===2&&!form.city) return showToast('Please enter your city')
               setStep(s=>s+1)
             }}>
               Continue →

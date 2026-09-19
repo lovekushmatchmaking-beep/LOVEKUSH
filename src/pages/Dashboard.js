@@ -1159,22 +1159,12 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
       </div>
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Religion & Location</div>
+        <div className="section-label" style={{marginBottom:14}}>Religion & Community</div>
         <div className="form-group">
           <label className="form-label">Religion</label>
           <select className="form-select" value={form.religion} onChange={e=>set('religion',e.target.value)}>
             {RELIGIONS.map(r=><option key={r}>{r}</option>)}
           </select>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">City *</label>
-            <input className="form-input" value={form.city} onChange={e=>set('city',e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">State</label>
-            <input className="form-input" value={form.state} onChange={e=>set('state',e.target.value)} />
-          </div>
         </div>
         {form.religion === 'Muslim' && (
           <div className="form-row">
@@ -1346,6 +1336,20 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <option value="">Select</option>
             {CASTE_NO_BAR_OPTIONS.map(c=><option key={c}>{c}</option>)}
           </select>
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-label" style={{marginBottom:14}}>Location Details</div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">City *</label>
+            <input className="form-input" value={form.city} onChange={e=>set('city',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">State</label>
+            <input className="form-input" value={form.state} onChange={e=>set('state',e.target.value)} />
+          </div>
         </div>
         <div className="form-row">
           <div className="form-group">
