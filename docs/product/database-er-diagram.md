@@ -36,7 +36,7 @@ state text
 country text
 religion text
 community text
-community_privacy text        -- default 'Members Only'
+community_privacy text        -- 3-tier: Public / Matches Only / Private, default 'Matches Only'
 islamic_denomination text     -- religion === 'Muslim' only (Sunni/Shia/etc.)
 islamic_school_of_thought text -- Sunni Madhab (Hanafi/Shafi/Maliki/Hanbali)
 islamic_shia_branch text      -- Shia branch (Ithna Ashari/Ismaili/Zaydi/etc.)
@@ -55,6 +55,10 @@ field_of_study text
 occupation text
 employer text
 annual_income text
+income_privacy text           -- 3-tier: Public / Matches Only / Private, default 'Private'
+company_privacy text          -- 3-tier: Public / Matches Only / Private, default 'Matches Only'
+college_privacy text          -- 3-tier: Public / Matches Only / Private, default 'Matches Only'
+contact_privacy text          -- 3-tier: Public / Matches Only / Private, default 'Matches Only'
 diet text
 smoking text
 drinking text
@@ -75,12 +79,12 @@ property_city text
 property_state text
 property_country text
 property_size text
-property_privacy text         -- default 'Members Only'
+property_privacy text         -- 3-tier: Public / Matches Only / Private, default 'Matches Only'
 vehicle_ownership text        -- structured, replaces old vehicle_details UI (column kept for backward compat)
 vehicle_model text            -- optional free-text model name (e.g. "Hyundai Creta")
 business_asset_type text
 business_detail text
-business_privacy text         -- default 'Hidden'
+business_privacy text         -- 3-tier: Public / Matches Only / Private, default 'Private'
 family_city text
 partner_age_min int
 partner_age_max int
