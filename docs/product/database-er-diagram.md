@@ -81,6 +81,7 @@ family_city text
 partner_age_min int
 partner_age_max int
 partner_religion text
+partner_community_ids text[]  -- multi-select; may include 'Any Community / No Bar' flag (skips community filtering in matching.js)
 partner_location text
 partner_education text
 partner_notes text

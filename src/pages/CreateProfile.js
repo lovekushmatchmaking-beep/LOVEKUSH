@@ -35,6 +35,8 @@ import {
   PROPERTY_OWNERSHIP,
   VEHICLE_OWNERSHIP,
   BUSINESS_ASSET_TYPES,
+  PARTNER_COMMUNITY_SPECIAL_OPTIONS,
+  PARTNER_COMMUNITY_NO_BAR,
   WEIGHT_RANGES,
   NATIONALITIES,
   MANGLIK_OPTIONS,
@@ -124,7 +126,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     family_city:'', own_house:'', house_type:'', property_details:'',
     vehicle_details:'', family_income_range:'',
     partner_age_min:'', partner_age_max:'',
-    partner_religion:'Any', partner_location:'Open to relocation',
+    partner_religion:'Any', partner_community_ids:[], partner_location:'Open to relocation',
     partner_education:'Any', partner_notes:''
   })
 
@@ -137,6 +139,21 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ? 'Accepted Connections Only'
       : p.community_privacy,
   }))
+
+  // "Any Community / No Bar" ek exclusive flag hai — usse select karte
+  // hi baaki sab communities unselect ho jaati hain, aur ussi ke baad
+  // koi aur community select karo to No Bar apne aap hat jaata hai.
+  const setPartnerCommunity = (newSelected) => {
+    const wasNoBar = form.partner_community_ids.includes(PARTNER_COMMUNITY_NO_BAR)
+    const isNoBar = newSelected.includes(PARTNER_COMMUNITY_NO_BAR)
+    if (isNoBar && !wasNoBar) {
+      set('partner_community_ids', [PARTNER_COMMUNITY_NO_BAR])
+    } else if (isNoBar && newSelected.length > 1) {
+      set('partner_community_ids', newSelected.filter(v => v !== PARTNER_COMMUNITY_NO_BAR))
+    } else {
+      set('partner_community_ids', newSelected)
+    }
+  }
 
   const showToast = (msg) => {
     setToast(msg)
@@ -1267,6 +1284,25 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                 {RELIGIONS.map(r=><option key={r}>{r}</option>)}
               </select>
             </div>
+
+            {form.partner_religion !== 'Any' && (
+              <div className="form-group">
+                <label className="form-label">Preferred Community</label>
+                <MultiSelectChips
+                  options={[
+                    ...(form.partner_religion === 'Muslim' ? ISLAMIC_COMMUNITIES
+                      : form.partner_religion === 'Christian' ? CHRISTIAN_COMMUNITIES
+                      : RELIGION_HIERARCHY[form.partner_religion]?.community.options
+                      || CASTES
+                    ).filter(c => !/^(other|others|don'?t)/i.test(c)),
+                    ...PARTNER_COMMUNITY_SPECIAL_OPTIONS,
+                  ]}
+                  selected={form.partner_community_ids}
+                  onChange={setPartnerCommunity}
+                />
+                <div className="form-hint">"Any Community / No Bar" select karne par baaki communities apne aap unselect ho jaayengi</div>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">Location Preference</label>

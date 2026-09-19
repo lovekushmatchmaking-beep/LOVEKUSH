@@ -1974,6 +1974,16 @@ export const VEHICLE_OWNERSHIP = [
   'Multiple Vehicles', 'Commercial Vehicle', 'Prefer not to specify',
 ]
 
+// Partner Preference — Community multi-select. Appended to whichever
+// religion-specific community list applies (same source used for the
+// user's own Community field) after stripping that list's own generic
+// "Other(s)"/"Don't wish to specify" entries, so there's one clean set
+// of special options regardless of religion.
+export const PARTNER_COMMUNITY_SPECIAL_OPTIONS = [
+  'Inter-community', 'Any Community / No Bar', 'Others', "Don't wish to specify",
+]
+export const PARTNER_COMMUNITY_NO_BAR = 'Any Community / No Bar'
+
 export const BUSINESS_ASSET_TYPES = [
   'Own Business', 'Family Business', 'Shop', 'Commercial Property',
   'Agricultural Land', 'Other', 'None', 'Prefer not to specify',

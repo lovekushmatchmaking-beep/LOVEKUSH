@@ -7,7 +7,8 @@ import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CA
   ISLAMIC_SUB_CASTE_DIVISIONS, SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE,
   CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES,
   RELIGION_HIERARCHY, NO_RELIGION_VALUES, JAIN_GOTRAS, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, BODY_TYPES, WEIGHT_RANGES,
-  PROPERTY_TYPES, PROPERTY_OWNERSHIP, VEHICLE_OWNERSHIP, BUSINESS_ASSET_TYPES, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
+  PROPERTY_TYPES, PROPERTY_OWNERSHIP, VEHICLE_OWNERSHIP, BUSINESS_ASSET_TYPES,
+  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
@@ -286,6 +287,7 @@ export default function Dashboard({ user }) {
                   {[
                     ['Age Range', profile.partner_age_min && profile.partner_age_max ? profile.partner_age_min + ' - ' + profile.partner_age_max + ' years' : null],
                     ['Religion', profile.partner_religion],
+                    ['Preferred Community', Array.isArray(profile.partner_community_ids) ? profile.partner_community_ids.join(', ') : null],
                     ['Education', profile.partner_education],
                     ['Location', profile.partner_location],
                     ['Notes', profile.partner_notes],
@@ -840,6 +842,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     partner_age_min: profile.partner_age_min || '',
     partner_age_max: profile.partner_age_max || '',
     partner_religion: profile.partner_religion || 'Any',
+    partner_community_ids: profile.partner_community_ids || [],
     partner_location: profile.partner_location || '',
     partner_education: profile.partner_education || 'Any',
     partner_notes: profile.partner_notes || '',
@@ -857,6 +860,21 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
       ? 'Accepted Connections Only'
       : p.community_privacy,
   }))
+
+  // "Any Community / No Bar" ek exclusive flag hai — usse select karte
+  // hi baaki sab communities unselect ho jaati hain, aur ussi ke baad
+  // koi aur community select karo to No Bar apne aap hat jaata hai.
+  const setPartnerCommunity = (newSelected) => {
+    const wasNoBar = form.partner_community_ids.includes(PARTNER_COMMUNITY_NO_BAR)
+    const isNoBar = newSelected.includes(PARTNER_COMMUNITY_NO_BAR)
+    if (isNoBar && !wasNoBar) {
+      set('partner_community_ids', [PARTNER_COMMUNITY_NO_BAR])
+    } else if (isNoBar && newSelected.length > 1) {
+      set('partner_community_ids', newSelected.filter(v => v !== PARTNER_COMMUNITY_NO_BAR))
+    } else {
+      set('partner_community_ids', newSelected)
+    }
+  }
 
   // "Others / Not in list" (community/gotra) — fire-and-forget, doesn't
   // block save. Increments times_suggested if the same name was already
@@ -1715,6 +1733,24 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             {RELIGIONS.map(r=><option key={r}>{r}</option>)}
           </select>
         </div>
+        {form.partner_religion !== 'Any' && (
+          <div className="form-group">
+            <label className="form-label">Preferred Community</label>
+            <MultiSelectChips
+              options={[
+                ...(form.partner_religion === 'Muslim' ? ISLAMIC_COMMUNITIES
+                  : form.partner_religion === 'Christian' ? CHRISTIAN_COMMUNITIES
+                  : RELIGION_HIERARCHY[form.partner_religion]?.community.options
+                  || CASTES
+                ).filter(c => !/^(other|others|don'?t)/i.test(c)),
+                ...PARTNER_COMMUNITY_SPECIAL_OPTIONS,
+              ]}
+              selected={form.partner_community_ids}
+              onChange={setPartnerCommunity}
+            />
+            <div className="form-hint">"Any Community / No Bar" select karne par baaki communities apne aap unselect ho jaayengi</div>
+          </div>
+        )}
         <div className="form-group">
           <label className="form-label">Education Preference</label>
           <select className="form-select" value={form.partner_education} onChange={e=>set('partner_education',e.target.value)}>
