@@ -1958,12 +1958,44 @@ export const FAMILY_TYPES = ['Nuclear', 'Joint', 'Extended']
 export const FAMILY_VALUES = ['Orthodox', 'Conservative', 'Moderate', 'Liberal']
 
 export const HEIGHT_RANGES = [
-  'Below 5\'0"',
-  '5\'0"–5\'2"',
-  '5\'3"–5\'5"',
-  '5\'6"–5\'8"',
-  '5\'9"–6\'0"',
-  'Above 6\'0"',
+  '4\'0" (122 cm)',
+  '4\'1" (124 cm)',
+  '4\'2" (127 cm)',
+  '4\'3" (130 cm)',
+  '4\'4" (132 cm)',
+  '4\'5" (135 cm)',
+  '4\'6" (137 cm)',
+  '4\'7" (140 cm)',
+  '4\'8" (142 cm)',
+  '4\'9" (145 cm)',
+  '4\'10" (147 cm)',
+  '4\'11" (150 cm)',
+  '5\'0" (152 cm)',
+  '5\'1" (155 cm)',
+  '5\'2" (157 cm)',
+  '5\'3" (160 cm)',
+  '5\'4" (163 cm)',
+  '5\'5" (165 cm)',
+  '5\'6" (168 cm)',
+  '5\'7" (170 cm)',
+  '5\'8" (173 cm)',
+  '5\'9" (175 cm)',
+  '5\'10" (178 cm)',
+  '5\'11" (180 cm)',
+  '6\'0" (183 cm)',
+  '6\'1" (185 cm)',
+  '6\'2" (188 cm)',
+  '6\'3" (191 cm)',
+  '6\'4" (193 cm)',
+  '6\'5" (196 cm)',
+  '6\'6" (198 cm)',
+  '6\'7" (201 cm)',
+  '6\'8" (203 cm)',
+  '6\'9" (206 cm)',
+  '6\'10" (208 cm)',
+  '6\'11" (211 cm)',
+  '7\'0" (213 cm)',
+  'Prefer not to specify',
 ]
 
 export const MARITAL_STATUSES = ['Never Married', 'Divorced', 'Widowed', 'Separated', 'Awaiting Divorce', 'Annulled']
@@ -1978,7 +2010,9 @@ export const LOCATION_PREFERENCES = [
 
 // ===================== PHASE 1 EXPANSION — naye fields ke liye =====================
 
-export const COMPLEXIONS = ['Very Fair', 'Fair', 'Wheatish', 'Dark', 'Prefer not to say']
+export const COMPLEXIONS = ['Very Fair', 'Fair', 'Wheatish', 'Wheatish Brown', 'Dark', 'Very Dark', 'Prefer not to specify']
+
+export const BODY_TYPES = ['Slim', 'Athletic', 'Average', 'Heavy', 'Curvy', 'Prefer not to specify']
 
 export const WEIGHT_RANGES = ['Below 45kg', '45–55kg', '55–65kg', '65–75kg', '75–85kg', 'Above 85kg']
 
