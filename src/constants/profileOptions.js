@@ -2168,7 +2168,14 @@ export const CASTE_NO_BAR_OPTIONS = ['Yes', 'No']
 
 // "Privacy level" — kis field ko kaun dekh sakta hai (Company/College/
 // Income/Contact ke liye same 5 levels use hote hain)
-export const PRIVACY_LEVELS = ['Public', 'Members Only', 'Accepted Connections Only', 'Admin Only', 'Hidden']
+// 3-tier privacy model (simplified from the earlier 5-level system):
+// Public = visible to anyone browsing; Matches Only = visible only to
+// profiles that have crossed the mutual-interest/match threshold;
+// Private = never shown to other users, visible only to staff (staff
+// always see full profile data regardless of this value — see
+// "staff can view all profiles" RLS policy on profiles, which has no
+// privacy-based qual).
+export const PRIVACY_LEVELS = ['Public', 'Matches Only', 'Private']
 
 // ===================== ISLAM — Denomination / Sect / Community =====================
 // Sirf religion === 'Muslim' hone par CreateProfile.js/Dashboard.js mein

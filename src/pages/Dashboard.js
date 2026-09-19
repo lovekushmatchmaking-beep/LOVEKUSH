@@ -752,7 +752,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     religion: profile.religion || '',
     community: profile.community || '',
     community_other: '',
-    community_privacy: profile.community_privacy || 'Members Only',
+    community_privacy: profile.community_privacy || 'Matches Only',
     islamic_denomination: profile.islamic_denomination || '',
     islamic_school_of_thought: profile.islamic_school_of_thought || '',
     islamic_shia_branch: profile.islamic_shia_branch || '',
@@ -797,10 +797,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     favourite_books: profile.favourite_books || [],
     dress_style: profile.dress_style || '',
     family_financial_status: profile.family_financial_status || '',
-    company_privacy: profile.company_privacy || 'Members Only',
-    college_privacy: profile.college_privacy || 'Members Only',
-    income_privacy: profile.income_privacy || 'Hidden',
-    contact_privacy: profile.contact_privacy || 'Accepted Connections Only',
+    company_privacy: profile.company_privacy || 'Matches Only',
+    college_privacy: profile.college_privacy || 'Matches Only',
+    income_privacy: profile.income_privacy || 'Private',
+    contact_privacy: profile.contact_privacy || 'Matches Only',
     disability_details: profile.disability_details || '',
     sub_caste: profile.sub_caste || '',
     gotra: profile.gotra || '',
@@ -838,10 +838,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     property_type: profile.property_type || '', property_ownership: profile.property_ownership || '',
     property_city: profile.property_city || '', property_state: profile.property_state || '',
     property_country: profile.property_country || 'India', property_size: profile.property_size || '',
-    property_privacy: profile.property_privacy || 'Members Only',
+    property_privacy: profile.property_privacy || 'Matches Only',
     vehicle_ownership: profile.vehicle_ownership || '', vehicle_model: profile.vehicle_model || '',
     business_asset_type: profile.business_asset_type || '', business_detail: profile.business_detail || '',
-    business_privacy: profile.business_privacy || 'Hidden',
+    business_privacy: profile.business_privacy || 'Private',
     family_income_range: profile.family_income_range || '',
     partner_age_min: profile.partner_age_min || '',
     partner_age_max: profile.partner_age_max || '',
@@ -862,8 +862,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
   const setCommunity = (v) => setForm(p=>({
     ...p,
     community: v,
-    community_privacy: (SENSITIVE_COMMUNITIES.includes(v) && p.community_privacy === 'Members Only')
-      ? 'Accepted Connections Only'
+    community_privacy: (SENSITIVE_COMMUNITIES.includes(v) && p.community_privacy === 'Matches Only')
+      ? 'Private'
       : p.community_privacy,
   }))
 

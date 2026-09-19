@@ -96,12 +96,12 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     country_of_birth:'', time_of_birth_accuracy:'',
     caste_no_bar:'', favourite_music:[], favourite_books:[], dress_style:'',
     family_financial_status:'',
-    company_privacy:'Members Only', college_privacy:'Members Only',
+    company_privacy:'Matches Only', college_privacy:'Matches Only',
     property_type:'', property_ownership:'', property_city:'', property_state:'', property_country:'India',
-    property_size:'', property_privacy:'Members Only',
+    property_size:'', property_privacy:'Matches Only',
     vehicle_ownership:'', vehicle_model:'',
-    business_asset_type:'', business_detail:'', business_privacy:'Hidden',
-    income_privacy:'Hidden', contact_privacy:'Accepted Connections Only',
+    business_asset_type:'', business_detail:'', business_privacy:'Private',
+    income_privacy:'Private', contact_privacy:'Matches Only',
     first_name:'', middle_name:'', last_name:'', gender:'Male', date_of_birth:'',
     city:'', state:'', country:'India', religion:'Hindu',
     community:'', community_other:'', mother_tongue:'', mother_tongue_other:'',
@@ -110,7 +110,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     christian_denomination:'',
     religion_denomination:'', religion_denomination_2:'',
     custom_caste_text:'', custom_caste_text_gotra:'',
-    community_privacy:'Members Only',
+    community_privacy:'Matches Only',
     height:'', weight:'', complexion:'', body_type:'Average',
     marital_status:'Never Married', nationality:'Indian',
     physical_disability:'No', disability_details:'',
@@ -137,8 +137,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   const setCommunity = (v) => setForm(p=>({
     ...p,
     community: v,
-    community_privacy: (SENSITIVE_COMMUNITIES.includes(v) && p.community_privacy === 'Members Only')
-      ? 'Accepted Connections Only'
+    community_privacy: (SENSITIVE_COMMUNITIES.includes(v) && p.community_privacy === 'Matches Only')
+      ? 'Private'
       : p.community_privacy,
   }))
 
