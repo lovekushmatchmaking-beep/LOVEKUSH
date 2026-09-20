@@ -3,6 +3,8 @@
 // alag-alag. Har match apna "kyun recommend hua" explanation deta hai —
 // fake percentage nahi, actual logic se nikla hua.
 
+import { parseHeightToInches } from '../constants/profileOptions'
+
 // ===================== HARD REQUIREMENTS =====================
 // "me" = jo dekh raha hai, "other" = jo dikh raha hai. Dono taraf ki
 // preferences check hoti hain — sirf ek taraf se nahi.
@@ -15,6 +17,17 @@ export function passesHardFilters(me, other) {
   if (me.partner_age_max && other.age > Number(me.partner_age_max)) return false
   if (other.partner_age_min && me.age < Number(other.partner_age_min)) return false
   if (other.partner_age_max && me.age > Number(other.partner_age_max)) return false
+
+  // Height preference — dono taraf se, jaisa Age preference upar hai.
+  // Height string se parse hoti hai (missing/unparseable height wale
+  // profiles is filter se kabhi exclude nahi hote — sirf jinka height
+  // pata hai aur preference violate karta hai unhi ko filter kiya jaata hai)
+  const otherHeightInches = parseHeightToInches(other.height)
+  const meHeightInches = parseHeightToInches(me.height)
+  if (me.partner_height_min && otherHeightInches && otherHeightInches < Number(me.partner_height_min)) return false
+  if (me.partner_height_max && otherHeightInches && otherHeightInches > Number(me.partner_height_max)) return false
+  if (other.partner_height_min && meHeightInches && meHeightInches < Number(other.partner_height_min)) return false
+  if (other.partner_height_max && meHeightInches && meHeightInches > Number(other.partner_height_max)) return false
 
   // Religion — dono taraf se (agar explicit preference hai, "Any" nahi)
   const meWantsReligion = me.partner_religion && me.partner_religion !== 'Any'

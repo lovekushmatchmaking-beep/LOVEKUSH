@@ -2165,6 +2165,16 @@ export function formatHeightFromInches(totalInches) {
   return `${feet}ft ${inches}in — ${cm}cm`
 }
 
+// Reverse of formatHeightFromInches — "4'0\" (122 cm)" (the HEIGHT_RANGES
+// string format) -> 48 (total inches). Used by matching.js to compare a
+// profile's own Height against a partner's Height Preference (int).
+export function parseHeightToInches(heightStr) {
+  if (!heightStr) return null
+  const match = heightStr.match(/\((\d+)\s*cm\)/)
+  if (!match) return null
+  return Math.round(Number(match[1]) / 2.54)
+}
+
 // Fine-grained height dropdown, feet+inches WITH cm — Shaadi.com jaisa
 export function generateHeightOptions() {
   const options = []
