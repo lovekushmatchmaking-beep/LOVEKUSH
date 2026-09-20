@@ -8,12 +8,17 @@ import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CA
   CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES,
   RELIGION_HIERARCHY, NO_RELIGION_VALUES, JAIN_GOTRAS, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, BODY_TYPES, WEIGHT_RANGES,
   PROPERTY_TYPES, PROPERTY_OWNERSHIP, VEHICLE_OWNERSHIP, BUSINESS_ASSET_TYPES,
-  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, INDUSTRIES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, WORKING_WITH_OPTIONS, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES } from '../constants/profileOptions'
+  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
+  LANGUAGES_SPOKEN, HAVE_CHILDREN_OPTIONS, CHILDREN_LIVING_WITH_OPTIONS, GREW_UP_IN_OPTIONS,
+  PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, formatHeightFromInches } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
 import SignedImage from '../components/SignedImage'
 import MultiSelectChips from '../components/MultiSelectChips'
+import DualRangeSlider from '../components/DualRangeSlider'
+
+const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
 export default function Dashboard({ user }) {
   const navigate = useNavigate()
@@ -229,6 +234,10 @@ export default function Dashboard({ user }) {
                     ['Complexion', profile.complexion],
                     ['Body Type', profile.body_type],
                     ['Nationality', profile.nationality],
+                    ['Have Children', profile.have_children],
+                    ['Children Living With', profile.children_living_with],
+                    ['Languages I Speak', Array.isArray(profile.languages_spoken) && profile.languages_spoken.length ? profile.languages_spoken.join(', ') : null],
+                    ['Grew Up In', profile.grew_up_in],
                     ['Physical Disability', profile.physical_disability === 'Yes' ? (profile.disability_details || 'Yes') : null],
                     ['Religion', profile.religion],
                     ['Community / Caste', profile.community],
@@ -242,13 +251,12 @@ export default function Dashboard({ user }) {
                     ['Country', profile.country],
                     ['Native Place', profile.native_place],
                     ['Relocation Preference', profile.relocation_preference],
-                    ['Education', profile.education],
-                    ['Field of Study', profile.field_of_study],
-                    ['Specialization', profile.specialization],
-                    ['Occupation', profile.occupation],
-                    ['Designation', profile.designation],
-                    ['Industry', profile.industry],
+                    ['Highest Education', profile.education],
+                    ['Degree', profile.degree],
                     ['Employment Type', profile.employment_type],
+                    ['Profession Category', profile.profession],
+                    ['Occupation', profile.occupation],
+                    ['Working As', profile.working_as],
                     ['Employer', profile.employer],
                     ['Work Location', profile.work_location],
                     ['Annual Income', profile.annual_income],
@@ -287,10 +295,10 @@ export default function Dashboard({ user }) {
                   <div className="section-label" style={{marginBottom:14}}>Partner Preferences</div>
                   {[
                     ['Age Range', profile.partner_age_min && profile.partner_age_max ? profile.partner_age_min + ' - ' + profile.partner_age_max + ' years' : null],
+                    ['Height Range', profile.partner_height_min && profile.partner_height_max ? formatHeightFromInches(profile.partner_height_min) + ' - ' + formatHeightFromInches(profile.partner_height_max) : null],
                     ['Religion', profile.partner_religion],
                     ['Preferred Community', Array.isArray(profile.partner_community_ids) ? profile.partner_community_ids.join(', ') : null],
                     ['Education Level', Array.isArray(profile.partner_education_level_preferences) && profile.partner_education_level_preferences.length ? profile.partner_education_level_preferences.join(', ') : null],
-                    ['Degree', Array.isArray(profile.partner_degree_preferences) && profile.partner_degree_preferences.length ? profile.partner_degree_preferences.join(', ') : null],
                     ['Location', profile.partner_location],
                     ['Notes', profile.partner_notes],
                   ].filter(([,v])=>v).map(([k,v])=>(
@@ -779,7 +787,9 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     astrology_consent: profile.astrology_consent || false,
     horoscope_match_required: profile.horoscope_match_required || '',
     profession: profile.profession || '',
-    working_with: profile.working_with || '',
+    languages_spoken: profile.languages_spoken || [],
+    have_children: profile.have_children || '', children_living_with: profile.children_living_with || '',
+    grew_up_in: profile.grew_up_in || '',
     hobbies_interests: profile.hobbies_interests || [],
     cuisines: profile.cuisines || [],
     sports: profile.sports || [],
@@ -811,15 +821,12 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     relocation_preference: profile.relocation_preference || '',
     education: profile.education || '',
     degree: profile.degree || '', degree_other: '',
-    field_of_study: profile.field_of_study || '',
-    specialization: profile.specialization || '',
     occupation: profile.occupation || '',
-    designation: profile.designation || '',
-    industry: profile.industry || '',
     employment_type: profile.employment_type || '',
     work_location: profile.work_location || '',
     employer: profile.employer || '',
     annual_income: profile.annual_income || '',
+    annual_income_currency: profile.annual_income_currency || 'INR',
     diet: profile.diet || '',
     smoking: profile.smoking || '',
     drinking: profile.drinking || '',
@@ -827,8 +834,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     about_me: profile.about_me || '',
     family_type: profile.family_type || '',
     family_values: profile.family_values || '',
-    father_profession: profile.father_profession || '',
-    mother_profession: profile.mother_profession || '',
+    father_profession: profile.father_profession || '', father_profession_other: '',
+    mother_profession: profile.mother_profession || '', mother_profession_other: '',
     siblings: profile.siblings || '',
     brothers_count: profile.brothers_count || 0, brothers_married_count: profile.brothers_married_count || 0,
     sisters_count: profile.sisters_count || 0, sisters_married_count: profile.sisters_married_count || 0,
@@ -843,19 +850,20 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     business_asset_type: profile.business_asset_type || '', business_detail: profile.business_detail || '',
     business_privacy: profile.business_privacy || 'Private',
     family_income_range: profile.family_income_range || '',
-    partner_age_min: profile.partner_age_min || '',
-    partner_age_max: profile.partner_age_max || '',
+    family_income_currency: profile.family_income_currency || 'INR',
+    partner_age_min: profile.partner_age_min || 18,
+    partner_age_max: profile.partner_age_max || 40,
+    partner_height_min: profile.partner_height_min || PARTNER_HEIGHT_MIN_INCHES,
+    partner_height_max: profile.partner_height_max || PARTNER_HEIGHT_MAX_INCHES,
     partner_religion: profile.partner_religion || 'Any',
     partner_community_ids: profile.partner_community_ids || [],
     partner_location: profile.partner_location || '',
     partner_education: profile.partner_education || 'Any',
-    partner_degree_preferences: profile.partner_degree_preferences || [],
     partner_education_level_preferences: profile.partner_education_level_preferences || [],
     partner_notes: profile.partner_notes || '',
   })
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
-  const [degreeSearch, setDegreeSearch] = useState('')
 
   const set = (k,v) => setForm(p=>({...p,[k]:v}))
 
@@ -936,6 +944,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
       const finalGotra = gotraIsOther ? (form.gotra_other || form.custom_caste_text_gotra) : form.gotra
       const degreeIsOther = form.degree === 'Others / Not in list'
       const finalDegree = degreeIsOther ? form.degree_other : form.degree
+      const finalFatherProfession = form.father_profession === 'Other' ? form.father_profession_other : form.father_profession
+      const finalMotherProfession = form.mother_profession === 'Other' ? form.mother_profession_other : form.mother_profession
 
       const denominationValue = form.islamic_denomination || form.christian_denomination || form.religion_denomination || null
 
@@ -958,7 +968,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
         })
       }
 
-      const { community_other, mother_tongue_other, gotra_other, custom_caste_text_gotra, ...formToSave } = form
+      const { community_other, mother_tongue_other, gotra_other, custom_caste_text_gotra,
+        father_profession_other, mother_profession_other, ...formToSave } = form
 
       const { count: photoCount } = await supabase
         .from('photos')
@@ -976,9 +987,13 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           mother_tongue: finalMotherTongue,
           gotra: finalGotra,
           degree: finalDegree,
+          father_profession: finalFatherProfession,
+          mother_profession: finalMotherProfession,
           age: ageCheck.age,
           partner_age_min: parseInt(form.partner_age_min) || null,
           partner_age_max: parseInt(form.partner_age_max) || null,
+          partner_height_min: parseInt(form.partner_height_min) || null,
+          partner_height_max: parseInt(form.partner_height_max) || null,
           profile_completeness: breakdown.overall,
           completeness_breakdown: breakdown,
         })
@@ -1089,6 +1104,24 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             </select>
           </div>
         </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Have Children?</label>
+            <select className="form-select" value={form.have_children} onChange={e=>set('have_children',e.target.value)}>
+              <option value="">Select</option>
+              {HAVE_CHILDREN_OPTIONS.map(h=><option key={h}>{h}</option>)}
+            </select>
+          </div>
+          {form.have_children === 'Yes' && (
+            <div className="form-group">
+              <label className="form-label">Children Living With</label>
+              <select className="form-select" value={form.children_living_with} onChange={e=>set('children_living_with',e.target.value)}>
+                <option value="">Select</option>
+                {CHILDREN_LIVING_WITH_OPTIONS.map(c=><option key={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
         <div className="form-group">
           <label className="form-label">Physical Disability</label>
           <select className="form-select" value={form.physical_disability} onChange={e=>set('physical_disability',e.target.value)}>
@@ -1114,6 +1147,18 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
               {HEALTH_INFO_OPTIONS.map(h=><option key={h}>{h}</option>)}
             </select>
           </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Languages I Speak</label>
+          <MultiSelectChips options={LANGUAGES_SPOKEN} selected={form.languages_spoken}
+            onChange={v=>set('languages_spoken',v)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Grew Up In</label>
+          <select className="form-select" value={form.grew_up_in} onChange={e=>set('grew_up_in',e.target.value)}>
+            <option value="">Select</option>
+            {GREW_UP_IN_OPTIONS.map(g=><option key={g}>{g}</option>)}
+          </select>
         </div>
       </div>
 
@@ -1284,13 +1329,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <div className="form-hint">Optional — sab communities ke liye applicable nahi hota</div>
           </div>
         )}
-        <div className="form-group">
-          <label className="form-label">Community Privacy</label>
-          <select className="form-select" value={form.community_privacy}
-            onChange={e=>set('community_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
-        </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Sub-Caste</label>
@@ -1383,38 +1421,41 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
       <div className="card" style={{marginBottom:12}}>
         <div className="section-label" style={{marginBottom:14}}>Education & Career</div>
         <div className="form-group">
-          <label className="form-label">Education</label>
+          <label className="form-label">Highest Education *</label>
           <select className="form-select" value={form.education} onChange={e=>set('education',e.target.value)}>
             {EDUCATIONS.map(e=><option key={e}>{e}</option>)}
           </select>
         </div>
         <div className="form-group">
           <label className="form-label">Degree</label>
-          <input className="form-input" style={{marginBottom:6}} placeholder="Search degree (e.g. MBBS, B.Tech)..."
-            value={degreeSearch} onChange={e=>setDegreeSearch(e.target.value)} />
           <select className="form-select" value={form.degree} onChange={e=>set('degree',e.target.value)}>
             <option value="">Select</option>
-            {Object.entries(DEGREE_OPTIONS).map(([cat, options]) => {
-              const filtered = options.filter(d => d.toLowerCase().includes(degreeSearch.toLowerCase()))
-              return filtered.length > 0 && (
-                <optgroup key={cat} label={cat}>
-                  {filtered.map(d=><option key={d}>{d}</option>)}
-                </optgroup>
-              )
-            })}
+            {Object.entries(DEGREE_OPTIONS).map(([cat, options]) => (
+              <optgroup key={cat} label={cat}>
+                {options.map(d=><option key={d}>{d}</option>)}
+              </optgroup>
+            ))}
           </select>
           {form.degree === 'Others / Not in list' && (
             <input className="form-input" style={{marginTop:8}} placeholder="Apni degree likhein"
               value={form.degree_other} onChange={e=>set('degree_other',e.target.value)} />
           )}
         </div>
-        <div className="form-group">
-          <label className="form-label">Field of Study</label>
-          <input className="form-input" value={form.field_of_study} onChange={e=>set('field_of_study',e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Specialization</label>
-          <input className="form-input" value={form.specialization} onChange={e=>set('specialization',e.target.value)} />
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Employment Type</label>
+            <select className="form-select" value={form.employment_type} onChange={e=>set('employment_type',e.target.value)}>
+              <option value="">Select</option>
+              {EMPLOYMENT_TYPES.map(e=><option key={e}>{e}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Profession Category</label>
+            <select className="form-select" value={form.profession} onChange={e=>set('profession',e.target.value)}>
+              <option value="">Select</option>
+              {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -1422,23 +1463,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <input className="form-input" value={form.occupation} onChange={e=>set('occupation',e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Designation</label>
-            <input className="form-input" value={form.designation} onChange={e=>set('designation',e.target.value)} />
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Industry</label>
-            <select className="form-select" value={form.industry} onChange={e=>set('industry',e.target.value)}>
+            <label className="form-label">Working As</label>
+            <select className="form-select" value={form.working_as} onChange={e=>set('working_as',e.target.value)}>
               <option value="">Select</option>
-              {INDUSTRIES.map(i=><option key={i}>{i}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Employment Type</label>
-            <select className="form-select" value={form.employment_type} onChange={e=>set('employment_type',e.target.value)}>
-              <option value="">Select</option>
-              {EMPLOYMENT_TYPES.map(e=><option key={e}>{e}</option>)}
+              {WORKING_AS_OPTIONS.map(w=><option key={w}>{w}</option>)}
             </select>
           </div>
         </div>
@@ -1454,52 +1482,19 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Profession Category</label>
-            <select className="form-select" value={form.profession} onChange={e=>set('profession',e.target.value)}>
-              <option value="">Select</option>
-              {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
+            <label className="form-label">Annual Income</label>
+            <select className="form-select" value={form.annual_income} onChange={e=>set('annual_income',e.target.value)}>
+              {(form.annual_income_currency === 'USD' ? USD_INCOME_RANGES : INCOME_RANGES).map(i=><option key={i}>{i}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Working With</label>
-            <select className="form-select" value={form.working_with} onChange={e=>set('working_with',e.target.value)}>
-              <option value="">Select</option>
-              {WORKING_WITH_OPTIONS.map(w=><option key={w}>{w}</option>)}
+            <label className="form-label">Currency</label>
+            <select className="form-select" value={form.annual_income_currency} onChange={e=>{
+              setForm(p=>({...p, annual_income_currency:e.target.value, annual_income:''}))
+            }}>
+              {CURRENCIES.map(c=><option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
             </select>
           </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Working As</label>
-            <select className="form-select" value={form.working_as} onChange={e=>set('working_as',e.target.value)}>
-              <option value="">Select</option>
-              {WORKING_AS_OPTIONS.map(w=><option key={w}>{w}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Company Name — who can see it?</label>
-            <select className="form-select" value={form.company_privacy} onChange={e=>set('company_privacy',e.target.value)}>
-              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="form-group">
-          <label className="form-label">College/Institution — who can see it?</label>
-          <select className="form-select" value={form.college_privacy} onChange={e=>set('college_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Annual Income</label>
-          <select className="form-select" value={form.annual_income} onChange={e=>set('annual_income',e.target.value)}>
-            {INCOME_RANGES.map(i=><option key={i}>{i}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Income — who can see it?</label>
-          <select className="form-select" value={form.income_privacy} onChange={e=>set('income_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
         </div>
       </div>
 
@@ -1582,35 +1577,62 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Father's Profession</label>
-            <input className="form-input" value={form.father_profession} onChange={e=>set('father_profession',e.target.value)} />
+            <select className="form-select" value={form.father_profession} onChange={e=>set('father_profession',e.target.value)}>
+              <option value="">Select</option>
+              {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
+              <option value="Retired">Retired</option>
+              <option value="Other">Other</option>
+            </select>
+            {form.father_profession === 'Other' && (
+              <input className="form-input" style={{marginTop:8}} placeholder="Please specify"
+                value={form.father_profession_other} onChange={e=>set('father_profession_other',e.target.value)} />
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">Mother's Profession</label>
-            <input className="form-input" value={form.mother_profession} onChange={e=>set('mother_profession',e.target.value)} />
+            <select className="form-select" value={form.mother_profession} onChange={e=>set('mother_profession',e.target.value)}>
+              <option value="">Select</option>
+              <option value="Homemaker">Homemaker</option>
+              {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
+              <option value="Retired">Retired</option>
+              <option value="Other">Other</option>
+            </select>
+            {form.mother_profession === 'Other' && (
+              <input className="form-input" style={{marginTop:8}} placeholder="Please specify"
+                value={form.mother_profession_other} onChange={e=>set('mother_profession_other',e.target.value)} />
+            )}
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Brothers</label>
-            <input className="form-input" type="number" min="0" max="10" value={form.brothers_count}
-              onChange={e=>setSiblingCount('brothers_count',e.target.value)} />
+            <select className="form-select" value={form.brothers_count}
+              onChange={e=>setSiblingCount('brothers_count',e.target.value)}>
+              {SIBLING_COUNT_OPTIONS.map(n=><option key={n} value={n}>{n}</option>)}
+            </select>
           </div>
           <div className="form-group">
             <label className="form-label">Brothers Married</label>
-            <input className="form-input" type="number" min="0" max={form.brothers_count} value={form.brothers_married_count}
-              onChange={e=>setSiblingCount('brothers_married_count',e.target.value)} />
+            <select className="form-select" value={form.brothers_married_count}
+              onChange={e=>setSiblingCount('brothers_married_count',e.target.value)}>
+              {SIBLING_COUNT_OPTIONS.filter(n=>n<=form.brothers_count).map(n=><option key={n} value={n}>{n}</option>)}
+            </select>
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Sisters</label>
-            <input className="form-input" type="number" min="0" max="10" value={form.sisters_count}
-              onChange={e=>setSiblingCount('sisters_count',e.target.value)} />
+            <select className="form-select" value={form.sisters_count}
+              onChange={e=>setSiblingCount('sisters_count',e.target.value)}>
+              {SIBLING_COUNT_OPTIONS.map(n=><option key={n} value={n}>{n}</option>)}
+            </select>
           </div>
           <div className="form-group">
             <label className="form-label">Sisters Married</label>
-            <input className="form-input" type="number" min="0" max={form.sisters_count} value={form.sisters_married_count}
-              onChange={e=>setSiblingCount('sisters_married_count',e.target.value)} />
+            <select className="form-select" value={form.sisters_married_count}
+              onChange={e=>setSiblingCount('sisters_married_count',e.target.value)}>
+              {SIBLING_COUNT_OPTIONS.filter(n=>n<=form.sisters_count).map(n=><option key={n} value={n}>{n}</option>)}
+            </select>
           </div>
         </div>
         <div className="form-group">
@@ -1633,12 +1655,22 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             </select>
           </div>
         </div>
-        <div className="form-group">
-          <label className="form-label">Family Income Range</label>
-          <select className="form-select" value={form.family_income_range} onChange={e=>set('family_income_range',e.target.value)}>
-            <option value="">Select</option>
-            {FAMILY_INCOME_RANGES.map(f=><option key={f}>{f}</option>)}
-          </select>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Family Income Range</label>
+            <select className="form-select" value={form.family_income_range} onChange={e=>set('family_income_range',e.target.value)}>
+              <option value="">Select</option>
+              {(form.family_income_currency === 'USD' ? USD_FAMILY_INCOME_RANGES : FAMILY_INCOME_RANGES).map(f=><option key={f}>{f}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Currency</label>
+            <select className="form-select" value={form.family_income_currency} onChange={e=>{
+              setForm(p=>({...p, family_income_currency:e.target.value, family_income_range:''}))
+            }}>
+              {CURRENCIES.map(c=><option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
+            </select>
+          </div>
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -1676,12 +1708,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <input className="form-input" placeholder="Optional, e.g. 1200 sq.ft" value={form.property_size} onChange={e=>set('property_size',e.target.value)} />
           </div>
         </div>
-        <div className="form-group">
-          <label className="form-label">Property Privacy</label>
-          <select className="form-select" value={form.property_privacy} onChange={e=>set('property_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
-        </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Vehicle Ownership</label>
@@ -1708,12 +1734,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <input className="form-input" placeholder="Optional, e.g. Garment Business" value={form.business_detail} onChange={e=>set('business_detail',e.target.value)} />
           </div>
         </div>
-        <div className="form-group">
-          <label className="form-label">Business Privacy</label>
-          <select className="form-select" value={form.business_privacy} onChange={e=>set('business_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
-        </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Family Status</label>
@@ -1730,20 +1750,12 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             </select>
           </div>
         </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Living With Parents?</label>
-            <select className="form-select" value={form.living_with_parents} onChange={e=>set('living_with_parents',e.target.value)}>
-              <option value="">Select</option>
-              {LIVING_WITH_PARENTS_OPTIONS.map(l=><option key={l}>{l}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Contact Details — who can see it?</label>
-            <select className="form-select" value={form.contact_privacy} onChange={e=>set('contact_privacy',e.target.value)}>
-              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-            </select>
-          </div>
+        <div className="form-group">
+          <label className="form-label">Living With Parents?</label>
+          <select className="form-select" value={form.living_with_parents} onChange={e=>set('living_with_parents',e.target.value)}>
+            <option value="">Select</option>
+            {LIVING_WITH_PARENTS_OPTIONS.map(l=><option key={l}>{l}</option>)}
+          </select>
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -1762,15 +1774,19 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
 
       <div className="card" style={{marginBottom:12}}>
         <div className="section-label" style={{marginBottom:14}}>Partner Preferences</div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Age Min</label>
-            <input className="form-input" type="number" value={form.partner_age_min} onChange={e=>set('partner_age_min',e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Age Max</label>
-            <input className="form-input" type="number" value={form.partner_age_max} onChange={e=>set('partner_age_max',e.target.value)} />
-          </div>
+        <div className="form-group">
+          <label className="form-label">Age Preference</label>
+          <DualRangeSlider min={18} max={70}
+            valueMin={form.partner_age_min} valueMax={form.partner_age_max}
+            onChange={(lo,hi)=>setForm(p=>({...p, partner_age_min:lo, partner_age_max:hi}))}
+            formatLabel={v=>v+' yrs'} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Height Preference</label>
+          <DualRangeSlider min={PARTNER_HEIGHT_MIN_INCHES} max={PARTNER_HEIGHT_MAX_INCHES}
+            valueMin={form.partner_height_min} valueMax={form.partner_height_max}
+            onChange={(lo,hi)=>setForm(p=>({...p, partner_height_min:lo, partner_height_max:hi}))}
+            formatLabel={formatHeightFromInches} />
         </div>
         <div className="form-group">
           <label className="form-label">Religion Preference</label>
@@ -1804,12 +1820,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           <div className="form-hint">Khaali chhodne par sab education levels acceptable maane jaayenge</div>
         </div>
         <div className="form-group">
-          <label className="form-label">Degree Preference</label>
-          <MultiSelectChips groups={DEGREE_OPTIONS} selected={form.partner_degree_preferences}
-            onChange={v=>set('partner_degree_preferences',v)} />
-          <div className="form-hint">Khaali chhodne par sab degrees acceptable maani jaayengi</div>
-        </div>
-        <div className="form-group">
           <label className="form-label">Location Preference</label>
           <select className="form-select" value={form.partner_location} onChange={e=>set('partner_location',e.target.value)}>
             <option value="">Select</option>
@@ -1819,6 +1829,52 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
         <div className="form-group">
           <label className="form-label">Additional Notes</label>
           <textarea className="form-textarea" value={form.partner_notes} onChange={e=>set('partner_notes',e.target.value)} />
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-label" style={{marginBottom:14}}>Privacy & Sensitive Info</div>
+        <div className="form-group">
+          <label className="form-label">Who can see your Community/Caste?</label>
+          <select className="form-select" value={form.community_privacy} onChange={e=>set('community_privacy',e.target.value)}>
+            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Who can see your College/Institution Name?</label>
+          <select className="form-select" value={form.college_privacy} onChange={e=>set('college_privacy',e.target.value)}>
+            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Who can see your Company Name?</label>
+          <select className="form-select" value={form.company_privacy} onChange={e=>set('company_privacy',e.target.value)}>
+            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Who can see your Income?</label>
+          <select className="form-select" value={form.income_privacy} onChange={e=>set('income_privacy',e.target.value)}>
+            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Who can see your Property details?</label>
+          <select className="form-select" value={form.property_privacy} onChange={e=>set('property_privacy',e.target.value)}>
+            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Who can see your Business/Commercial Asset details?</label>
+          <select className="form-select" value={form.business_privacy} onChange={e=>set('business_privacy',e.target.value)}>
+            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Who can see your Contact Details?</label>
+          <select className="form-select" value={form.contact_privacy} onChange={e=>set('contact_privacy',e.target.value)}>
+            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+          </select>
         </div>
       </div>
 
