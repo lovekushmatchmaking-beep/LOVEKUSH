@@ -51,10 +51,15 @@ marital_status text
 education text
 degree text                   -- specific qualification (B.Tech/MBBS/LLB/etc.), grouped dropdown in DEGREE_OPTIONS
 degree_other text              -- free-text "Others / Not in list" entry for degree
-field_of_study text
+field_of_study text            -- legacy, kept for backward compat, no longer shown in UI
+specialization text            -- legacy, kept for backward compat, no longer shown in UI
 occupation text
+designation text               -- legacy, kept for backward compat, no longer shown in UI (was a free-text duplicate of Occupation/Working As)
+industry text                  -- legacy, kept for backward compat, no longer shown in UI (was a duplicate of Profession Category)
+working_with text              -- legacy, kept for backward compat, no longer shown in UI (was a duplicate of Employment Type)
 employer text
 annual_income text
+annual_income_currency text    -- 'INR' | 'USD', default 'INR' -- swaps which range list Annual Income shows
 income_privacy text           -- 3-tier: Public / Matches Only / Private, default 'Private'
 company_privacy text          -- 3-tier: Public / Matches Only / Private, default 'Matches Only'
 college_privacy text          -- 3-tier: Public / Matches Only / Private, default 'Matches Only'
@@ -66,8 +71,10 @@ hobbies text
 about_me text
 family_type text
 family_values text
-father_profession text
-mother_profession text
+father_profession text         -- dropdown (PROFESSION_CATEGORIES + Retired/Other); when 'Other', the free-text UI value is resolved into this same column before save
+father_profession_other text   -- present but unused by the app (the UI's "Other" free-text is stripped and resolved into father_profession before save, same pattern as community_other/gotra_other)
+mother_profession text         -- dropdown (Homemaker + PROFESSION_CATEGORIES + Retired/Other); when 'Other', the free-text UI value is resolved into this same column before save
+mother_profession_other text   -- present but unused by the app (see father_profession_other)
 siblings text                  -- legacy free-text, kept for backward compat, no longer shown in UI
 brothers_count int             -- 0-10, clamped client-side
 brothers_married_count int     -- clamped to <= brothers_count
@@ -86,13 +93,20 @@ business_asset_type text
 business_detail text
 business_privacy text         -- 3-tier: Public / Matches Only / Private, default 'Private'
 family_city text
+family_income_currency text    -- 'INR' | 'USD', default 'INR' -- swaps which range list Family Income Range shows
+languages_spoken text[]        -- multi-select, same list as mother_tongue (LANGUAGES_SPOKEN alias of MOTHER_TONGUES)
+have_children text             -- 'No' | 'Yes' | 'Prefer not to say'
+children_living_with text      -- 'Me' | 'Ex-Spouse' | 'Jointly' | 'Other', only shown/relevant when have_children = 'Yes'
+grew_up_in text                -- 'Metro City' | 'Urban / City' | 'Semi-Urban / Town' | 'Rural / Village' | 'Abroad'
 partner_age_min int
 partner_age_max int
+partner_height_min int         -- total inches (53-84, same 4'5"-7'0" range as HEIGHT_OPTIONS_DETAILED); informational only, not a matching.js hard filter
+partner_height_max int
 partner_religion text
 partner_community_ids text[]  -- multi-select; may include 'Any Community / No Bar' flag (skips community filtering in matching.js)
 partner_location text
 partner_education text          -- legacy single-select, kept for backward compat, no longer shown in UI
-partner_degree_preferences text[]              -- multi-select, DEGREE_OPTIONS grouped values; empty = no preference
+partner_degree_preferences text[]              -- legacy, kept for backward compat, no longer shown in UI (removed for bad chip-list UX with the full DEGREE_OPTIONS list)
 partner_education_level_preferences text[]     -- multi-select, EDUCATIONS values; empty = no preference
 partner_notes text
 submitted_at timestamptz

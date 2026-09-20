@@ -1881,6 +1881,12 @@ export const MOTHER_TONGUES = [
   "Other",
 ]
 
+// "Languages I Speak" (multi-select) reuses the exact same global
+// language list as Mother Tongue — separate name for clarity at the
+// call site, same underlying data (a person's spoken languages are a
+// superset of their one Mother Tongue, but the option list is identical).
+export const LANGUAGES_SPOKEN = MOTHER_TONGUES
+
 
 export const EDUCATIONS = [
   'Class 10th',
@@ -2043,7 +2049,7 @@ export const MARITAL_STATUSES = ['Never Married', 'Divorced', 'Widowed', 'Separa
 export const LOCATION_PREFERENCES = [
   'Same city',
   'Same state',
-  'Anywhere in India',
+  'Anywhere in My Country',
   'Open to relocation',
   'Global',
 ]
@@ -2066,17 +2072,21 @@ export const RELOCATION_PREFERENCES = ['Not willing to relocate', 'Open to reloc
 
 export const EMPLOYMENT_TYPES = ['Government', 'Private Sector', 'Business / Self-Employed', 'Not Working', 'Student', 'Retired']
 
-export const INDUSTRIES = [
-  'IT / Software', 'Banking / Finance', 'Healthcare / Medical', 'Education', 'Government / Public Sector',
-  'Engineering / Manufacturing', 'Legal', 'Retail / Business', 'Media / Entertainment', 'Hospitality',
-  'Agriculture', 'Real Estate', 'Defence / Armed Forces', 'Other',
-]
-
 export const OWN_HOUSE_OPTIONS = ['Own House', 'Rented', 'Family House']
 
 export const HOUSE_TYPES = ['Independent House', 'Apartment/Flat', 'Farmhouse', 'Other']
 
 export const FAMILY_INCOME_RANGES = ['Below ₹5L', '₹5–10L', '₹10–20L', '₹20–50L', '₹50L+']
+export const USD_FAMILY_INCOME_RANGES = ['Below $6,000', '$6,000–12,000', '$12,000–25,000', '$25,000–60,000', '$60,000+']
+
+// Currency toggle for Annual Income / Family Income — Indian users stay
+// on INR (default), worldwide/diaspora users can switch to USD, which
+// swaps the range dropdown to USD_INCOME_RANGES/USD_FAMILY_INCOME_RANGES.
+export const CURRENCIES = ['INR', 'USD']
+export const USD_INCOME_RANGES = [
+  'Below $2,500/year', '$2,500–6,000', '$6,000–12,000', '$12,000–25,000',
+  '$25,000–40,000', '$40,000–65,000', '$65,000–120,000', '$120,000+', 'Prefer not to specify',
+]
 
 export const PHYSICAL_DISABILITY_OPTIONS = ['No', 'Yes']
 
@@ -2091,7 +2101,10 @@ export const PROFESSION_CATEGORIES = [
   'Sales & Marketing', 'Science', 'Others',
 ]
 
-export const WORKING_WITH_OPTIONS = ['Private Company', 'Government / Public Sector', 'Defense / Civil Services', 'Business / Self Employed', 'Not Working']
+export const HAVE_CHILDREN_OPTIONS = ['No', 'Yes', 'Prefer not to say']
+export const CHILDREN_LIVING_WITH_OPTIONS = ['Me', 'Ex-Spouse', 'Jointly', 'Other']
+
+export const GREW_UP_IN_OPTIONS = ['Metro City', 'Urban / City', 'Semi-Urban / Town', 'Rural / Village', 'Abroad']
 
 export const HEALTH_INFO_OPTIONS = ['No Health Problems', 'HIV Positive', 'Diabetes', 'Low BP', 'High BP', 'Heart Ailments', 'Other']
 
@@ -2141,18 +2154,31 @@ export const SPORTS_LIST = [
   'Carrom', 'Card Games', 'Table Tennis', 'Adventure Sports',
 ]
 
+// Ek hi total-inches value ko "Xft Yin — Zcm" string mein format karta
+// hai — dono generateHeightOptions() aur naya partner-height dual-slider
+// (DualRangeSlider ka formatLabel) isi ek helper ko reuse karte hain,
+// taaki dono jagah exact same ft/in/cm conversion ho.
+export function formatHeightFromInches(totalInches) {
+  const feet = Math.floor(totalInches / 12)
+  const inches = totalInches % 12
+  const cm = Math.round(totalInches * 2.54)
+  return `${feet}ft ${inches}in — ${cm}cm`
+}
+
 // Fine-grained height dropdown, feet+inches WITH cm — Shaadi.com jaisa
 export function generateHeightOptions() {
   const options = []
   for (let totalInches = 53; totalInches <= 84; totalInches++) { // 4'5" to 7'0"
-    const feet = Math.floor(totalInches / 12)
-    const inches = totalInches % 12
-    const cm = Math.round(totalInches * 2.54)
-    options.push(`${feet}ft ${inches}in — ${cm}cm`)
+    options.push(formatHeightFromInches(totalInches))
   }
   return options
 }
 export const HEIGHT_OPTIONS_DETAILED = generateHeightOptions()
+
+// Partner Height Preference — dual-range slider bounds (total inches,
+// same 4'5"–7'0" range as HEIGHT_OPTIONS_DETAILED above).
+export const PARTNER_HEIGHT_MIN_INCHES = 53
+export const PARTNER_HEIGHT_MAX_INCHES = 84
 
 // NOTE: "Not Filled" ≠ "No" — koi bhi field jo user ne bhari nahi hai,
 // khaali/blank hi rehni chahiye database mein (kabhi bhi false/No
