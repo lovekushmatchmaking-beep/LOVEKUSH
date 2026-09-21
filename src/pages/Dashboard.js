@@ -8,7 +8,7 @@ import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CA
   CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES,
   RELIGION_HIERARCHY, NO_RELIGION_VALUES, JAIN_GOTRAS, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, BODY_TYPES, WEIGHT_RANGES,
   PROPERTY_TYPES, PROPERTY_OWNERSHIP, VEHICLE_OWNERSHIP, BUSINESS_ASSET_TYPES,
-  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
+  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, COUNTRIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
   LANGUAGES_SPOKEN, HAVE_CHILDREN_OPTIONS, CHILDREN_LIVING_WITH_OPTIONS, GREW_UP_IN_OPTIONS,
   PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, formatHeightFromInches,
   PARTNER_INCOME_BOUNDS } from '../constants/profileOptions'
@@ -306,6 +306,7 @@ export default function Dashboard({ user }) {
                     ['Location', profile.partner_location],
                     ['Preferred City', profile.partner_city_preference],
                     ['Preferred State', profile.partner_state_preference],
+                    ['Preferred Country', profile.partner_country_preference && profile.partner_country_preference !== 'Open to All' ? profile.partner_country_preference : null],
                     ['Notes', profile.partner_notes],
                   ].filter(([,v])=>v).map(([k,v])=>(
                     <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
@@ -784,7 +785,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     complexion: profile.complexion || '',
     body_type: profile.body_type || 'Average',
     marital_status: profile.marital_status || 'Never Married',
-    nationality: profile.nationality || 'Indian',
+    nationality: profile.nationality || 'India',
     physical_disability: profile.physical_disability || 'No',
     blood_group: profile.blood_group || '',
     health_info: profile.health_info || '',
@@ -867,6 +868,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     partner_income_currency: profile.partner_income_currency || 'INR',
     partner_city_preference: profile.partner_city_preference || '',
     partner_state_preference: profile.partner_state_preference || '',
+    partner_country_preference: profile.partner_country_preference || 'Open to All',
     partner_religion: profile.partner_religion || 'Any',
     partner_community_ids: profile.partner_community_ids || [],
     partner_location: profile.partner_location || '',
@@ -1114,7 +1116,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           <div className="form-group">
             <label className="form-label">Nationality</label>
             <select className="form-select" value={form.nationality} onChange={e=>set('nationality',e.target.value)}>
-              {NATIONALITIES.map(n=><option key={n}>{n}</option>)}
+              {COUNTRIES.filter(c=>c!=='Open to All').map(n=><option key={n}>{n}</option>)}
             </select>
           </div>
         </div>
@@ -1198,7 +1200,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           </div>
           <div className="form-group">
             <label className="form-label">Country of Birth</label>
-            <input className="form-input" value={form.country_of_birth} onChange={e=>set('country_of_birth',e.target.value)} />
+            <select className="form-select" value={form.country_of_birth} onChange={e=>set('country_of_birth',e.target.value)}>
+              <option value="">Select</option>
+              {COUNTRIES.filter(c=>c!=='Open to All').map(c=><option key={c}>{c}</option>)}
+            </select>
           </div>
         </div>
         <div className="form-group">
@@ -1873,6 +1878,12 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <label className="form-label">Partner State Preference</label>
             <input className="form-input" value={form.partner_state_preference} onChange={e=>set('partner_state_preference',e.target.value)} />
           </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Partner Country Preference</label>
+          <select className="form-select" value={form.partner_country_preference} onChange={e=>set('partner_country_preference',e.target.value)}>
+            {COUNTRIES.map(c=><option key={c}>{c}</option>)}
+          </select>
         </div>
         <div className="form-group">
           <label className="form-label">Additional Notes</label>

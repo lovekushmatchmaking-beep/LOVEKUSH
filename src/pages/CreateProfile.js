@@ -38,7 +38,7 @@ import {
   PARTNER_COMMUNITY_SPECIAL_OPTIONS,
   PARTNER_COMMUNITY_NO_BAR,
   WEIGHT_RANGES,
-  NATIONALITIES,
+  COUNTRIES,
   MANGLIK_OPTIONS,
   KUNDLI_AVAILABLE,
   RELOCATION_PREFERENCES,
@@ -124,7 +124,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     custom_caste_text:'', custom_caste_text_gotra:'',
     community_privacy:'Matches Only',
     height:'', weight:'', complexion:'', body_type:'Average',
-    marital_status:'Never Married', nationality:'Indian',
+    marital_status:'Never Married', nationality:'India',
     physical_disability:'No', disability_details:'',
     sub_caste:'', gotra:'', gotra_other:'', manglik:'', kundli_available:'',
     native_place:'', current_address:'', relocation_preference:'',
@@ -142,7 +142,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     partner_height_min:PARTNER_HEIGHT_MIN_INCHES, partner_height_max:PARTNER_HEIGHT_MAX_INCHES,
     partner_income_min:PARTNER_INCOME_BOUNDS.INR.min, partner_income_max:PARTNER_INCOME_BOUNDS.INR.max,
     partner_income_currency:'INR',
-    partner_city_preference:'', partner_state_preference:'',
+    partner_city_preference:'', partner_state_preference:'', partner_country_preference:'Open to All',
     partner_religion:'Any', partner_community_ids:[], partner_location:'Open to relocation',
     partner_education:'Any', partner_education_level_preferences:[],
     partner_notes:''
@@ -521,7 +521,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               <div className="form-group">
                 <label className="form-label">Nationality</label>
                 <select className="form-select" value={form.nationality} onChange={e=>set('nationality',e.target.value)}>
-                  {NATIONALITIES.map(n=><option key={n}>{n}</option>)}
+                  {COUNTRIES.filter(c=>c!=='Open to All').map(n=><option key={n}>{n}</option>)}
                 </select>
               </div>
             </div>
@@ -803,7 +803,10 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               </div>
               <div className="form-group">
                 <label className="form-label">Country of Birth</label>
-                <input className="form-input" placeholder="India" value={form.country_of_birth} onChange={e=>set('country_of_birth',e.target.value)} />
+                <select className="form-select" value={form.country_of_birth} onChange={e=>set('country_of_birth',e.target.value)}>
+                  <option value="">Select</option>
+                  {COUNTRIES.filter(c=>c!=='Open to All').map(c=><option key={c}>{c}</option>)}
+                </select>
               </div>
             </div>
 
@@ -1413,6 +1416,13 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                 <input className="form-input" placeholder="Optional" value={form.partner_state_preference}
                   onChange={e=>set('partner_state_preference',e.target.value)} />
               </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Partner Country Preference</label>
+              <select className="form-select" value={form.partner_country_preference} onChange={e=>set('partner_country_preference',e.target.value)}>
+                {COUNTRIES.map(c=><option key={c}>{c}</option>)}
+              </select>
             </div>
 
             <div className="form-group">

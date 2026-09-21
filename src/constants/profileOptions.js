@@ -2067,7 +2067,59 @@ export const BODY_TYPES = ['Slim', 'Athletic', 'Average', 'Heavy', 'Curvy', 'Pre
 
 export const WEIGHT_RANGES = ['Below 45kg', '45–55kg', '55–65kg', '65–75kg', '75–85kg', 'Above 85kg']
 
-export const NATIONALITIES = ['Indian', 'NRI - USA', 'NRI - UK', 'NRI - Canada', 'NRI - Australia', 'NRI - UAE/Gulf', 'NRI - Other', 'Other']
+// Country list supplied by the user — a small "priority" block of common
+// countries first, then the full list alphabetically. Used for Nationality,
+// Country of Birth, and Partner Country Preference. "Open to All" is only
+// meaningful for Partner Country Preference but is kept in this single
+// shared list exactly as the user provided it.
+export const COUNTRIES = [
+  'Open to All', 'India', 'USA', 'UK', 'UAE', 'Canada', 'Australia', 'New Zealand',
+  'Pakistan', 'Saudi Arabia', 'Kuwait', 'South Africa',
+  'Afghanistan', 'Albania', 'Algeria', 'American Samoa', 'Andorra', 'Angola', 'Anguilla',
+  'Antigua & Barbuda', 'Argentina', 'Armenia', 'Austria', 'Azerbaijan',
+  'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Bermuda', 'Bhutan',
+  'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria',
+  'Burkina Faso', 'Burundi',
+  'Cambodia', 'Cameroon', 'Cape Verde', 'Cayman Islands', 'Central African Republic', 'Chad',
+  'Chile', 'China', 'Colombia', 'Comoros', 'Congo (DRC)', 'Congo', 'Cook Islands',
+  'Costa Rica', "Cote d'Ivoire", 'Croatia (Hrvatska)', 'Cuba', 'Cyprus', 'Czech Republic',
+  'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic',
+  'East Timor', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia',
+  'Ethiopia',
+  'Falkland Islands', 'Faroe Islands', 'Fiji Islands', 'Finland', 'France', 'French Guiana',
+  'French Polynesia',
+  'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Gibraltar', 'Greece', 'Greenland',
+  'Grenada', 'Guadeloupe', 'Guam', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana',
+  'Haiti', 'Honduras', 'Hong Kong SAR', 'Hungary',
+  'Iceland', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy',
+  'Jamaica', 'Japan', 'Jordan',
+  'Kazakhstan', 'Kenya', 'Kiribati', 'Korea', 'Kyrgyzstan',
+  'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania',
+  'Luxembourg',
+  'Macao SAR', 'Macedonia', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta',
+  'Martinique', 'Mauritania', 'Mauritius', 'Mayotte', 'Mexico', 'Micronesia', 'Moldova',
+  'Monaco', 'Mongolia', 'Montserrat', 'Morocco', 'Mozambique', 'Myanmar',
+  'Namibia', 'Nauru', 'Nepal', 'Netherlands Antilles', 'Netherlands', 'New Caledonia',
+  'Nicaragua', 'Niger', 'Nigeria', 'Niue', 'Norfolk Island', 'North Korea', 'Norway',
+  'Oman',
+  'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Pitcairn Islands',
+  'Poland', 'Portugal', 'Puerto Rico',
+  'Qatar',
+  'Reunion', 'Romania', 'Russia', 'Rwanda',
+  'Samoa', 'San Marino', 'Sao Tome and Principe', 'Senegal', 'Serbia and Montenegro',
+  'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon Islands',
+  'Somalia', 'Spain', 'Sri Lanka', 'St. Helena', 'St. Kitts and Nevis', 'St. Lucia',
+  'St. Pierre and Miquelon', 'St. Vincent & Grenadines', 'Sudan', 'Suriname', 'Swaziland',
+  'Sweden', 'Switzerland', 'Syria',
+  'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Togo', 'Tokelau', 'Tonga',
+  'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Turks and Caicos Islands',
+  'Tuvalu',
+  'Uganda', 'Ukraine', 'Uruguay', 'Uzbekistan',
+  'Vanuatu', 'Venezuela', 'Vietnam', 'Virgin Islands (British)', 'Virgin Islands',
+  'Wallis and Futuna',
+  'Yemen', 'Yugoslavia',
+  'Zambia', 'Zimbabwe',
+]
 
 export const MANGLIK_OPTIONS = ['Manglik', 'Non-Manglik', "Don't Know"]
 

@@ -108,6 +108,7 @@ partner_income_max int
 partner_income_currency text   -- 'INR' | 'USD', default 'INR'
 partner_city_preference text   -- free text
 partner_state_preference text  -- free text
+partner_country_preference text -- dropdown, COUNTRIES list (+ 'Open to All'), default 'Open to All'
 partner_religion text
 partner_community_ids text[]  -- multi-select; may include 'Any Community / No Bar' flag (skips community filtering in matching.js)
 partner_location text          -- broad category (Same city/state/Anywhere in My Country/Global); distinct from the granular partner_city/state_preference above
