@@ -1953,9 +1953,14 @@ export const DEGREE_OPTIONS = {
   'System': ['Others / Not in list', "Don't wish to specify"],
 }
 
+// Fine-grained slabs — ₹1L steps up to ₹15L (jahan zyada profiles cluster
+// karte hain), phir ₹5L steps ₹50L tak, phir ₹10L steps ₹1Cr tak.
 export const INCOME_RANGES = [
-  'Below ₹2L/year', '₹2–5L', '₹5–10L', '₹10–20L', '₹20–35L', '₹35–50L',
-  '₹50L–₹1Cr', '₹1Cr+', 'Prefer not to specify',
+  'Below ₹1L', '₹1–2L', '₹2–3L', '₹3–4L', '₹4–5L', '₹5–6L', '₹6–7L', '₹7–8L',
+  '₹8–9L', '₹9–10L', '₹10–11L', '₹11–12L', '₹12–13L', '₹13–14L', '₹14–15L',
+  '₹15–20L', '₹20–25L', '₹25–30L', '₹30–35L', '₹35–40L', '₹40–45L', '₹45–50L',
+  '₹50–60L', '₹60–70L', '₹70–80L', '₹80–90L', '₹90L–₹1Cr', '₹1Cr+',
+  'Prefer not to specify',
 ]
 
 // ===================== ASSETS — Property / Vehicle / Business =====================
@@ -2062,13 +2067,65 @@ export const BODY_TYPES = ['Slim', 'Athletic', 'Average', 'Heavy', 'Curvy', 'Pre
 
 export const WEIGHT_RANGES = ['Below 45kg', '45–55kg', '55–65kg', '65–75kg', '75–85kg', 'Above 85kg']
 
-export const NATIONALITIES = ['Indian', 'NRI - USA', 'NRI - UK', 'NRI - Canada', 'NRI - Australia', 'NRI - UAE/Gulf', 'NRI - Other', 'Other']
+// Country list supplied by the user — a small "priority" block of common
+// countries first, then the full list alphabetically. Used for Nationality,
+// Country of Birth, and Partner Country Preference. "Open to All" is only
+// meaningful for Partner Country Preference but is kept in this single
+// shared list exactly as the user provided it.
+export const COUNTRIES = [
+  'Open to All', 'India', 'USA', 'UK', 'UAE', 'Canada', 'Australia', 'New Zealand',
+  'Pakistan', 'Saudi Arabia', 'Kuwait', 'South Africa',
+  'Afghanistan', 'Albania', 'Algeria', 'American Samoa', 'Andorra', 'Angola', 'Anguilla',
+  'Antigua & Barbuda', 'Argentina', 'Armenia', 'Austria', 'Azerbaijan',
+  'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Bermuda', 'Bhutan',
+  'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria',
+  'Burkina Faso', 'Burundi',
+  'Cambodia', 'Cameroon', 'Cape Verde', 'Cayman Islands', 'Central African Republic', 'Chad',
+  'Chile', 'China', 'Colombia', 'Comoros', 'Congo (DRC)', 'Congo', 'Cook Islands',
+  'Costa Rica', "Cote d'Ivoire", 'Croatia (Hrvatska)', 'Cuba', 'Cyprus', 'Czech Republic',
+  'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic',
+  'East Timor', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia',
+  'Ethiopia',
+  'Falkland Islands', 'Faroe Islands', 'Fiji Islands', 'Finland', 'France', 'French Guiana',
+  'French Polynesia',
+  'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Gibraltar', 'Greece', 'Greenland',
+  'Grenada', 'Guadeloupe', 'Guam', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana',
+  'Haiti', 'Honduras', 'Hong Kong SAR', 'Hungary',
+  'Iceland', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy',
+  'Jamaica', 'Japan', 'Jordan',
+  'Kazakhstan', 'Kenya', 'Kiribati', 'Korea', 'Kyrgyzstan',
+  'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania',
+  'Luxembourg',
+  'Macao SAR', 'Macedonia', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta',
+  'Martinique', 'Mauritania', 'Mauritius', 'Mayotte', 'Mexico', 'Micronesia', 'Moldova',
+  'Monaco', 'Mongolia', 'Montserrat', 'Morocco', 'Mozambique', 'Myanmar',
+  'Namibia', 'Nauru', 'Nepal', 'Netherlands Antilles', 'Netherlands', 'New Caledonia',
+  'Nicaragua', 'Niger', 'Nigeria', 'Niue', 'Norfolk Island', 'North Korea', 'Norway',
+  'Oman',
+  'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Pitcairn Islands',
+  'Poland', 'Portugal', 'Puerto Rico',
+  'Qatar',
+  'Reunion', 'Romania', 'Russia', 'Rwanda',
+  'Samoa', 'San Marino', 'Sao Tome and Principe', 'Senegal', 'Serbia and Montenegro',
+  'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon Islands',
+  'Somalia', 'Spain', 'Sri Lanka', 'St. Helena', 'St. Kitts and Nevis', 'St. Lucia',
+  'St. Pierre and Miquelon', 'St. Vincent & Grenadines', 'Sudan', 'Suriname', 'Swaziland',
+  'Sweden', 'Switzerland', 'Syria',
+  'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Togo', 'Tokelau', 'Tonga',
+  'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Turks and Caicos Islands',
+  'Tuvalu',
+  'Uganda', 'Ukraine', 'Uruguay', 'Uzbekistan',
+  'Vanuatu', 'Venezuela', 'Vietnam', 'Virgin Islands (British)', 'Virgin Islands',
+  'Wallis and Futuna',
+  'Yemen', 'Yugoslavia',
+  'Zambia', 'Zimbabwe',
+]
 
 export const MANGLIK_OPTIONS = ['Manglik', 'Non-Manglik', "Don't Know"]
 
 export const KUNDLI_AVAILABLE = ['Yes', 'No', 'Will arrange if needed']
 
-export const RELOCATION_PREFERENCES = ['Not willing to relocate', 'Open to relocation within India', 'Open to relocation abroad', 'Flexible']
+export const RELOCATION_PREFERENCES = ['Not willing to relocate', 'Open to relocation within my country', 'Open to relocation abroad', 'Flexible']
 
 export const EMPLOYMENT_TYPES = ['Government', 'Private Sector', 'Business / Self-Employed', 'Not Working', 'Student', 'Retired']
 
@@ -2076,17 +2133,42 @@ export const OWN_HOUSE_OPTIONS = ['Own House', 'Rented', 'Family House']
 
 export const HOUSE_TYPES = ['Independent House', 'Apartment/Flat', 'Farmhouse', 'Other']
 
-export const FAMILY_INCOME_RANGES = ['Below ₹5L', '₹5–10L', '₹10–20L', '₹20–50L', '₹50L+']
-export const USD_FAMILY_INCOME_RANGES = ['Below $6,000', '$6,000–12,000', '$12,000–25,000', '$25,000–60,000', '$60,000+']
+export const FAMILY_INCOME_RANGES = [
+  'Below ₹1L', '₹1–2L', '₹2–3L', '₹3–4L', '₹4–5L', '₹5–6L', '₹6–7L', '₹7–8L',
+  '₹8–9L', '₹9–10L', '₹10–11L', '₹11–12L', '₹12–13L', '₹13–14L', '₹14–15L',
+  '₹15–20L', '₹20–25L', '₹25–30L', '₹30–35L', '₹35–40L', '₹40–45L', '₹45–50L',
+  '₹50–60L', '₹60–70L', '₹70–80L', '₹80–90L', '₹90L–₹1Cr', '₹1Cr+',
+  'Prefer not to specify',
+]
+export const USD_FAMILY_INCOME_RANGES = [
+  'Below $1,500', '$1,500–3,000', '$3,000–4,500', '$4,500–6,000', '$6,000–7,500',
+  '$7,500–9,000', '$9,000–10,500', '$10,500–12,000', '$12,000–15,000', '$15,000–18,000',
+  '$18,000–24,000', '$24,000–30,000', '$30,000–40,000', '$40,000–50,000',
+  '$50,000–65,000', '$65,000–85,000', '$85,000–110,000', '$110,000–120,000', '$120,000+',
+  'Prefer not to specify',
+]
 
-// Currency toggle for Annual Income / Family Income — Indian users stay
-// on INR (default), worldwide/diaspora users can switch to USD, which
-// swaps the range dropdown to USD_INCOME_RANGES/USD_FAMILY_INCOME_RANGES.
+// Currency toggle for Annual Income / Family Income / Partner Income
+// Preference — Indian users stay on INR (default), worldwide/diaspora
+// users can switch to USD, which swaps the range dropdown to
+// USD_INCOME_RANGES/USD_FAMILY_INCOME_RANGES (or slider bounds, for
+// Partner Income Preference — see PARTNER_INCOME_BOUNDS below).
 export const CURRENCIES = ['INR', 'USD']
 export const USD_INCOME_RANGES = [
-  'Below $2,500/year', '$2,500–6,000', '$6,000–12,000', '$12,000–25,000',
-  '$25,000–40,000', '$40,000–65,000', '$65,000–120,000', '$120,000+', 'Prefer not to specify',
+  'Below $1,500/year', '$1,500–3,000', '$3,000–4,500', '$4,500–6,000', '$6,000–7,500',
+  '$7,500–9,000', '$9,000–10,500', '$10,500–12,000', '$12,000–15,000', '$15,000–18,000',
+  '$18,000–24,000', '$24,000–30,000', '$30,000–40,000', '$40,000–50,000',
+  '$50,000–65,000', '$65,000–85,000', '$85,000–110,000', '$110,000–120,000', '$120,000+',
+  'Prefer not to specify',
 ]
+
+// Partner Income Preference — numeric slider bounds (proposed default,
+// open to adjustment): open-ended top bucket shown via formatLabel's
+// "+" suffix at the max value, same convention as the slab lists above.
+export const PARTNER_INCOME_BOUNDS = {
+  INR: { min: 0, max: 10000000, step: 50000 },
+  USD: { min: 0, max: 150000, step: 2500 },
+}
 
 export const PHYSICAL_DISABILITY_OPTIONS = ['No', 'Yes']
 
@@ -2163,6 +2245,16 @@ export function formatHeightFromInches(totalInches) {
   const inches = totalInches % 12
   const cm = Math.round(totalInches * 2.54)
   return `${feet}ft ${inches}in — ${cm}cm`
+}
+
+// Reverse of formatHeightFromInches — "4'0\" (122 cm)" (the HEIGHT_RANGES
+// string format) -> 48 (total inches). Used by matching.js to compare a
+// profile's own Height against a partner's Height Preference (int).
+export function parseHeightToInches(heightStr) {
+  if (!heightStr) return null
+  const match = heightStr.match(/\((\d+)\s*cm\)/)
+  if (!match) return null
+  return Math.round(Number(match[1]) / 2.54)
 }
 
 // Fine-grained height dropdown, feet+inches WITH cm — Shaadi.com jaisa
