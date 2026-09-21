@@ -51,6 +51,7 @@ marital_status text
 education text
 degree text                   -- specific qualification (B.Tech/MBBS/LLB/etc.), grouped dropdown in DEGREE_OPTIONS
 degree_other text              -- free-text "Others / Not in list" entry for degree
+college_name text              -- free-text, own field separate from college_privacy (who can see it)
 field_of_study text            -- legacy, kept for backward compat, no longer shown in UI
 specialization text            -- legacy, kept for backward compat, no longer shown in UI
 occupation text
@@ -71,9 +72,9 @@ hobbies text
 about_me text
 family_type text
 family_values text
-father_profession text         -- dropdown (PROFESSION_CATEGORIES + Retired/Other); when 'Other', the free-text UI value is resolved into this same column before save
+father_profession text         -- dropdown (PROFESSION_CATEGORIES + Retired/Other/Passed Away); when 'Other', the free-text UI value is resolved into this same column before save
 father_profession_other text   -- present but unused by the app (the UI's "Other" free-text is stripped and resolved into father_profession before save, same pattern as community_other/gotra_other)
-mother_profession text         -- dropdown (Homemaker + PROFESSION_CATEGORIES + Retired/Other); when 'Other', the free-text UI value is resolved into this same column before save
+mother_profession text         -- dropdown (Homemaker + PROFESSION_CATEGORIES + Retired/Other/Passed Away); when 'Other', the free-text UI value is resolved into this same column before save
 mother_profession_other text   -- present but unused by the app (see father_profession_other)
 siblings text                  -- legacy free-text, kept for backward compat, no longer shown in UI
 brothers_count int             -- 0-10, clamped client-side
@@ -100,11 +101,16 @@ children_living_with text      -- 'Me' | 'Ex-Spouse' | 'Jointly' | 'Other', only
 grew_up_in text                -- 'Metro City' | 'Urban / City' | 'Semi-Urban / Town' | 'Rural / Village' | 'Abroad'
 partner_age_min int
 partner_age_max int
-partner_height_min int         -- total inches (53-84, same 4'5"-7'0" range as HEIGHT_OPTIONS_DETAILED); informational only, not a matching.js hard filter
+partner_height_min int         -- total inches (53-84, same 4'5"-7'0" range as HEIGHT_OPTIONS_DETAILED); matching.js hard filter (symmetric, both sides)
 partner_height_max int
+partner_income_min int         -- currency-scaled per partner_income_currency; informational only, not a matching.js hard filter
+partner_income_max int
+partner_income_currency text   -- 'INR' | 'USD', default 'INR'
+partner_city_preference text   -- free text
+partner_state_preference text  -- free text
 partner_religion text
 partner_community_ids text[]  -- multi-select; may include 'Any Community / No Bar' flag (skips community filtering in matching.js)
-partner_location text
+partner_location text          -- broad category (Same city/state/Anywhere in My Country/Global); distinct from the granular partner_city/state_preference above
 partner_education text          -- legacy single-select, kept for backward compat, no longer shown in UI
 partner_degree_preferences text[]              -- legacy, kept for backward compat, no longer shown in UI (removed for bad chip-list UX with the full DEGREE_OPTIONS list)
 partner_education_level_preferences text[]     -- multi-select, EDUCATIONS values; empty = no preference

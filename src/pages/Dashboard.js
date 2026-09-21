@@ -10,13 +10,15 @@ import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CA
   PROPERTY_TYPES, PROPERTY_OWNERSHIP, VEHICLE_OWNERSHIP, BUSINESS_ASSET_TYPES,
   PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, NATIONALITIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
   LANGUAGES_SPOKEN, HAVE_CHILDREN_OPTIONS, CHILDREN_LIVING_WITH_OPTIONS, GREW_UP_IN_OPTIONS,
-  PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, formatHeightFromInches } from '../constants/profileOptions'
+  PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, formatHeightFromInches,
+  PARTNER_INCOME_BOUNDS } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
 import SignedImage from '../components/SignedImage'
 import MultiSelectChips from '../components/MultiSelectChips'
 import DualRangeSlider from '../components/DualRangeSlider'
+import CheckboxDropdown from '../components/CheckboxDropdown'
 
 const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
@@ -253,6 +255,7 @@ export default function Dashboard({ user }) {
                     ['Relocation Preference', profile.relocation_preference],
                     ['Highest Education', profile.education],
                     ['Degree', profile.degree],
+                    ['College/Institution Name', profile.college_name],
                     ['Employment Type', profile.employment_type],
                     ['Profession Category', profile.profession],
                     ['Occupation', profile.occupation],
@@ -296,10 +299,13 @@ export default function Dashboard({ user }) {
                   {[
                     ['Age Range', profile.partner_age_min && profile.partner_age_max ? profile.partner_age_min + ' - ' + profile.partner_age_max + ' years' : null],
                     ['Height Range', profile.partner_height_min && profile.partner_height_max ? formatHeightFromInches(profile.partner_height_min) + ' - ' + formatHeightFromInches(profile.partner_height_max) : null],
+                    ['Income Range', profile.partner_income_max ? (profile.partner_income_currency === 'USD' ? '$' : '₹') + Number(profile.partner_income_min || 0).toLocaleString() + ' - ' + (profile.partner_income_currency === 'USD' ? '$' : '₹') + Number(profile.partner_income_max).toLocaleString() : null],
                     ['Religion', profile.partner_religion],
                     ['Preferred Community', Array.isArray(profile.partner_community_ids) ? profile.partner_community_ids.join(', ') : null],
                     ['Education Level', Array.isArray(profile.partner_education_level_preferences) && profile.partner_education_level_preferences.length ? profile.partner_education_level_preferences.join(', ') : null],
                     ['Location', profile.partner_location],
+                    ['Preferred City', profile.partner_city_preference],
+                    ['Preferred State', profile.partner_state_preference],
                     ['Notes', profile.partner_notes],
                   ].filter(([,v])=>v).map(([k,v])=>(
                     <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
@@ -821,6 +827,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     relocation_preference: profile.relocation_preference || '',
     education: profile.education || '',
     degree: profile.degree || '', degree_other: '',
+    college_name: profile.college_name || '',
     occupation: profile.occupation || '',
     employment_type: profile.employment_type || '',
     work_location: profile.work_location || '',
@@ -855,6 +862,11 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
     partner_age_max: profile.partner_age_max || 40,
     partner_height_min: profile.partner_height_min || PARTNER_HEIGHT_MIN_INCHES,
     partner_height_max: profile.partner_height_max || PARTNER_HEIGHT_MAX_INCHES,
+    partner_income_min: profile.partner_income_min || PARTNER_INCOME_BOUNDS.INR.min,
+    partner_income_max: profile.partner_income_max || PARTNER_INCOME_BOUNDS.INR.max,
+    partner_income_currency: profile.partner_income_currency || 'INR',
+    partner_city_preference: profile.partner_city_preference || '',
+    partner_state_preference: profile.partner_state_preference || '',
     partner_religion: profile.partner_religion || 'Any',
     partner_community_ids: profile.partner_community_ids || [],
     partner_location: profile.partner_location || '',
@@ -994,6 +1006,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
           partner_age_max: parseInt(form.partner_age_max) || null,
           partner_height_min: parseInt(form.partner_height_min) || null,
           partner_height_max: parseInt(form.partner_height_max) || null,
+          partner_income_min: parseInt(form.partner_income_min) || null,
+          partner_income_max: parseInt(form.partner_income_max) || null,
           profile_completeness: breakdown.overall,
           completeness_breakdown: breakdown,
         })
@@ -1150,8 +1164,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
         </div>
         <div className="form-group">
           <label className="form-label">Languages I Speak</label>
-          <MultiSelectChips options={LANGUAGES_SPOKEN} selected={form.languages_spoken}
-            onChange={v=>set('languages_spoken',v)} />
+          <CheckboxDropdown options={LANGUAGES_SPOKEN} selected={form.languages_spoken}
+            onChange={v=>set('languages_spoken',v)} placeholder="Select languages..." />
         </div>
         <div className="form-group">
           <label className="form-label">Grew Up In</label>
@@ -1441,6 +1455,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
               value={form.degree_other} onChange={e=>set('degree_other',e.target.value)} />
           )}
         </div>
+        <div className="form-group">
+          <label className="form-label">College/Institution Name</label>
+          <input className="form-input" value={form.college_name} onChange={e=>set('college_name',e.target.value)} />
+        </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Employment Type</label>
@@ -1582,6 +1600,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
               {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
               <option value="Retired">Retired</option>
               <option value="Other">Other</option>
+              <option value="Passed Away">Passed Away</option>
             </select>
             {form.father_profession === 'Other' && (
               <input className="form-input" style={{marginTop:8}} placeholder="Please specify"
@@ -1596,6 +1615,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
               {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
               <option value="Retired">Retired</option>
               <option value="Other">Other</option>
+              <option value="Passed Away">Passed Away</option>
             </select>
             {form.mother_profession === 'Other' && (
               <input className="form-input" style={{marginTop:8}} placeholder="Please specify"
@@ -1789,6 +1809,24 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             formatLabel={formatHeightFromInches} />
         </div>
         <div className="form-group">
+          <label className="form-label">Income Preference</label>
+          <select className="form-select" value={form.partner_income_currency} onChange={e=>{
+            const bounds = PARTNER_INCOME_BOUNDS[e.target.value]
+            setForm(p=>({...p, partner_income_currency:e.target.value, partner_income_min:bounds.min, partner_income_max:bounds.max}))
+          }} style={{marginBottom:8, maxWidth:140}}>
+            {CURRENCIES.map(c=><option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
+          </select>
+          <DualRangeSlider min={PARTNER_INCOME_BOUNDS[form.partner_income_currency].min}
+            max={PARTNER_INCOME_BOUNDS[form.partner_income_currency].max}
+            valueMin={form.partner_income_min} valueMax={form.partner_income_max}
+            onChange={(lo,hi)=>setForm(p=>({...p, partner_income_min:lo, partner_income_max:hi}))}
+            formatLabel={v=>{
+              const symbol = form.partner_income_currency === 'INR' ? '₹' : '$'
+              const isMax = v === PARTNER_INCOME_BOUNDS[form.partner_income_currency].max
+              return symbol + v.toLocaleString(form.partner_income_currency === 'INR' ? 'en-IN' : 'en-US') + (isMax ? '+' : '')
+            }} />
+        </div>
+        <div className="form-group">
           <label className="form-label">Religion Preference</label>
           <select className="form-select" value={form.partner_religion} onChange={e=>set('partner_religion',e.target.value)}>
             <option value="Any">Any / Open to all</option>
@@ -1825,6 +1863,16 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <option value="">Select</option>
             {LOCATION_PREFERENCES.map(l=><option key={l}>{l}</option>)}
           </select>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Partner City Preference</label>
+            <input className="form-input" value={form.partner_city_preference} onChange={e=>set('partner_city_preference',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Partner State Preference</label>
+            <input className="form-input" value={form.partner_state_preference} onChange={e=>set('partner_state_preference',e.target.value)} />
+          </div>
         </div>
         <div className="form-group">
           <label className="form-label">Additional Notes</label>

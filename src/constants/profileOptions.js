@@ -1953,9 +1953,14 @@ export const DEGREE_OPTIONS = {
   'System': ['Others / Not in list', "Don't wish to specify"],
 }
 
+// Fine-grained slabs — ₹1L steps up to ₹15L (jahan zyada profiles cluster
+// karte hain), phir ₹5L steps ₹50L tak, phir ₹10L steps ₹1Cr tak.
 export const INCOME_RANGES = [
-  'Below ₹2L/year', '₹2–5L', '₹5–10L', '₹10–20L', '₹20–35L', '₹35–50L',
-  '₹50L–₹1Cr', '₹1Cr+', 'Prefer not to specify',
+  'Below ₹1L', '₹1–2L', '₹2–3L', '₹3–4L', '₹4–5L', '₹5–6L', '₹6–7L', '₹7–8L',
+  '₹8–9L', '₹9–10L', '₹10–11L', '₹11–12L', '₹12–13L', '₹13–14L', '₹14–15L',
+  '₹15–20L', '₹20–25L', '₹25–30L', '₹30–35L', '₹35–40L', '₹40–45L', '₹45–50L',
+  '₹50–60L', '₹60–70L', '₹70–80L', '₹80–90L', '₹90L–₹1Cr', '₹1Cr+',
+  'Prefer not to specify',
 ]
 
 // ===================== ASSETS — Property / Vehicle / Business =====================
@@ -2068,7 +2073,7 @@ export const MANGLIK_OPTIONS = ['Manglik', 'Non-Manglik', "Don't Know"]
 
 export const KUNDLI_AVAILABLE = ['Yes', 'No', 'Will arrange if needed']
 
-export const RELOCATION_PREFERENCES = ['Not willing to relocate', 'Open to relocation within India', 'Open to relocation abroad', 'Flexible']
+export const RELOCATION_PREFERENCES = ['Not willing to relocate', 'Open to relocation within my country', 'Open to relocation abroad', 'Flexible']
 
 export const EMPLOYMENT_TYPES = ['Government', 'Private Sector', 'Business / Self-Employed', 'Not Working', 'Student', 'Retired']
 
@@ -2076,17 +2081,42 @@ export const OWN_HOUSE_OPTIONS = ['Own House', 'Rented', 'Family House']
 
 export const HOUSE_TYPES = ['Independent House', 'Apartment/Flat', 'Farmhouse', 'Other']
 
-export const FAMILY_INCOME_RANGES = ['Below ₹5L', '₹5–10L', '₹10–20L', '₹20–50L', '₹50L+']
-export const USD_FAMILY_INCOME_RANGES = ['Below $6,000', '$6,000–12,000', '$12,000–25,000', '$25,000–60,000', '$60,000+']
+export const FAMILY_INCOME_RANGES = [
+  'Below ₹1L', '₹1–2L', '₹2–3L', '₹3–4L', '₹4–5L', '₹5–6L', '₹6–7L', '₹7–8L',
+  '₹8–9L', '₹9–10L', '₹10–11L', '₹11–12L', '₹12–13L', '₹13–14L', '₹14–15L',
+  '₹15–20L', '₹20–25L', '₹25–30L', '₹30–35L', '₹35–40L', '₹40–45L', '₹45–50L',
+  '₹50–60L', '₹60–70L', '₹70–80L', '₹80–90L', '₹90L–₹1Cr', '₹1Cr+',
+  'Prefer not to specify',
+]
+export const USD_FAMILY_INCOME_RANGES = [
+  'Below $1,500', '$1,500–3,000', '$3,000–4,500', '$4,500–6,000', '$6,000–7,500',
+  '$7,500–9,000', '$9,000–10,500', '$10,500–12,000', '$12,000–15,000', '$15,000–18,000',
+  '$18,000–24,000', '$24,000–30,000', '$30,000–40,000', '$40,000–50,000',
+  '$50,000–65,000', '$65,000–85,000', '$85,000–110,000', '$110,000–120,000', '$120,000+',
+  'Prefer not to specify',
+]
 
-// Currency toggle for Annual Income / Family Income — Indian users stay
-// on INR (default), worldwide/diaspora users can switch to USD, which
-// swaps the range dropdown to USD_INCOME_RANGES/USD_FAMILY_INCOME_RANGES.
+// Currency toggle for Annual Income / Family Income / Partner Income
+// Preference — Indian users stay on INR (default), worldwide/diaspora
+// users can switch to USD, which swaps the range dropdown to
+// USD_INCOME_RANGES/USD_FAMILY_INCOME_RANGES (or slider bounds, for
+// Partner Income Preference — see PARTNER_INCOME_BOUNDS below).
 export const CURRENCIES = ['INR', 'USD']
 export const USD_INCOME_RANGES = [
-  'Below $2,500/year', '$2,500–6,000', '$6,000–12,000', '$12,000–25,000',
-  '$25,000–40,000', '$40,000–65,000', '$65,000–120,000', '$120,000+', 'Prefer not to specify',
+  'Below $1,500/year', '$1,500–3,000', '$3,000–4,500', '$4,500–6,000', '$6,000–7,500',
+  '$7,500–9,000', '$9,000–10,500', '$10,500–12,000', '$12,000–15,000', '$15,000–18,000',
+  '$18,000–24,000', '$24,000–30,000', '$30,000–40,000', '$40,000–50,000',
+  '$50,000–65,000', '$65,000–85,000', '$85,000–110,000', '$110,000–120,000', '$120,000+',
+  'Prefer not to specify',
 ]
+
+// Partner Income Preference — numeric slider bounds (proposed default,
+// open to adjustment): open-ended top bucket shown via formatLabel's
+// "+" suffix at the max value, same convention as the slab lists above.
+export const PARTNER_INCOME_BOUNDS = {
+  INR: { min: 0, max: 10000000, step: 50000 },
+  USD: { min: 0, max: 150000, step: 2500 },
+}
 
 export const PHYSICAL_DISABILITY_OPTIONS = ['No', 'Yes']
 

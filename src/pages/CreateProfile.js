@@ -75,9 +75,11 @@ import {
   PARTNER_HEIGHT_MIN_INCHES,
   PARTNER_HEIGHT_MAX_INCHES,
   formatHeightFromInches,
+  PARTNER_INCOME_BOUNDS,
 } from '../constants/profileOptions'
 import MultiSelectChips from '../components/MultiSelectChips'
 import DualRangeSlider from '../components/DualRangeSlider'
+import CheckboxDropdown from '../components/CheckboxDropdown'
 import { compressImage } from '../utils/compressImage'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { calculateSectionCompleteness } from '../utils/completeness'
@@ -126,7 +128,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     physical_disability:'No', disability_details:'',
     sub_caste:'', gotra:'', gotra_other:'', manglik:'', kundli_available:'',
     native_place:'', current_address:'', relocation_preference:'',
-    education:'Graduation', degree:'', degree_other:'', occupation:'',
+    education:'Graduation', degree:'', degree_other:'', college_name:'', occupation:'',
     employment_type:'', work_location:'',
     employer:'', annual_income:'₹3–5L', annual_income_currency:'INR',
     diet:'Vegetarian', smoking:'Never', drinking:'Never',
@@ -138,6 +140,9 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     vehicle_details:'', family_income_range:'', family_income_currency:'INR',
     partner_age_min:18, partner_age_max:40,
     partner_height_min:PARTNER_HEIGHT_MIN_INCHES, partner_height_max:PARTNER_HEIGHT_MAX_INCHES,
+    partner_income_min:PARTNER_INCOME_BOUNDS.INR.min, partner_income_max:PARTNER_INCOME_BOUNDS.INR.max,
+    partner_income_currency:'INR',
+    partner_city_preference:'', partner_state_preference:'',
     partner_religion:'Any', partner_community_ids:[], partner_location:'Open to relocation',
     partner_education:'Any', partner_education_level_preferences:[],
     partner_notes:''
@@ -329,6 +334,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           partner_age_max: parseInt(form.partner_age_max) || null,
           partner_height_min: parseInt(form.partner_height_min) || null,
           partner_height_max: parseInt(form.partner_height_max) || null,
+          partner_income_min: parseInt(form.partner_income_min) || null,
+          partner_income_max: parseInt(form.partner_income_max) || null,
           profile_completeness: completeness(),
           completeness_breakdown: calculateSectionCompleteness(form, photoFiles.filter(Boolean).length)
         })
@@ -557,8 +564,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
 
             <div className="form-group">
               <label className="form-label">Languages I Speak</label>
-              <MultiSelectChips options={LANGUAGES_SPOKEN} selected={form.languages_spoken}
-                onChange={v=>set('languages_spoken',v)} />
+              <CheckboxDropdown options={LANGUAGES_SPOKEN} selected={form.languages_spoken}
+                onChange={v=>set('languages_spoken',v)} placeholder="Select languages..." />
             </div>
 
             <div className="form-group">
@@ -907,6 +914,12 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               )}
             </div>
 
+            <div className="form-group">
+              <label className="form-label">College/Institution Name</label>
+              <input className="form-input" placeholder="Optional" value={form.college_name}
+                onChange={e=>set('college_name',e.target.value)} />
+            </div>
+
             {/* Employment Type -> Profession Category -> Occupation -> Working As -> Employer -> Work Location -> Annual Income */}
             <div className="form-row">
               <div className="form-group">
@@ -1101,6 +1114,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                   {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
                   <option value="Retired">Retired</option>
                   <option value="Other">Other</option>
+                  <option value="Passed Away">Passed Away</option>
                 </select>
                 {form.father_profession === 'Other' && (
                   <input className="form-input" style={{marginTop:8}} placeholder="Please specify"
@@ -1115,6 +1129,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                   {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
                   <option value="Retired">Retired</option>
                   <option value="Other">Other</option>
+                  <option value="Passed Away">Passed Away</option>
                 </select>
                 {form.mother_profession === 'Other' && (
                   <input className="form-input" style={{marginTop:8}} placeholder="Please specify"
@@ -1335,6 +1350,25 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             </div>
 
             <div className="form-group">
+              <label className="form-label">Income Preference</label>
+              <select className="form-select" value={form.partner_income_currency} onChange={e=>{
+                const bounds = PARTNER_INCOME_BOUNDS[e.target.value]
+                setForm(p=>({...p, partner_income_currency:e.target.value, partner_income_min:bounds.min, partner_income_max:bounds.max}))
+              }} style={{marginBottom:8, maxWidth:140}}>
+                {CURRENCIES.map(c=><option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
+              </select>
+              <DualRangeSlider min={PARTNER_INCOME_BOUNDS[form.partner_income_currency].min}
+                max={PARTNER_INCOME_BOUNDS[form.partner_income_currency].max}
+                valueMin={form.partner_income_min} valueMax={form.partner_income_max}
+                onChange={(lo,hi)=>setForm(p=>({...p, partner_income_min:lo, partner_income_max:hi}))}
+                formatLabel={v=>{
+                  const symbol = form.partner_income_currency === 'INR' ? '₹' : '$'
+                  const isMax = v === PARTNER_INCOME_BOUNDS[form.partner_income_currency].max
+                  return symbol + v.toLocaleString(form.partner_income_currency === 'INR' ? 'en-IN' : 'en-US') + (isMax ? '+' : '')
+                }} />
+            </div>
+
+            <div className="form-group">
               <label className="form-label">Religion Preference</label>
               <select className="form-select" value={form.partner_religion} onChange={e=>set('partner_religion',e.target.value)}>
                 <option value="Any">Any / Open to all</option>
@@ -1366,6 +1400,19 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               <select className="form-select" value={form.partner_location} onChange={e=>set('partner_location',e.target.value)}>
                 {LOCATION_PREFERENCES.map(l=><option key={l}>{l}</option>)}
               </select>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Partner City Preference</label>
+                <input className="form-input" placeholder="Optional" value={form.partner_city_preference}
+                  onChange={e=>set('partner_city_preference',e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Partner State Preference</label>
+                <input className="form-input" placeholder="Optional" value={form.partner_state_preference}
+                  onChange={e=>set('partner_state_preference',e.target.value)} />
+              </div>
             </div>
 
             <div className="form-group">
