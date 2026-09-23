@@ -176,6 +176,21 @@ export default function Admin({ staffUser }) {
     setSelected(null)
   }
 
+  // Manual Premium toggle — UI-only "premium look" (blurred photo/locked
+  // fields for non-premium viewers) tak hi limited hai abhi, koi real
+  // payment/subscription system nahi hai. Staff yahan se kisi bhi profile
+  // ko premium mark/unmark kar sakte hain testing/demo ke liye.
+  const togglePremium = async (id, current) => {
+    const { error } = await supabase.from('profiles').update({ is_premium: !current }).eq('id', id)
+    if (error) {
+      alert('Update failed: ' + error.message)
+      return
+    }
+    await logAuditEntry('premium_toggle', id, { is_premium: !current })
+    setProfiles(prev => prev.map(p => p.id === id ? { ...p, is_premium: !current } : p))
+    if (selected && selected.id === id) setSelected(prev => ({ ...prev, is_premium: !current }))
+  }
+
   // ===== FIND MATCHES (reuses existing matching.js — koi naya algorithm nahi) =====
   const findMatchesForProfile = async (profile) => {
     setMatchesFor(profile)
@@ -398,6 +413,7 @@ export default function Admin({ staffUser }) {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <div className={"badge badge-" + p.profile_status} style={{ fontSize: 10 }}>{p.profile_status}</div>
+                    {p.is_premium && <div className="badge" style={{ fontSize: 10, background: '#fef3c7', color: '#b45309' }}>👑 Premium</div>}
                     <div style={{ fontSize: 10, color: '#8e8e8e', fontFamily: 'monospace' }}>{p.profile_code}</div>
                   </div>
                 </div>
@@ -442,6 +458,11 @@ export default function Admin({ staffUser }) {
                         onClick={e => { e.stopPropagation(); setEditingProfile(p); setView('editProfile') }}>✎ Edit</button>
                       <button className="btn btn-outline btn-sm"
                         onClick={e => { e.stopPropagation(); findMatchesForProfile(p) }}>🔍 Find Matches</button>
+                      <button className="btn btn-outline btn-sm"
+                        style={p.is_premium ? { color: '#b45309', borderColor: '#b45309' } : {}}
+                        onClick={e => { e.stopPropagation(); togglePremium(p.id, p.is_premium) }}>
+                        {p.is_premium ? '👑 Remove Premium' : '👑 Make Premium'}
+                      </button>
                     </div>
                   </div>
                 )}

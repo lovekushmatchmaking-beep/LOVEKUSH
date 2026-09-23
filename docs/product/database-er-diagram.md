@@ -116,6 +116,8 @@ partner_education text          -- legacy single-select, kept for backward compa
 partner_degree_preferences text[]              -- legacy, kept for backward compat, no longer shown in UI (removed for bad chip-list UX with the full DEGREE_OPTIONS list)
 partner_education_level_preferences text[]     -- multi-select, EDUCATIONS values; empty = no preference
 partner_notes text
+is_premium boolean            -- default false; manual admin-set flag (no real payment system yet), drives "premium look" UI (blurred photo, locked company/college) in matches list
+hidden_until timestamptz      -- set 15 days out when user hides their profile; profiles_public_view excludes rows where this is in the future
 submitted_at timestamptz
 reviewed_at timestamptz
 reviewed_by uuid
@@ -123,6 +125,10 @@ review_notes text
 created_at timestamptz
 updated_at timestamptz
 ```
+
+### profiles_public_view
+
+Read-only view over `profiles`, `where profile_status = 'active' and (hidden_until is null or hidden_until < now())`. Used for browsing/matching other members — excludes sensitive columns (contact info, income privacy-gated fields, family/asset details) by only selecting a fixed safe column list. Includes `about_me`, `employer`, `college_name` (added for the match-card "About"/premium-look features) alongside the core biodata fields.
 
 ### profile_completion_sections
 

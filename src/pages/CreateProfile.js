@@ -1299,10 +1299,26 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               </div>
               <div className="form-group">
                 <label className="form-label">Family Financial Status</label>
-                <select className="form-select" value={form.family_financial_status} onChange={e=>set('family_financial_status',e.target.value)}>
-                  <option value="">Select</option>
-                  {FAMILY_FINANCIAL_STATUS.map(f=><option key={f.label} value={f.label}>{f.label} ({f.range})</option>)}
-                </select>
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  {FAMILY_FINANCIAL_STATUS.map(f=>{
+                    const isSelected = form.family_financial_status === f.label
+                    return (
+                      <div key={f.label} onClick={()=>set('family_financial_status', f.label)}
+                        style={{border:'1.5px solid ' + (isSelected ? '#000' : 'rgba(0,0,0,0.1)'), borderRadius:10, overflow:'hidden', cursor:'pointer'}}>
+                        <div style={{padding:'12px 16px', fontWeight:600, fontSize:14,
+                          background: isSelected ? '#000' : 'transparent', color: isSelected ? '#fff' : '#333'}}>
+                          {isSelected ? '◉' : '○'} {f.label}
+                        </div>
+                        {isSelected && (
+                          <div style={{padding:'10px 16px 14px', fontSize:12, color:'#555', lineHeight:1.6}}>
+                            <div>{f.desc}</div>
+                            <div style={{marginTop:4, fontWeight:500}}>Annual family income: {f.range}</div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
