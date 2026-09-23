@@ -130,6 +130,22 @@ export default function Dashboard({ user }) {
     navigate('/')
   }
 
+  // Profile ko 15 din ke liye temporarily hide karna — profiles_public_view
+  // hidden_until wale profiles ko already exclude karti hai (matching se
+  // gayab ho jaate hain), koi extra client-side filtering nahi chahiye.
+  const hideProfile = async () => {
+    const until = new Date(Date.now() + 15*24*60*60*1000).toISOString()
+    const { error } = await supabase.from('profiles').update({ hidden_until: until }).eq('id', profile.id)
+    if (error) { alert('Could not hide profile: ' + error.message); return }
+    setProfile(p => ({ ...p, hidden_until: until }))
+  }
+
+  const unhideProfile = async () => {
+    const { error } = await supabase.from('profiles').update({ hidden_until: null }).eq('id', profile.id)
+    if (error) { alert('Could not unhide profile: ' + error.message); return }
+    setProfile(p => ({ ...p, hidden_until: null }))
+  }
+
   if(loading) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh'}}>
       <div style={{textAlign:'center'}}>
@@ -182,6 +198,20 @@ export default function Dashboard({ user }) {
                     {profile.profile_status==='active'?'Active':'Under Review'}
                   </div>
                 </div>
+
+                {profile.hidden_until && new Date(profile.hidden_until) > new Date() ? (
+                  <div className="notice" style={{marginBottom:20, display:'flex', justifyContent:'space-between', alignItems:'center', gap:10}}>
+                    <span>Your profile is hidden until {new Date(profile.hidden_until).toLocaleDateString('en-IN')}.</span>
+                    <button className="btn btn-outline btn-sm" style={{flexShrink:0}} onClick={unhideProfile}>Unhide Now</button>
+                  </div>
+                ) : (
+                  <div style={{display:'flex', gap:10, marginBottom:20}}>
+                    <button className="btn btn-outline" style={{fontSize:12,padding:'8px 14px'}} onClick={()=>{
+                      if (window.confirm('Hide your profile for 15 days? Other members won\'t see you in matches until then.')) hideProfile()
+                    }}>Hide Profile (15 days)</button>
+                    <button className="btn btn-outline" style={{fontSize:12,padding:'8px 14px'}} onClick={()=>setActiveTab('biodata')}>Download Biodata</button>
+                  </div>
+                )}
 
                 {/* Completeness */}
                 <div style={{marginBottom:20}}>
@@ -366,7 +396,7 @@ export default function Dashboard({ user }) {
             ) : (
               <div style={{display:'flex',flexDirection:'column',gap:12}}>
                 {matches.map((m)=>(
-                  <MatchCard key={m.id} match={m} interest={interestWith(m.id)}
+                  <MatchCard key={m.id} match={m} interest={interestWith(m.id)} viewerIsPremium={!!profile.is_premium}
                     onConnect={()=>sendInterest(m)} onGoToMessages={()=>setActiveTab('messages')} />
                 ))}
               </div>
@@ -429,6 +459,11 @@ export default function Dashboard({ user }) {
             onCancel={() => setActiveTab('home')}
           />
         )}
+
+        {/* BIODATA TAB */}
+        {activeTab === 'biodata' && profile && (
+          <BiodataView profile={profile} photo={photos.find(p=>p.is_primary) || photos[0]} onBack={()=>setActiveTab('home')} />
+        )}
       </div>
 
       {/* Bottom Nav */}
@@ -453,8 +488,91 @@ export default function Dashboard({ user }) {
 // Match card — score ke saath "Why this match?" expand karke poora
 // breakdown dikhata hai (Strong Matches ✓ / Needs Discussion △) — fake
 // percentage nahi, actual matching.js se aaya hua real explanation.
-function MatchCard({ match: m, interest, onConnect, onGoToMessages }) {
+// ===== BIODATA — printable/shareable biodata (browser "Save as PDF" print,
+// no new PDF library dependency) =====
+function BiodataView({ profile: p, photo, onBack }) {
+  const rows = (pairs) => pairs.filter(([,v])=>v).map(([k,v])=>(
+    <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid rgba(0,0,0,0.06)',fontSize:13}}>
+      <span style={{color:'#8e8e8e'}}>{k}</span>
+      <span style={{fontWeight:500,textAlign:'right'}}>{v}</span>
+    </div>
+  ))
+
+  return (
+    <div>
+      <div className="no-print" style={{display:'flex',gap:10,marginBottom:16}}>
+        <button className="btn btn-outline" style={{flex:1}} onClick={onBack}>← Back</button>
+        <button className="btn btn-black" style={{flex:2}} onClick={()=>window.print()}>🖨️ Print / Save as PDF</button>
+      </div>
+
+      <div style={{border:'1px solid rgba(0,0,0,0.1)',borderRadius:16,padding:24,background:'#fff'}}>
+        <div style={{textAlign:'center',marginBottom:20,paddingBottom:16,borderBottom:'2px solid #000'}}>
+          <div style={{fontFamily:'Cormorant Garamond',fontSize:28,fontWeight:300,letterSpacing:'0.05em'}}>LOVEKUSH</div>
+          <div style={{fontSize:11,color:'#8e8e8e',letterSpacing:'0.15em',textTransform:'uppercase'}}>Matrimonial Biodata</div>
+        </div>
+
+        <div style={{display:'flex',gap:16,marginBottom:20}}>
+          <div style={{width:96,height:96,borderRadius:10,background:'#f0f0f0',overflow:'hidden',flexShrink:0}}>
+            {photo
+              ? <SignedImage path={photo.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+              : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32}}>👤</div>
+            }
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:600,fontSize:19,marginBottom:4}}>{p.full_name}</div>
+            <div style={{fontSize:13,color:'#555'}}>{p.age ? p.age + ' years' : ''}{p.height ? ' • ' + p.height : ''}</div>
+            <div style={{fontSize:13,color:'#555'}}>{p.city}{p.state ? ', ' + p.state : ''}</div>
+            <div className="profile-code" style={{marginTop:6}}>{p.profile_code}</div>
+          </div>
+        </div>
+
+        {p.about_me && (
+          <div style={{marginBottom:16,fontSize:13,color:'#333',lineHeight:1.6,fontStyle:'italic'}}>
+            "{p.about_me}"
+          </div>
+        )}
+
+        <div style={{fontSize:12,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#8e8e8e',marginTop:14,marginBottom:6}}>Basic Details</div>
+        {rows([
+          ['Marital Status', p.marital_status], ['Complexion', p.complexion], ['Body Type', p.body_type],
+          ['Nationality', p.nationality], ['Mother Tongue', p.mother_tongue],
+        ])}
+
+        <div style={{fontSize:12,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#8e8e8e',marginTop:14,marginBottom:6}}>Religious Background</div>
+        {rows([
+          ['Religion', p.religion], ['Community', p.community], ['Sub-Caste', p.sub_caste],
+          ['Gotra', p.gotra], ['Manglik', p.manglik],
+        ])}
+
+        <div style={{fontSize:12,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#8e8e8e',marginTop:14,marginBottom:6}}>Location, Education & Career</div>
+        {rows([
+          ['Living In', [p.city, p.state, p.country].filter(Boolean).join(', ')],
+          ['Highest Qualification', p.education], ['Degree', p.degree], ['College', p.college_name],
+          ['Occupation', p.occupation], ['Employer', p.employer], ['Annual Income', p.annual_income],
+        ])}
+
+        <div style={{fontSize:12,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#8e8e8e',marginTop:14,marginBottom:6}}>Family Details</div>
+        {rows([
+          ['Family Type', p.family_type], ["Father's Profession", p.father_profession],
+          ["Mother's Profession", p.mother_profession], ['Family Financial Status', p.family_financial_status],
+        ])}
+
+        <div style={{fontSize:12,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#8e8e8e',marginTop:14,marginBottom:6}}>Contact</div>
+        {rows([
+          ['Contact No.', p.client_phone], ['Email ID', p.client_email || p.alternate_email],
+        ])}
+
+        <div style={{textAlign:'center',marginTop:20,paddingTop:12,borderTop:'1px solid rgba(0,0,0,0.08)',fontSize:10,color:'#b0b0b0'}}>
+          Generated via LOVEKUSH Matchmaking
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MatchCard({ match: m, interest, onConnect, onGoToMessages, viewerIsPremium }) {
   const [expanded, setExpanded] = useState(false)
+  const [aboutExpanded, setAboutExpanded] = useState(false)
 
   let actionButton
   if (!interest) {
@@ -471,14 +589,28 @@ function MatchCard({ match: m, interest, onConnect, onGoToMessages }) {
     actionButton = <button className="btn btn-black" style={{fontSize:11,padding:'6px 14px'}} onClick={onConnect}>Connect</button>
   }
 
+  // "You match X/Y preferences" — existing matching.js strengths/needsDiscussion
+  // se hi nikala, koi naya scoring logic nahi. Strength = matched, needsDiscussion
+  // = evaluated but not matched; total = dono ka sum.
+  const matchedCount = (m.matchStrengths || []).length
+  const totalCount = matchedCount + (m.matchNeedsDiscussion || []).length
+
+  const aboutText = m.about_me || ''
+  const aboutTruncated = aboutText.length > 140 && !aboutExpanded ? aboutText.slice(0, 140) + '…' : aboutText
+
   return (
     <div style={{background:'#f5f5f5',borderRadius:14,overflow:'hidden'}}>
       <div style={{display:'flex',gap:14,alignItems:'center',padding:'14px'}}>
-        <div style={{width:56,height:56,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0}}>
+        <div style={{position:'relative',width:56,height:56,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0}}>
           {m.primaryPhotoPath
-            ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+            ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(6px)'}} />
             : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>👤</div>
           }
+          {!viewerIsPremium && m.primaryPhotoPath && (
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)'}}>
+              <span style={{fontSize:16}}>🔒</span>
+            </div>
+          )}
         </div>
         <div style={{flex:1,cursor:'pointer'}} onClick={()=>setExpanded(!expanded)}>
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
@@ -491,6 +623,9 @@ function MatchCard({ match: m, interest, onConnect, onGoToMessages }) {
           </div>
           <div style={{fontSize:12,color:'#8e8e8e'}}>{m.age} years • {m.city}</div>
           <div style={{fontSize:11,color:'#8e8e8e'}}>{m.education} • {m.occupation}</div>
+          {totalCount > 0 && (
+            <div style={{fontSize:11,color:'#4a5568',marginTop:2}}>You match {matchedCount}/{totalCount} preferences</div>
+          )}
           <div style={{fontSize:10,color:'#4a5568',marginTop:3,textDecoration:'underline'}}>
             {expanded ? 'Hide details' : 'Why this match?'}
           </div>
@@ -500,6 +635,42 @@ function MatchCard({ match: m, interest, onConnect, onGoToMessages }) {
 
       {expanded && (
         <div style={{padding:'0 14px 14px 84px'}}>
+          {!viewerIsPremium && (
+            <div style={{background:'#fff8e1',border:'1px solid #fde68a',borderRadius:10,padding:'10px 12px',marginBottom:10}}>
+              <div style={{fontSize:12,fontWeight:600,color:'#b45309',marginBottom:6}}>🔒 Premium members can see:</div>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
+                <span style={{color:'#8e8e8e'}}>Photo</span>
+                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
+                <span style={{color:'#8e8e8e'}}>Company Name</span>
+                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
+                <span style={{color:'#8e8e8e'}}>College Name</span>
+                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
+              </div>
+              <button className="btn btn-black btn-sm" style={{marginTop:8,width:'100%'}}>👑 Go Premium Now</button>
+            </div>
+          )}
+          {viewerIsPremium && (m.employer || m.college_name) && (
+            <div style={{marginBottom:10}}>
+              {m.employer && <div style={{fontSize:12,color:'#333',marginBottom:2}}><span style={{color:'#8e8e8e'}}>Company: </span>{m.employer}</div>}
+              {m.college_name && <div style={{fontSize:12,color:'#333',marginBottom:2}}><span style={{color:'#8e8e8e'}}>College: </span>{m.college_name}</div>}
+            </div>
+          )}
+          {aboutText && (
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:600,color:'#333',marginBottom:4}}>About</div>
+              <div style={{fontSize:12,color:'#555',lineHeight:1.6}}>{aboutTruncated}</div>
+              {aboutText.length > 140 && (
+                <div style={{fontSize:11,color:'#4a5568',textDecoration:'underline',cursor:'pointer',marginTop:2}}
+                  onClick={()=>setAboutExpanded(!aboutExpanded)}>
+                  {aboutExpanded ? 'View less' : 'View more'}
+                </div>
+              )}
+            </div>
+          )}
           {m.matchStrengths && m.matchStrengths.length > 0 && (
             <div style={{marginBottom:8}}>
               <div style={{fontSize:11,fontWeight:600,color:'#16a34a',marginBottom:4}}>Strong Matches</div>
@@ -1759,20 +1930,34 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
             <input className="form-input" placeholder="Optional, e.g. Garment Business" value={form.business_detail} onChange={e=>set('business_detail',e.target.value)} />
           </div>
         </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Family Status</label>
-            <select className="form-select" value={form.family_status} onChange={e=>set('family_status',e.target.value)}>
-              <option value="">Select</option>
-              {FAMILY_STATUS_OPTIONS.map(f=><option key={f}>{f}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Family Financial Status</label>
-            <select className="form-select" value={form.family_financial_status} onChange={e=>set('family_financial_status',e.target.value)}>
-              <option value="">Select</option>
-              {FAMILY_FINANCIAL_STATUS.map(f=><option key={f.label} value={f.label}>{f.label} ({f.range})</option>)}
-            </select>
+        <div className="form-group">
+          <label className="form-label">Family Status</label>
+          <select className="form-select" value={form.family_status} onChange={e=>set('family_status',e.target.value)}>
+            <option value="">Select</option>
+            {FAMILY_STATUS_OPTIONS.map(f=><option key={f}>{f}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Family Financial Status</label>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {FAMILY_FINANCIAL_STATUS.map(f=>{
+              const isSelected = form.family_financial_status === f.label
+              return (
+                <div key={f.label} onClick={()=>set('family_financial_status', f.label)}
+                  style={{border:'1.5px solid ' + (isSelected ? '#000' : 'rgba(0,0,0,0.1)'), borderRadius:10, overflow:'hidden', cursor:'pointer'}}>
+                  <div style={{padding:'12px 16px', fontWeight:600, fontSize:14,
+                    background: isSelected ? '#000' : 'transparent', color: isSelected ? '#fff' : '#333'}}>
+                    {isSelected ? '◉' : '○'} {f.label}
+                  </div>
+                  {isSelected && (
+                    <div style={{padding:'10px 16px 14px', fontSize:12, color:'#555', lineHeight:1.6}}>
+                      <div>{f.desc}</div>
+                      <div style={{marginTop:4, fontWeight:500}}>Annual family income: {f.range}</div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
         <div className="form-group">

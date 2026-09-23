@@ -422,3 +422,8 @@ body {
 @media (max-width: 480px) {
   .form-row { grid-template-columns: 1fr; }
 }
+
+@media print {
+  .navbar, .bottom-nav, .no-print { display: none !important; }
+  body { padding: 0 !important; background: #fff !important; }
+}
