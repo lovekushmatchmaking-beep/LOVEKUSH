@@ -29,7 +29,8 @@ export default function Dashboard({ user }) {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('home')
   const [matches, setMatches] = useState([])
-  const [interests, setInterests] = useState([])
+  const [myActions, setMyActions] = useState([]) // match_actions rows where actor = me
+  const [myIntroductions, setMyIntroductions] = useState([]) // introductions (Talk/Meeting requests) involving me
 
   useEffect(() => {
     loadProfile()
@@ -49,6 +50,17 @@ export default function Dashboard({ user }) {
         .eq('profile_id', p.id)
       setPhotos(ph || [])
 
+      // Apne khud ke Like/Dislike/Super Like actions pehle load karte hain,
+      // taaki disliked profiles ko candidates se hi nikaal sakein (kabhi
+      // dobara na dikhein, jab tak user khud "Undo" na kare).
+      const { data: actions } = await supabase
+        .from('match_actions')
+        .select('*')
+        .eq('actor_profile_id', p.id)
+      const myActionsList = actions || []
+      setMyActions(myActionsList)
+      const dislikedIds = new Set(myActionsList.filter(a => a.action === 'dislike').map(a => a.target_profile_id))
+
       // Load matches — "profiles_public_view" se (sensitive fields
       // pehle se hi exclude hain database-level pe) — opposite gender
       // pe query-level pe hi filter karte hain (efficient), phir baaki
@@ -63,8 +75,10 @@ export default function Dashboard({ user }) {
         .eq('gender', oppositeGender)
         .limit(100)
 
-      if (candidates && candidates.length > 0) {
-        const ranked = rankMatches(p, candidates)
+      const visibleCandidates = (candidates || []).filter(c => !dislikedIds.has(c.id))
+
+      if (visibleCandidates.length > 0) {
+        const ranked = rankMatches(p, visibleCandidates)
         const profileIds = ranked.map(r => r.profile.id)
         const { data: matchPhotos } = profileIds.length > 0
           ? await supabase.from('photos').select('*').in('profile_id', profileIds).eq('is_primary', true)
@@ -82,47 +96,53 @@ export default function Dashboard({ user }) {
         setMatches([])
       }
 
-      // Interest status map — taaki Connect button ko pata ho kis profile
-      // ke saath already "sent"/"accepted" hai
-      const { data: myInterests } = await supabase
-        .from('interests')
+      // Talk/Meeting requests (introductions table) — dono taraf ki, taaki
+      // "already requested" state pata chale aur Requests tab bhar sake.
+      const { data: intros } = await supabase
+        .from('introductions')
         .select('*')
-        .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
-      setInterests(myInterests || [])
+        .or(`from_profile.eq.${p.id},to_profile.eq.${p.id}`)
+      setMyIntroductions(intros || [])
     }
     setLoading(false)
   }
 
-  // ===== CONNECT / INTEREST WORKFLOW =====
-  const sendInterest = async (otherProfile) => {
-    try {
-      const { error } = await supabase.from('interests').insert({
-        sender_profile_id: profile.id,
-        receiver_profile_id: otherProfile.id,
-        sender_user_id: user.id,
-        receiver_user_id: otherProfile.user_id,
-        status: 'sent',
-      })
-      if (error) {
-        if (error.code === '23505') { // unique constraint — already sent
-          alert('You have already sent an interest to this profile.')
-        } else {
-          alert('Could not send interest: ' + error.message)
-        }
-        return
-      }
-      loadProfile()
-    } catch (err) {
-      alert('Error: ' + err.message)
+  // ===== LIKE / DISLIKE / SUPER LIKE =====
+  const setMatchAction = async (targetProfileId, action) => {
+    const { error } = await supabase.from('match_actions')
+      .upsert({ actor_profile_id: profile.id, target_profile_id: targetProfileId, action, updated_at: new Date().toISOString() },
+        { onConflict: 'actor_profile_id,target_profile_id' })
+    if (error) { alert('Could not save: ' + error.message); return }
+    if (action === 'dislike') {
+      setMatches(prev => prev.filter(m => m.id !== targetProfileId))
     }
+    setMyActions(prev => {
+      const rest = prev.filter(a => a.target_profile_id !== targetProfileId)
+      return [...rest, { actor_profile_id: profile.id, target_profile_id: targetProfileId, action }]
+    })
   }
 
-  const interestWith = (otherProfileId) => {
-    const i = interests.find(x =>
-      (x.sender_profile_id === otherProfileId || x.receiver_profile_id === otherProfileId)
-    )
-    if (!i) return null
-    return { ...i, iAmSender: i.sender_profile_id === profile.id }
+  const undoDislike = async (targetProfileId) => {
+    const { error } = await supabase.from('match_actions').delete()
+      .eq('actor_profile_id', profile.id).eq('target_profile_id', targetProfileId)
+    if (error) { alert('Could not undo: ' + error.message); return }
+    setMyActions(prev => prev.filter(a => a.target_profile_id !== targetProfileId))
+  }
+
+  // ===== TALK / MEETING REQUEST (routed to a Relationship Manager, no in-app chat) =====
+  const sendIntroductionRequest = async (targetProfileId, requestType) => {
+    const { error } = await supabase.from('introductions').insert({
+      from_profile: profile.id,
+      to_profile: targetProfileId,
+      request_type: requestType,
+      status: 'pending',
+    })
+    if (error) {
+      if (error.code === '23505') { alert('You have already sent a request to this profile.') }
+      else { alert('Could not send request: ' + error.message) }
+      return
+    }
+    setMyIntroductions(prev => [...prev, { from_profile: profile.id, to_profile: targetProfileId, request_type: requestType, status: 'pending' }])
   }
 
   const logout = async () => {
@@ -396,17 +416,20 @@ export default function Dashboard({ user }) {
             ) : (
               <div style={{display:'flex',flexDirection:'column',gap:12}}>
                 {matches.map((m)=>(
-                  <MatchCard key={m.id} match={m} interest={interestWith(m.id)} viewerIsPremium={!!profile.is_premium}
-                    onConnect={()=>sendInterest(m)} onGoToMessages={()=>setActiveTab('messages')} />
+                  <MatchCard key={m.id} match={m} viewerIsPremium={!!profile.is_premium}
+                    myAction={myActions.find(a => a.target_profile_id === m.id)?.action || null}
+                    introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
+                    onSetAction={(action)=>setMatchAction(m.id, action)}
+                    onSendIntro={(type)=>sendIntroductionRequest(m.id, type)} />
                 ))}
               </div>
             )}
           </div>
         )}
 
-        {/* MESSAGES TAB */}
-        {activeTab === 'messages' && (
-          <MessagesTab user={user} myProfile={profile} interests={interests} onInterestsChanged={loadProfile} />
+        {/* REQUESTS TAB */}
+        {activeTab === 'requests' && (
+          <RequestsTab myProfile={profile} introductions={myIntroductions} />
         )}
 
         {/* PROFILE TAB */}
@@ -428,6 +451,9 @@ export default function Dashboard({ user }) {
                 <div style={{display:'flex',flexDirection:'column',gap:10}}>
                   <button className="btn btn-black" style={{width:'100%'}} onClick={()=>setActiveTab('editprofile')}>
                     Edit Profile
+                  </button>
+                  <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('disliked')}>
+                    Disliked Profiles
                   </button>
                   <button className="btn btn-outline" style={{width:'100%',color:'#e53e3e',borderColor:'#e53e3e'}} onClick={logout}>
                     Logout
@@ -464,6 +490,12 @@ export default function Dashboard({ user }) {
         {activeTab === 'biodata' && profile && (
           <BiodataView profile={profile} photo={photos.find(p=>p.is_primary) || photos[0]} onBack={()=>setActiveTab('home')} />
         )}
+
+        {/* DISLIKED PROFILES TAB */}
+        {activeTab === 'disliked' && profile && (
+          <DislikedProfilesView myProfile={profile} dislikedActions={myActions.filter(a=>a.action==='dislike')}
+            onUndo={async (id)=>{ await undoDislike(id); loadProfile() }} onBack={()=>setActiveTab('profile')} />
+        )}
       </div>
 
       {/* Bottom Nav */}
@@ -471,7 +503,7 @@ export default function Dashboard({ user }) {
         {[
           {id:'home',icon:'🏠',label:'Home'},
           {id:'matches',icon:'💝',label:'Matches'},
-          {id:'messages',icon:'💬',label:'Messages'},
+          {id:'requests',icon:'🤝',label:'Requests'},
           {id:'profile',icon:'👤',label:'Profile'},
         ].map(item=>(
           <button key={item.id} className={"bottom-nav-item " + (activeTab===item.id?'active':'')}
@@ -570,24 +602,11 @@ function BiodataView({ profile: p, photo, onBack }) {
   )
 }
 
-function MatchCard({ match: m, interest, onConnect, onGoToMessages, viewerIsPremium }) {
+function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro }) {
   const [expanded, setExpanded] = useState(false)
   const [aboutExpanded, setAboutExpanded] = useState(false)
-
-  let actionButton
-  if (!interest) {
-    actionButton = <button className="btn btn-black" style={{fontSize:11,padding:'6px 14px'}} onClick={onConnect}>Connect</button>
-  } else if (interest.status === 'sent' && interest.iAmSender) {
-    actionButton = <span style={{fontSize:11,color:'#8e8e8e',padding:'6px 10px'}}>Request Sent</span>
-  } else if (interest.status === 'sent' && !interest.iAmSender) {
-    actionButton = <button className="btn btn-outline" style={{fontSize:11,padding:'6px 14px'}} onClick={onGoToMessages}>Respond to Request</button>
-  } else if (interest.status === 'accepted') {
-    actionButton = <button className="btn btn-outline" style={{fontSize:11,padding:'6px 14px'}} onClick={onGoToMessages}>Message</button>
-  } else if (interest.status === 'declined') {
-    actionButton = <span style={{fontSize:11,color:'#8e8e8e',padding:'6px 10px'}}>Declined</span>
-  } else {
-    actionButton = <button className="btn btn-black" style={{fontSize:11,padding:'6px 14px'}} onClick={onConnect}>Connect</button>
-  }
+  const [showIntroChoice, setShowIntroChoice] = useState(false)
+  const [introJustSent, setIntroJustSent] = useState(false)
 
   // "You match X/Y preferences" — existing matching.js strengths/needsDiscussion
   // se hi nikala, koi naya scoring logic nahi. Strength = matched, needsDiscussion
@@ -596,7 +615,13 @@ function MatchCard({ match: m, interest, onConnect, onGoToMessages, viewerIsPrem
   const totalCount = matchedCount + (m.matchNeedsDiscussion || []).length
 
   const aboutText = m.about_me || ''
-  const aboutTruncated = aboutText.length > 140 && !aboutExpanded ? aboutText.slice(0, 140) + '…' : aboutText
+  const aboutTruncated = aboutText.length > 140 && !aboutExpanded ? aboutText.slice(0, 140) + '\u2026' : aboutText
+
+  const handleIntro = (type) => {
+    onSendIntro(type)
+    setShowIntroChoice(false)
+    setIntroJustSent(true)
+  }
 
   return (
     <div style={{background:'#f5f5f5',borderRadius:14,overflow:'hidden'}}>
@@ -604,11 +629,11 @@ function MatchCard({ match: m, interest, onConnect, onGoToMessages, viewerIsPrem
         <div style={{position:'relative',width:56,height:56,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0}}>
           {m.primaryPhotoPath
             ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(6px)'}} />
-            : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>👤</div>
+            : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>\ud83d\udc64</div>
           }
           {!viewerIsPremium && m.primaryPhotoPath && (
             <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)'}}>
-              <span style={{fontSize:16}}>🔒</span>
+              <span style={{fontSize:16}}>\ud83d\udd12</span>
             </div>
           )}
         </div>
@@ -621,8 +646,7 @@ function MatchCard({ match: m, interest, onConnect, onGoToMessages, viewerIsPrem
               </span>
             )}
           </div>
-          <div style={{fontSize:12,color:'#8e8e8e'}}>{m.age} years • {m.city}</div>
-          <div style={{fontSize:11,color:'#8e8e8e'}}>{m.education} • {m.occupation}</div>
+          <div style={{fontSize:12,color:'#8e8e8e'}}>{m.age} years \u2022 {m.city}</div>
           {totalCount > 0 && (
             <div style={{fontSize:11,color:'#4a5568',marginTop:2}}>You match {matchedCount}/{totalCount} preferences</div>
           )}
@@ -630,27 +654,35 @@ function MatchCard({ match: m, interest, onConnect, onGoToMessages, viewerIsPrem
             {expanded ? 'Hide details' : 'Why this match?'}
           </div>
         </div>
-        {actionButton}
+      </div>
+
+      <div style={{display:'flex',gap:6,padding:'0 14px 14px'}}>
+        <button className={myAction==='like' ? 'btn btn-black btn-sm' : 'btn btn-outline btn-sm'} style={{flex:1}}
+          onClick={()=>onSetAction('like')}>\ud83d\udc4d Like</button>
+        <button className={myAction==='super_like' ? 'btn btn-black btn-sm' : 'btn btn-outline btn-sm'} style={{flex:1}}
+          onClick={()=>onSetAction('super_like')}>\u2b50 Super Like</button>
+        <button className="btn btn-outline btn-sm" style={{flex:1,color:'#dc2626',borderColor:'#dc2626'}}
+          onClick={()=>onSetAction('dislike')}>\ud83d\udc4e Dislike</button>
       </div>
 
       {expanded && (
         <div style={{padding:'0 14px 14px 84px'}}>
           {!viewerIsPremium && (
             <div style={{background:'#fff8e1',border:'1px solid #fde68a',borderRadius:10,padding:'10px 12px',marginBottom:10}}>
-              <div style={{fontSize:12,fontWeight:600,color:'#b45309',marginBottom:6}}>🔒 Premium members can see:</div>
+              <div style={{fontSize:12,fontWeight:600,color:'#b45309',marginBottom:6}}>\ud83d\udd12 Premium members can see:</div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
                 <span style={{color:'#8e8e8e'}}>Photo</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
+                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>
               </div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
                 <span style={{color:'#8e8e8e'}}>Company Name</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
+                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>
               </div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
                 <span style={{color:'#8e8e8e'}}>College Name</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
+                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>
               </div>
-              <button className="btn btn-black btn-sm" style={{marginTop:8,width:'100%'}}>👑 Go Premium Now</button>
+              <button className="btn btn-black btn-sm" style={{marginTop:8,width:'100%'}}>\ud83d\udc51 Go Premium Now</button>
             </div>
           )}
           {viewerIsPremium && (m.employer || m.college_name) && (
@@ -675,17 +707,31 @@ function MatchCard({ match: m, interest, onConnect, onGoToMessages, viewerIsPrem
             <div style={{marginBottom:8}}>
               <div style={{fontSize:11,fontWeight:600,color:'#16a34a',marginBottom:4}}>Strong Matches</div>
               {m.matchStrengths.map((s,i)=>(
-                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>✓ {s}</div>
+                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>\u2713 {s}</div>
               ))}
             </div>
           )}
           {m.matchNeedsDiscussion && m.matchNeedsDiscussion.length > 0 && (
-            <div>
+            <div style={{marginBottom:10}}>
               <div style={{fontSize:11,fontWeight:600,color:'#b45309',marginBottom:4}}>Needs Discussion</div>
               {m.matchNeedsDiscussion.map((s,i)=>(
-                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>△ {s}</div>
+                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>\u25b3 {s}</div>
               ))}
             </div>
+          )}
+
+          {/* Talk / Meeting request — routed to a Relationship Manager, no in-app chat */}
+          {introSent ? (
+            <div style={{fontSize:12,color:'#16a34a',fontWeight:500}}>\u2713 Request sent \u2014 our relationship manager will contact you to coordinate.</div>
+          ) : introJustSent ? (
+            <div style={{fontSize:12,color:'#16a34a',fontWeight:500}}>\u2713 Request sent \u2014 our relationship manager will contact you to coordinate.</div>
+          ) : showIntroChoice ? (
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn btn-black btn-sm" style={{flex:1}} onClick={()=>handleIntro('talk')}>Request to Talk</button>
+              <button className="btn btn-black btn-sm" style={{flex:1}} onClick={()=>handleIntro('meeting')}>Request a Meeting</button>
+            </div>
+          ) : (
+            <button className="btn btn-outline btn-sm" style={{width:'100%'}} onClick={()=>setShowIntroChoice(true)}>Request to Talk / Meet</button>
           )}
         </div>
       )}
@@ -693,19 +739,62 @@ function MatchCard({ match: m, interest, onConnect, onGoToMessages, viewerIsPrem
   )
 }
 
-// ===== MESSAGES TAB — Requests (received/sent) + Conversations =====
-function MessagesTab({ user, myProfile, interests, onInterestsChanged }) {
-  const [subTab, setSubTab] = useState('conversations') // 'conversations' | 'requests'
+// ===== REQUESTS TAB — Talk/Meeting requests (Sent + Received), routed to a
+// Relationship Manager instead of in-app chat =====
+// ===== DISLIKED PROFILES — undo a Dislike so the profile can reappear in matches =====
+function DislikedProfilesView({ myProfile, dislikedActions, onUndo, onBack }) {
   const [profilesById, setProfilesById] = useState({})
-  const [openConversation, setOpenConversation] = useState(null) // interest object
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const ids = dislikedActions.map(a => a.target_profile_id)
+    if (ids.length === 0) { setLoading(false); return }
+    supabase.from('profiles_public_view').select('id, full_name, city').in('id', ids).then(({ data }) => {
+      const map = {}
+      ;(data || []).forEach(p => { map[p.id] = p })
+      setProfilesById(map)
+      setLoading(false)
+    })
+  }, [])
+
+  return (
+    <div>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+        <button onClick={onBack} style={{background:'none',border:'none',fontSize:20,cursor:'pointer'}}>←</button>
+        <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,margin:0}}>Disliked Profiles</h2>
+      </div>
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : dislikedActions.length === 0 ? (
+        <div style={{textAlign:'center',padding:'60px 0',color:'#8e8e8e',fontSize:13}}>No disliked profiles</div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {dislikedActions.map(a => {
+            const p = profilesById[a.target_profile_id]
+            return (
+              <div key={a.target_profile_id} style={{padding:'14px',background:'#f5f5f5',borderRadius:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontSize:14,fontWeight:500}}>{p ? p.full_name + (p.city ? ' • ' + p.city : '') : 'Profile'}</span>
+                <button className="btn btn-outline btn-sm" onClick={()=>onUndo(a.target_profile_id)}>Undo</button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RequestsTab({ myProfile, introductions }) {
+  const [subTab, setSubTab] = useState('received') // 'received' | 'sent'
+  const [profilesById, setProfilesById] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadProfileNames()
-  }, [interests])
+  }, [introductions])
 
   const loadProfileNames = async () => {
-    const ids = [...new Set(interests.flatMap(i => [i.sender_profile_id, i.receiver_profile_id]))]
+    const ids = [...new Set(introductions.flatMap(i => [i.from_profile, i.to_profile]))]
       .filter(id => id !== myProfile.id)
     if (ids.length === 0) { setLoading(false); return }
     const { data } = await supabase.from('profiles_public_view').select('id, full_name').in('id', ids)
@@ -715,205 +804,66 @@ function MessagesTab({ user, myProfile, interests, onInterestsChanged }) {
     setLoading(false)
   }
 
-  const received = interests.filter(i => i.receiver_profile_id === myProfile.id && i.status === 'sent')
-  const sent = interests.filter(i => i.sender_profile_id === myProfile.id && i.status === 'sent')
-  const conversations = interests.filter(i => i.status === 'accepted')
-
-  const respond = async (interest, newStatus) => {
-    const { error } = await supabase.from('interests')
-      .update({ status: newStatus, responded_at: new Date().toISOString() })
-      .eq('id', interest.id)
-    if (error) { alert('Error: ' + error.message); return }
-    onInterestsChanged()
-  }
-
-  const withdraw = async (interest) => {
-    const { error } = await supabase.from('interests')
-      .update({ status: 'withdrawn', responded_at: new Date().toISOString() })
-      .eq('id', interest.id)
-    if (error) { alert('Error: ' + error.message); return }
-    onInterestsChanged()
-  }
-
-  if (openConversation) {
-    const otherProfileId = openConversation.sender_profile_id === myProfile.id ? openConversation.receiver_profile_id : openConversation.sender_profile_id
-    const otherUserId = openConversation.sender_profile_id === myProfile.id ? openConversation.receiver_user_id : openConversation.sender_user_id
-    return (
-      <ConversationView
-        user={user}
-        otherUserId={otherUserId}
-        otherName={profilesById[otherProfileId] || 'Profile'}
-        onBack={()=>setOpenConversation(null)}
-      />
-    )
-  }
+  const received = introductions.filter(i => i.to_profile === myProfile.id)
+  const sent = introductions.filter(i => i.from_profile === myProfile.id)
 
   return (
     <div>
-      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:26,fontWeight:300,marginBottom:16}}>Messages</h2>
+      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:26,fontWeight:300,marginBottom:16}}>Requests</h2>
 
       <div style={{display:'flex',gap:4,marginBottom:18,borderBottom:'1px solid rgba(0,0,0,0.08)'}}>
-        {['conversations','requests'].map(t=>(
+        {['received','sent'].map(t=>(
           <button key={t} onClick={()=>setSubTab(t)}
             style={{padding:'8px 14px',border:'none',background:'transparent',fontSize:13,
               fontWeight:subTab===t?600:400, color:subTab===t?'#000':'#8e8e8e',
               borderBottom:subTab===t?'2px solid #000':'2px solid transparent',
               cursor:'pointer',textTransform:'capitalize'}}>
-            {t === 'requests' && (received.length>0) ? `Requests (${received.length})` : t}
+            {t === 'received' && received.length>0 ? `Received (${received.length})` : t}
           </button>
         ))}
       </div>
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
-      ) : subTab === 'conversations' ? (
-        conversations.length === 0 ? (
+      ) : subTab === 'received' ? (
+        received.length === 0 ? (
           <div style={{textAlign:'center',padding:'60px 0',color:'#8e8e8e'}}>
-            <div style={{fontSize:48,marginBottom:16}}>💬</div>
-            <div style={{fontSize:16,marginBottom:8}}>No conversations yet</div>
-            <div style={{fontSize:13}}>Once a Connect request is accepted, you can chat here</div>
+            <div style={{fontSize:48,marginBottom:16}}>\ud83e\udd1d</div>
+            <div style={{fontSize:16,marginBottom:8}}>No requests yet</div>
+            <div style={{fontSize:13}}>When someone wants to talk or meet, it'll show here</div>
           </div>
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {conversations.map(i => {
-              const otherId = i.sender_profile_id === myProfile.id ? i.receiver_profile_id : i.sender_profile_id
-              return (
-                <div key={i.id} onClick={()=>setOpenConversation(i)}
-                  style={{padding:'14px',background:'#f5f5f5',borderRadius:12,cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <span style={{fontSize:14,fontWeight:500}}>{profilesById[otherId] || 'Profile'}</span>
-                  <span style={{fontSize:11,color:'#8e8e8e'}}>Open →</span>
+            {received.map(i => (
+              <div key={i.id} style={{padding:'14px',background:'#f5f5f5',borderRadius:12}}>
+                <div style={{fontSize:14,fontWeight:500,marginBottom:6}}>{profilesById[i.from_profile] || 'A member'}</div>
+                <div style={{fontSize:12,color:'#555',lineHeight:1.6}}>
+                  Interested in {i.request_type === 'meeting' ? 'meeting' : 'talking to'} you. Our relationship manager will contact you shortly to coordinate.
                 </div>
-              )
-            })}
+              </div>
+            ))}
           </div>
         )
       ) : (
-        <div>
-          {received.length === 0 && sent.length === 0 ? (
-            <div style={{textAlign:'center',padding:'60px 0',color:'#8e8e8e',fontSize:13}}>No pending requests</div>
-          ) : (
-            <>
-              {received.length > 0 && (
-                <div style={{marginBottom:20}}>
-                  <div className="section-label" style={{marginBottom:10}}>Received</div>
-                  {received.map(i => (
-                    <div key={i.id} style={{padding:'14px',background:'#f5f5f5',borderRadius:12,marginBottom:8}}>
-                      <div style={{fontSize:14,fontWeight:500,marginBottom:10}}>{profilesById[i.sender_profile_id] || 'Profile'} wants to connect</div>
-                      <div style={{display:'flex',gap:8}}>
-                        <button className="btn btn-black btn-sm" onClick={()=>respond(i,'accepted')}>Accept</button>
-                        <button className="btn btn-outline btn-sm" onClick={()=>respond(i,'declined')}>Decline</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {sent.length > 0 && (
-                <div>
-                  <div className="section-label" style={{marginBottom:10}}>Sent</div>
-                  {sent.map(i => (
-                    <div key={i.id} style={{padding:'14px',background:'#f5f5f5',borderRadius:12,marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                      <span style={{fontSize:14}}>{profilesById[i.receiver_profile_id] || 'Profile'}</span>
-                      <button className="btn btn-outline btn-sm" onClick={()=>withdraw(i)}>Withdraw</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ===== CONVERSATION VIEW — real message history + send =====
-function ConversationView({ user, otherUserId, otherName, onBack }) {
-  const [messages, setMessages] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [text, setText] = useState('')
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    loadMessages()
-    const interval = setInterval(loadMessages, 5000) // simple polling — naye messages ke liye
-    return () => clearInterval(interval)
-  }, [])
-
-  const loadMessages = async () => {
-    const { data, error: err } = await supabase
-      .from('messages')
-      .select('*')
-      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`)
-      .order('created_at', { ascending: true })
-    if (err) { setError('Could not load messages: ' + err.message) }
-    else { setMessages(data || []); setError('') }
-    setLoading(false)
-  }
-
-  const send = async () => {
-    if (!text.trim()) return
-    setSending(true)
-    const content = text.trim()
-    setText('')
-    const { error: err } = await supabase.from('messages').insert({
-      sender_id: user.id,
-      receiver_id: otherUserId,
-      content,
-    })
-    if (err) {
-      setError('Message not sent: ' + err.message)
-      setText(content) // restore so user doesn't lose what they typed
-    } else {
-      loadMessages()
-    }
-    setSending(false)
-  }
-
-  return (
-    <div style={{display:'flex',flexDirection:'column',height:'70vh'}}>
-      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}>
-        <button onClick={onBack} style={{background:'none',border:'none',fontSize:20,cursor:'pointer'}}>←</button>
-        <span style={{fontSize:15,fontWeight:600}}>{otherName}</span>
-      </div>
-
-      <div style={{flex:1,overflowY:'auto',display:'flex',flexDirection:'column',gap:8,padding:'8px 0'}}>
-        {loading ? (
-          <div style={{textAlign:'center',color:'#8e8e8e',fontSize:13,padding:'20px 0'}}>Loading messages...</div>
-        ) : messages.length === 0 ? (
-          <div style={{textAlign:'center',color:'#8e8e8e',fontSize:13,padding:'20px 0'}}>Say hello 👋 — start the conversation</div>
+        sent.length === 0 ? (
+          <div style={{textAlign:'center',padding:'60px 0',color:'#8e8e8e',fontSize:13}}>No requests sent yet</div>
         ) : (
-          messages.map(m => (
-            <div key={m.id} style={{
-              alignSelf: m.sender_id === user.id ? 'flex-end' : 'flex-start',
-              maxWidth: '75%',
-              background: m.sender_id === user.id ? '#000' : '#f5f5f5',
-              color: m.sender_id === user.id ? '#fff' : '#000',
-              padding: '10px 14px', borderRadius: 14, fontSize: 13,
-            }}>
-              <div>{m.content}</div>
-              <div style={{fontSize:10,opacity:0.6,marginTop:4}}>
-                {new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {sent.map(i => (
+              <div key={i.id} style={{padding:'14px',background:'#f5f5f5',borderRadius:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:500}}>{profilesById[i.to_profile] || 'Profile'}</div>
+                  <div style={{fontSize:11,color:'#8e8e8e',textTransform:'capitalize'}}>{i.request_type === 'meeting' ? 'Meeting request' : 'Talk request'}</div>
+                </div>
+                <span style={{fontSize:11,fontWeight:600,padding:'3px 10px',borderRadius:20,
+                  background: i.status==='closed'?'#f5f5f5':i.status==='contacted'?'#f0fdf4':'#fff8e1',
+                  color: i.status==='closed'?'#8e8e8e':i.status==='contacted'?'#16a34a':'#b45309',
+                  textTransform:'capitalize'}}>{i.status}</span>
               </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {error && <div style={{fontSize:12,color:'#dc2626',marginBottom:8}}>{error}</div>}
-
-      <div style={{display:'flex',gap:8,paddingTop:10,borderTop:'1px solid rgba(0,0,0,0.08)'}}>
-        <input
-          value={text}
-          onChange={e=>setText(e.target.value)}
-          onKeyDown={e=>{if(e.key==='Enter'&&!sending) send()}}
-          placeholder="Type a message..."
-          style={{flex:1,padding:'10px 14px',borderRadius:20,border:'1px solid rgba(0,0,0,0.12)',fontSize:13,outline:'none'}}
-        />
-        <button className="btn btn-black" style={{borderRadius:20,padding:'10px 20px'}} onClick={send} disabled={sending||!text.trim()}>
-          {sending ? '...' : 'Send'}
-        </button>
-      </div>
+            ))}
+          </div>
+        )
+      )}
     </div>
   )
 }

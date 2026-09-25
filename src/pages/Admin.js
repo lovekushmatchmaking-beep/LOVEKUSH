@@ -273,6 +273,10 @@ export default function Admin({ staffUser }) {
         <CasteSuggestionsView onBack={()=>setView('list')} />
       )}
 
+      {view === 'coordinationRequests' && (
+        <CoordinationRequestsView onBack={()=>setView('list')} />
+      )}
+
       {view === 'findMatches' && matchesFor && (
         <FindMatchesView
           profile={matchesFor}
@@ -287,6 +291,7 @@ export default function Admin({ staffUser }) {
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
           <button className="btn btn-outline btn-sm" onClick={()=>setView('casteSuggestions')}>📋 Caste Suggestions</button>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('coordinationRequests')}>🤝 Coordination Requests</button>
           <button className="btn btn-outline btn-sm" onClick={()=>setView('shareLinks')}>🔗 My Share Links</button>
           <button className="btn btn-black btn-sm" onClick={()=>setView('createClient')}>+ Create Client Profile</button>
         </div>
@@ -742,6 +747,100 @@ function CasteSuggestionsView({ onBack }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Talk/Meeting requests (introductions table) — staff yahan se dekh ke
+// dono profiles ko manually coordinate karte hain, koi in-app chat nahi.
+function CoordinationRequestsView({ onBack }) {
+  const [requests, setRequests] = useState([])
+  const [profilesById, setProfilesById] = useState({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('introductions')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      const rows = data || []
+      setRequests(rows)
+      const ids = [...new Set(rows.flatMap(r => [r.from_profile, r.to_profile]))]
+      if (ids.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code').in('id', ids)
+        const map = {}
+        ;(profs || []).forEach(p => { map[p.id] = p })
+        setProfilesById(map)
+      }
+    } catch (err) {
+      console.error(err.message)
+    }
+    setLoading(false)
+  }
+
+  const handleAction = async (id, status) => {
+    try {
+      const { error } = await supabase.from('introductions').update({ status }).eq('id', id)
+      if (error) throw error
+      load()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,marginBottom:20}}>Coordination Requests</h2>
+
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : requests.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
+          No Talk/Meeting requests yet.
+        </div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {requests.map(r => {
+            const from = profilesById[r.from_profile]
+            const to = profilesById[r.to_profile]
+            return (
+              <div key={r.id} style={{border:'1px solid rgba(0,0,0,0.08)',borderRadius:12,padding:14}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:600}}>
+                      {from ? from.full_name : 'Unknown'} → {to ? to.full_name : 'Unknown'}
+                    </div>
+                    <div style={{fontSize:12,color:'#8e8e8e',marginTop:2,textTransform:'capitalize'}}>
+                      {r.request_type === 'meeting' ? 'Meeting request' : 'Talk request'}
+                    </div>
+                    <div style={{fontSize:10,color:'#bbb',marginTop:2}}>
+                      {new Date(r.created_at).toLocaleDateString('en-IN')}
+                    </div>
+                  </div>
+                  <div className={"badge badge-" + (r.status==='closed'?'blocked':r.status==='contacted'?'active':'pending')} style={{fontSize:10}}>
+                    {r.status}
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:8,marginTop:10}}>
+                  {r.status !== 'contacted' && (
+                    <button className="btn btn-outline btn-sm" style={{color:'#16a34a',borderColor:'#16a34a'}}
+                      onClick={()=>handleAction(r.id, 'contacted')}>✓ Mark Contacted</button>
+                  )}
+                  {r.status !== 'closed' && (
+                    <button className="btn btn-outline btn-sm" onClick={()=>handleAction(r.id, 'closed')}>Close</button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
