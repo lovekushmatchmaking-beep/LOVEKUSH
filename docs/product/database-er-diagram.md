@@ -187,6 +187,42 @@ admin review — see Admin panel's "Caste Suggestions" section. Increment
 on duplicate handled by the `upsert_caste_suggestion` Postgres function
 (atomic insert-or-increment), not client-side RLS.
 
+### match_actions
+
+```text
+id uuid pk
+actor_profile_id uuid fk profiles.id
+target_profile_id uuid fk profiles.id
+action text              -- 'like' | 'dislike' | 'super_like'
+created_at timestamptz
+updated_at timestamptz
+unique(actor_profile_id, target_profile_id)
+```
+Private per-user Like/Dislike/Super Like signal on other profiles (Stage
+11, replaced the never-functional `interests`-based Connect/chat flow —
+that table never existed in this database). A `dislike` row removes the
+target profile from that user's future matches (`Dashboard.js` filters
+candidates against this before ranking); the user can undo a dislike
+from their own "Disliked Profiles" list, which deletes the row.
+
+### introductions
+
+```text
+id uuid pk
+from_profile uuid fk profiles.id
+to_profile uuid fk profiles.id
+message text
+request_type text        -- 'talk' | 'meeting', default 'talk' (added Stage 11)
+status text               -- default 'pending' -> 'contacted' / 'closed'
+created_at timestamptz
+unique(from_profile, to_profile)
+```
+"Request to Talk / Meet" — Stage 11 repurposed this previously-unused
+table instead of building in-app chat. The recipient never sees an
+accept/decline flow; they just see "our relationship manager will
+contact you to coordinate." Staff work these from the Admin panel's
+"Coordination Requests" section (mark Contacted / Closed).
+
 ## Future ERD
 
 ```text
