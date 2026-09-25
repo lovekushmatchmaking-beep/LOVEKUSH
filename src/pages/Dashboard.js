@@ -629,11 +629,11 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
         <div style={{position:'relative',width:56,height:56,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0}}>
           {m.primaryPhotoPath
             ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(6px)'}} />
-            : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>\ud83d\udc64</div>
+            : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>👤</div>
           }
           {!viewerIsPremium && m.primaryPhotoPath && (
             <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)'}}>
-              <span style={{fontSize:16}}>\ud83d\udd12</span>
+              <span style={{fontSize:16}}>🔒</span>
             </div>
           )}
         </div>
@@ -646,7 +646,7 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
               </span>
             )}
           </div>
-          <div style={{fontSize:12,color:'#8e8e8e'}}>{m.age} years \u2022 {m.city}</div>
+          <div style={{fontSize:12,color:'#8e8e8e'}}>{m.age} years • {m.city}</div>
           {totalCount > 0 && (
             <div style={{fontSize:11,color:'#4a5568',marginTop:2}}>You match {matchedCount}/{totalCount} preferences</div>
           )}
@@ -658,31 +658,31 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
 
       <div style={{display:'flex',gap:6,padding:'0 14px 14px'}}>
         <button className={myAction==='like' ? 'btn btn-black btn-sm' : 'btn btn-outline btn-sm'} style={{flex:1}}
-          onClick={()=>onSetAction('like')}>\ud83d\udc4d Like</button>
+          onClick={()=>onSetAction('like')}>👍 Like</button>
         <button className={myAction==='super_like' ? 'btn btn-black btn-sm' : 'btn btn-outline btn-sm'} style={{flex:1}}
-          onClick={()=>onSetAction('super_like')}>\u2b50 Super Like</button>
+          onClick={()=>onSetAction('super_like')}>⭐ Super Like</button>
         <button className="btn btn-outline btn-sm" style={{flex:1,color:'#dc2626',borderColor:'#dc2626'}}
-          onClick={()=>onSetAction('dislike')}>\ud83d\udc4e Dislike</button>
+          onClick={()=>onSetAction('dislike')}>👎 Dislike</button>
       </div>
 
       {expanded && (
         <div style={{padding:'0 14px 14px 84px'}}>
           {!viewerIsPremium && (
             <div style={{background:'#fff8e1',border:'1px solid #fde68a',borderRadius:10,padding:'10px 12px',marginBottom:10}}>
-              <div style={{fontSize:12,fontWeight:600,color:'#b45309',marginBottom:6}}>\ud83d\udd12 Premium members can see:</div>
+              <div style={{fontSize:12,fontWeight:600,color:'#b45309',marginBottom:6}}>🔒 Premium members can see:</div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
                 <span style={{color:'#8e8e8e'}}>Photo</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>
+                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
               </div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
                 <span style={{color:'#8e8e8e'}}>Company Name</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>
+                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
               </div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
                 <span style={{color:'#8e8e8e'}}>College Name</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>
+                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
               </div>
-              <button className="btn btn-black btn-sm" style={{marginTop:8,width:'100%'}}>\ud83d\udc51 Go Premium Now</button>
+              <button className="btn btn-black btn-sm" style={{marginTop:8,width:'100%'}}>👑 Go Premium Now</button>
             </div>
           )}
           {viewerIsPremium && (m.employer || m.college_name) && (
@@ -707,7 +707,7 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
             <div style={{marginBottom:8}}>
               <div style={{fontSize:11,fontWeight:600,color:'#16a34a',marginBottom:4}}>Strong Matches</div>
               {m.matchStrengths.map((s,i)=>(
-                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>\u2713 {s}</div>
+                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>✓ {s}</div>
               ))}
             </div>
           )}
@@ -715,16 +715,16 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
             <div style={{marginBottom:10}}>
               <div style={{fontSize:11,fontWeight:600,color:'#b45309',marginBottom:4}}>Needs Discussion</div>
               {m.matchNeedsDiscussion.map((s,i)=>(
-                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>\u25b3 {s}</div>
+                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>△ {s}</div>
               ))}
             </div>
           )}
 
           {/* Talk / Meeting request — routed to a Relationship Manager, no in-app chat */}
           {introSent ? (
-            <div style={{fontSize:12,color:'#16a34a',fontWeight:500}}>\u2713 Request sent \u2014 our relationship manager will contact you to coordinate.</div>
+            <div style={{fontSize:12,color:'#16a34a',fontWeight:500}}>✓ Request sent — our relationship manager will contact you to coordinate.</div>
           ) : introJustSent ? (
-            <div style={{fontSize:12,color:'#16a34a',fontWeight:500}}>\u2713 Request sent \u2014 our relationship manager will contact you to coordinate.</div>
+            <div style={{fontSize:12,color:'#16a34a',fontWeight:500}}>✓ Request sent — our relationship manager will contact you to coordinate.</div>
           ) : showIntroChoice ? (
             <div style={{display:'flex',gap:8}}>
               <button className="btn btn-black btn-sm" style={{flex:1}} onClick={()=>handleIntro('talk')}>Request to Talk</button>
@@ -828,7 +828,7 @@ function RequestsTab({ myProfile, introductions }) {
       ) : subTab === 'received' ? (
         received.length === 0 ? (
           <div style={{textAlign:'center',padding:'60px 0',color:'#8e8e8e'}}>
-            <div style={{fontSize:48,marginBottom:16}}>\ud83e\udd1d</div>
+            <div style={{fontSize:48,marginBottom:16}}>🤝</div>
             <div style={{fontSize:16,marginBottom:8}}>No requests yet</div>
             <div style={{fontSize:13}}>When someone wants to talk or meet, it'll show here</div>
           </div>
