@@ -1,8 +1,8 @@
 export const compressImage = (file, options = {}) => {
   const {
-    maxSizeKB = 800,
-    maxWidth = 1200,
-    maxHeight = 1200,
+    maxSizeKB = 250,
+    maxWidth = 1000,
+    maxHeight = 1000,
     initialQuality = 0.85,
     minQuality = 0.3,
   } = options

@@ -91,9 +91,9 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
-  const [photos, setPhotos] = useState(Array(6).fill(null))
-  const [photoFiles, setPhotoFiles] = useState(Array(6).fill(null))
-  const fileRefs = useRef(Array(6).fill(null).map(()=>React.createRef()))
+  const [photos, setPhotos] = useState(Array(2).fill(null))
+  const [photoFiles, setPhotoFiles] = useState(Array(2).fill(null))
+  const fileRefs = useRef(Array(2).fill(null).map(()=>React.createRef()))
   const [toast, setToast] = useState('')
 
   const [form, setForm] = useState({
@@ -208,7 +208,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     }).then(({ error }) => { if (error) console.error(error.message) })
   }
 
-  const [photoErrors, setPhotoErrors] = useState(Array(6).fill(null))
+  const [photoErrors, setPhotoErrors] = useState(Array(2).fill(null))
   const [compressingIdx, setCompressingIdx] = useState(null)
 
   const handlePhotoSelect = async (idx, file) => {
@@ -251,6 +251,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   }
 
   const removePhoto = (idx) => {
+    if (idx === 0) return // Profile photo can only be replaced, not removed
     const newPhotos = [...photos]; newPhotos[idx] = null
     const newFiles = [...photoFiles]; newFiles[idx] = null
     const newErrors = [...photoErrors]; newErrors[idx] = null
@@ -364,7 +365,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             profile_id: profile.id,
             storage_path: path,
             is_primary: i===0,
-            photo_type: i===0 ? 'profile' : 'general'
+            photo_type: i===0 ? 'profile' : 'secondary'
           })
           if (insertErr) photoErrors.push('Photo ' + (i+1) + ' record: ' + insertErr.message)
         }
@@ -1515,13 +1516,13 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         {step===8 && (
           <div>
             <h2 className="page-title">Your Photos</h2>
-            <p className="page-subtitle">Add up to 6 photos. First photo is your profile picture.</p>
+            <p className="page-subtitle">Profile photo required, Secondary photo optional.</p>
 
             <div className="notice" style={{marginBottom:20}}>
-              <strong>Photo Guidelines:</strong> Natural, clear photos only. No filters, sunglasses, or edited images. Families prefer honest, natural presentation.
+              <strong>Photo Guidelines:</strong> Photo <strong>full standing</strong> honi chahiye (sirf face/headshot nahi) — bina kisi filter ke, natural lighting mein, bina sunglasses/edited-image ke. Yeh isliye zaroori hai taaki family/partner ko aapki real, honest tasveer dikhe.
             </div>
 
-            <div className="photo-grid">
+            <div className="photo-grid" style={{gridTemplateColumns:'repeat(2, 1fr)'}}>
               {photos.map((photo, idx)=>(
                 <div key={idx} className={'photo-slot ' + (photo?'filled':'')}
                   onClick={()=>!photo&&fileRefs.current[idx].current.click()}>
@@ -1531,13 +1532,17 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                       {compressingIdx===idx && (
                         <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#fff',background:'rgba(0,0,0,0.3)'}}>Processing...</div>
                       )}
-                      <button className="remove-btn" onClick={e=>{e.stopPropagation();removePhoto(idx)}}>✕</button>
-                      {idx===0&&<div style={{position:'absolute',bottom:4,left:4,background:'rgba(0,0,0,0.7)',color:'#fff',fontSize:9,padding:'2px 6px',borderRadius:4,letterSpacing:'0.1em'}}>MAIN</div>}
+                      {idx===0 ? (
+                        <button className="remove-btn" onClick={e=>{e.stopPropagation();fileRefs.current[idx].current.click()}} title="Change Photo">↻</button>
+                      ) : (
+                        <button className="remove-btn" onClick={e=>{e.stopPropagation();removePhoto(idx)}}>✕</button>
+                      )}
+                      <div style={{position:'absolute',bottom:4,left:4,background:'rgba(0,0,0,0.7)',color:'#fff',fontSize:9,padding:'2px 6px',borderRadius:4,letterSpacing:'0.1em'}}>{idx===0?'PROFILE':'SECONDARY'}</div>
                     </>
                   ) : (
                     <>
                       <span style={{fontSize:24,opacity:0.25}}>+</span>
-                      <span style={{fontSize:9,opacity:0.35,letterSpacing:'0.1em'}}>{idx===0?'MAIN':'PHOTO '+(idx+1)}</span>
+                      <span style={{fontSize:9,opacity:0.35,letterSpacing:'0.1em'}}>{idx===0?'PROFILE PHOTO *':'SECONDARY PHOTO'}</span>
                     </>
                   )}
                   <input ref={fileRefs.current[idx]} type="file" accept="image/*" style={{display:'none'}}
