@@ -375,15 +375,15 @@ export default function Dashboard({ user }) {
                 )}
 
                 {/* Photos */}
-                {photos.length > 0 && (
-                  <div className="card" style={{marginBottom:12}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-                    <div className="section-label">Photos ({photos.length})</div>
+                <div className="card" style={{marginBottom:12}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:photos.length>0?12:0}}>
+                    <div className="section-label">Photos {photos.length>0 ? '(' + photos.length + ')' : ''}</div>
                     <button className="btn btn-outline" style={{fontSize:11,padding:'5px 14px'}}
                       onClick={()=>setActiveTab('editphotos')}>
-                      Manage Photos
+                      {photos.length>0 ? 'Manage Photos' : 'Add Photos'}
                     </button>
                   </div>
+                  {photos.length > 0 ? (
                     <div className="photo-grid">
                       {photos.map((p,i)=>(
                         <div key={i} style={{aspectRatio:1,borderRadius:10,overflow:'hidden',background:'#f5f5f5'}}>
@@ -391,8 +391,10 @@ export default function Dashboard({ user }) {
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div style={{fontSize:13,color:'#8e8e8e'}}>Koi photo nahi hai abhi — apni Profile Photo add karein.</div>
+                  )}
+                </div>
 
                 <div className="notice" style={{marginTop:20}}>
                   <strong>Our team is reviewing your profile.</strong> You'll be notified once it's active and we start finding suitable matches.
@@ -451,6 +453,9 @@ export default function Dashboard({ user }) {
                 <div style={{display:'flex',flexDirection:'column',gap:10}}>
                   <button className="btn btn-black" style={{width:'100%'}} onClick={()=>setActiveTab('editprofile')}>
                     Edit Profile
+                  </button>
+                  <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('editphotos')}>
+                    Manage Photos
                   </button>
                   <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('disliked')}>
                     Disliked Profiles
