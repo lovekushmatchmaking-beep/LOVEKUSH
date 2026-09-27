@@ -130,6 +130,23 @@ updated_at timestamptz
 
 Read-only view over `profiles`, `where profile_status = 'active' and (hidden_until is null or hidden_until < now())`. Used for browsing/matching other members — excludes sensitive columns (contact info, income privacy-gated fields, family/asset details) by only selecting a fixed safe column list. Includes `about_me`, `employer`, `college_name` (added for the match-card "About"/premium-look features) alongside the core biodata fields.
 
+### photos
+
+```text
+id uuid pk
+profile_id uuid fk profiles.id
+storage_path text          -- real column, used everywhere (SignedImage, uploads)
+photo_type text             -- 'profile' | 'secondary' (older rows may say 'general')
+is_primary boolean
+display_order int
+photo_url text               -- legacy, unused by any app code, nullable (was NOT NULL
+                              -- until 2026-09-27 — every photo insert was silently
+                              -- failing on this constraint since nothing ever wrote it)
+created_at timestamptz
+```
+2-slot model (Profile required/replace-only, Secondary optional) shipped
+in the photo-overhaul stage — see `EditPhotos.js`/`CreateProfile.js`.
+
 ### profile_completion_sections
 
 ```text
