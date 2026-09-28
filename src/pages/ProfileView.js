@@ -1,12 +1,26 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import SignedImage from '../components/SignedImage'
+import { supabase } from '../supabase'
 
 const TABS = ['About', 'Career & Education', 'Family & Lifestyle']
 
-export default function ProfileView({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, onBack }) {
+export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId, myAction, introSent, onSetAction, onSendIntro, onBack }) {
   const [tab, setTab] = useState('About')
   const [showIntroChoice, setShowIntroChoice] = useState(false)
   const [introJustSent, setIntroJustSent] = useState(false)
+
+  // Profile Visits — ek baar record karte hain jab yeh profile khula
+  // (Activity tab ke "Profile Visits" stat ke liye). Fire-and-forget,
+  // rendering ko block nahi karta. unique(profile_id, viewer_profile_id)
+  // constraint hai, isliye repeat visits sirf viewed_at update karte hain,
+  // count double nahi hota.
+  useEffect(() => {
+    if (!viewerProfileId || !m.id || viewerProfileId === m.id) return
+    supabase.from('profile_views')
+      .upsert({ profile_id: m.id, viewer_profile_id: viewerProfileId, viewed_at: new Date().toISOString() },
+        { onConflict: 'profile_id,viewer_profile_id' })
+      .then(({ error }) => { if (error) console.error('profile_views upsert failed:', error.message) })
+  }, [m.id, viewerProfileId])
 
   const matchedCount = (m.matchStrengths || []).length
   const totalCount = matchedCount + (m.matchNeedsDiscussion || []).length
