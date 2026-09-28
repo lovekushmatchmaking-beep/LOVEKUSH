@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
 import AccountSettings from './AccountSettings'
+import ProfileView from './ProfileView'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
@@ -32,6 +33,7 @@ export default function Dashboard({ user }) {
   const [matches, setMatches] = useState([])
   const [myActions, setMyActions] = useState([]) // match_actions rows where actor = me
   const [myIntroductions, setMyIntroductions] = useState([]) // introductions (Talk/Meeting requests) involving me
+  const [viewingMatchId, setViewingMatchId] = useState(null) // set when a match card is tapped, opens ProfileView
 
   useEffect(() => {
     loadProfile()
@@ -405,6 +407,18 @@ export default function Dashboard({ user }) {
 
         {/* MATCHES TAB */}
         {activeTab === 'matches' && (
+          viewingMatchId ? (() => {
+            const m = matches.find(x => x.id === viewingMatchId)
+            if (!m) { setViewingMatchId(null); return null }
+            return (
+              <ProfileView match={m} viewerIsPremium={!!profile.is_premium}
+                myAction={myActions.find(a => a.target_profile_id === m.id)?.action || null}
+                introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
+                onSetAction={(action)=>setMatchAction(m.id, action)}
+                onSendIntro={(type)=>sendIntroductionRequest(m.id, type)}
+                onBack={()=>setViewingMatchId(null)} />
+            )
+          })() : (
           <div>
             <h2 style={{fontFamily:'Cormorant Garamond',fontSize:26,fontWeight:300,marginBottom:20}}>Your Matches</h2>
             {matches.length === 0 ? (
@@ -420,11 +434,13 @@ export default function Dashboard({ user }) {
                     myAction={myActions.find(a => a.target_profile_id === m.id)?.action || null}
                     introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
                     onSetAction={(action)=>setMatchAction(m.id, action)}
-                    onSendIntro={(type)=>sendIntroductionRequest(m.id, type)} />
+                    onSendIntro={(type)=>sendIntroductionRequest(m.id, type)}
+                    onView={()=>setViewingMatchId(m.id)} />
                 ))}
               </div>
             )}
           </div>
+          )
         )}
 
         {/* REQUESTS TAB */}
@@ -620,30 +636,16 @@ function BiodataView({ profile: p, photo, onBack }) {
   )
 }
 
-function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro }) {
-  const [expanded, setExpanded] = useState(false)
-  const [aboutExpanded, setAboutExpanded] = useState(false)
-  const [showIntroChoice, setShowIntroChoice] = useState(false)
-  const [introJustSent, setIntroJustSent] = useState(false)
-
+function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, onView }) {
   // "You match X/Y preferences" — existing matching.js strengths/needsDiscussion
   // se hi nikala, koi naya scoring logic nahi. Strength = matched, needsDiscussion
   // = evaluated but not matched; total = dono ka sum.
   const matchedCount = (m.matchStrengths || []).length
   const totalCount = matchedCount + (m.matchNeedsDiscussion || []).length
 
-  const aboutText = m.about_me || ''
-  const aboutTruncated = aboutText.length > 140 && !aboutExpanded ? aboutText.slice(0, 140) + '\u2026' : aboutText
-
-  const handleIntro = (type) => {
-    onSendIntro(type)
-    setShowIntroChoice(false)
-    setIntroJustSent(true)
-  }
-
   return (
     <div style={{background:'#f5f5f5',borderRadius:14,overflow:'hidden'}}>
-      <div style={{display:'flex',gap:14,alignItems:'center',padding:'14px'}}>
+      <div style={{display:'flex',gap:14,alignItems:'center',padding:'14px',cursor:'pointer'}} onClick={onView}>
         <div style={{position:'relative',width:56,height:56,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0}}>
           {m.primaryPhotoPath
             ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(6px)'}} />
@@ -655,7 +657,7 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
             </div>
           )}
         </div>
-        <div style={{flex:1,cursor:'pointer'}} onClick={()=>setExpanded(!expanded)}>
+        <div style={{flex:1}}>
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
             <div style={{fontWeight:600,fontSize:15}}>{m.full_name}</div>
             {typeof m.matchScore === 'number' && (
@@ -668,9 +670,7 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
           {totalCount > 0 && (
             <div style={{fontSize:11,color:'#4a5568',marginTop:2}}>You match {matchedCount}/{totalCount} preferences</div>
           )}
-          <div style={{fontSize:10,color:'#4a5568',marginTop:3,textDecoration:'underline'}}>
-            {expanded ? 'Hide details' : 'Why this match?'}
-          </div>
+          <div style={{fontSize:10,color:'#4a5568',marginTop:3,textDecoration:'underline'}}>View profile →</div>
         </div>
       </div>
 
@@ -682,77 +682,6 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
         <button className="btn btn-outline btn-sm" style={{flex:1,color:'#dc2626',borderColor:'#dc2626'}}
           onClick={()=>onSetAction('dislike')}>👎 Dislike</button>
       </div>
-
-      {expanded && (
-        <div style={{padding:'0 14px 14px 84px'}}>
-          {!viewerIsPremium && (
-            <div style={{background:'#fff8e1',border:'1px solid #fde68a',borderRadius:10,padding:'10px 12px',marginBottom:10}}>
-              <div style={{fontSize:12,fontWeight:600,color:'#b45309',marginBottom:6}}>🔒 Premium members can see:</div>
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
-                <span style={{color:'#8e8e8e'}}>Photo</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
-              </div>
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
-                <span style={{color:'#8e8e8e'}}>Company Name</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
-              </div>
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
-                <span style={{color:'#8e8e8e'}}>College Name</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
-              </div>
-              <button className="btn btn-black btn-sm" style={{marginTop:8,width:'100%'}}>👑 Go Premium Now</button>
-            </div>
-          )}
-          {viewerIsPremium && (m.employer || m.college_name) && (
-            <div style={{marginBottom:10}}>
-              {m.employer && <div style={{fontSize:12,color:'#333',marginBottom:2}}><span style={{color:'#8e8e8e'}}>Company: </span>{m.employer}</div>}
-              {m.college_name && <div style={{fontSize:12,color:'#333',marginBottom:2}}><span style={{color:'#8e8e8e'}}>College: </span>{m.college_name}</div>}
-            </div>
-          )}
-          {aboutText && (
-            <div style={{marginBottom:10}}>
-              <div style={{fontSize:11,fontWeight:600,color:'#333',marginBottom:4}}>About</div>
-              <div style={{fontSize:12,color:'#555',lineHeight:1.6}}>{aboutTruncated}</div>
-              {aboutText.length > 140 && (
-                <div style={{fontSize:11,color:'#4a5568',textDecoration:'underline',cursor:'pointer',marginTop:2}}
-                  onClick={()=>setAboutExpanded(!aboutExpanded)}>
-                  {aboutExpanded ? 'View less' : 'View more'}
-                </div>
-              )}
-            </div>
-          )}
-          {m.matchStrengths && m.matchStrengths.length > 0 && (
-            <div style={{marginBottom:8}}>
-              <div style={{fontSize:11,fontWeight:600,color:'#16a34a',marginBottom:4}}>Strong Matches</div>
-              {m.matchStrengths.map((s,i)=>(
-                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>✓ {s}</div>
-              ))}
-            </div>
-          )}
-          {m.matchNeedsDiscussion && m.matchNeedsDiscussion.length > 0 && (
-            <div style={{marginBottom:10}}>
-              <div style={{fontSize:11,fontWeight:600,color:'#b45309',marginBottom:4}}>Needs Discussion</div>
-              {m.matchNeedsDiscussion.map((s,i)=>(
-                <div key={i} style={{fontSize:12,color:'#333',marginBottom:2}}>△ {s}</div>
-              ))}
-            </div>
-          )}
-
-          {/* Talk / Meeting request — routed to a Relationship Manager, no in-app chat */}
-          {introSent ? (
-            <div style={{fontSize:12,color:'#16a34a',fontWeight:500}}>✓ Request sent — our relationship manager will contact you to coordinate.</div>
-          ) : introJustSent ? (
-            <div style={{fontSize:12,color:'#16a34a',fontWeight:500}}>✓ Request sent — our relationship manager will contact you to coordinate.</div>
-          ) : showIntroChoice ? (
-            <div style={{display:'flex',gap:8}}>
-              <button className="btn btn-black btn-sm" style={{flex:1}} onClick={()=>handleIntro('talk')}>Request to Talk</button>
-              <button className="btn btn-black btn-sm" style={{flex:1}} onClick={()=>handleIntro('meeting')}>Request a Meeting</button>
-            </div>
-          ) : (
-            <button className="btn btn-outline btn-sm" style={{width:'100%'}} onClick={()=>setShowIntroChoice(true)}>Request to Talk / Meet</button>
-          )}
-        </div>
-      )}
     </div>
   )
 }
