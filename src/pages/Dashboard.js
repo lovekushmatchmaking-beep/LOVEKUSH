@@ -3,6 +3,7 @@ import EditPhotos from './EditPhotos'
 import AccountSettings from './AccountSettings'
 import ProfileView from './ProfileView'
 import ActivityTab from './ActivityTab'
+import SearchByProfileId from './SearchByProfileId'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
@@ -58,6 +59,7 @@ export default function Dashboard({ user }) {
   const [receivedActions, setReceivedActions] = useState([]) // match_actions rows where target = me (others' interest in me)
   const [profileViewsCount, setProfileViewsCount] = useState(0)
   const [activityViewProfile, setActivityViewProfile] = useState(null) // set when a row in Activity tab is tapped, opens ProfileView
+  const [searchViewProfile, setSearchViewProfile] = useState(null) // set when a Search-by-Profile-ID result is opened
 
   useEffect(() => {
     loadProfile()
@@ -562,6 +564,9 @@ export default function Dashboard({ user }) {
                   <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('accountsettings')}>
                     Account & Settings
                   </button>
+                  <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('searchid')}>
+                    Search by Profile ID
+                  </button>
                   <button className="btn btn-outline" style={{width:'100%',color:'#e53e3e',borderColor:'#e53e3e'}} onClick={logout}>
                     Logout
                   </button>
@@ -569,6 +574,20 @@ export default function Dashboard({ user }) {
               </div>
             )}
           </div>
+        )}
+
+        {/* SEARCH BY PROFILE ID TAB */}
+        {activeTab === 'searchid' && profile && (
+          searchViewProfile ? (
+            <ProfileView match={searchViewProfile} viewerIsPremium={!!profile.is_premium} viewerProfileId={profile.id}
+              myAction={myActions.find(a => a.target_profile_id === searchViewProfile.id)?.action || null}
+              introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === searchViewProfile.id)}
+              onSetAction={(action)=>setMatchAction(searchViewProfile.id, action)}
+              onSendIntro={(type)=>sendIntroductionRequest(searchViewProfile.id, type)}
+              onBack={()=>setSearchViewProfile(null)} />
+          ) : (
+            <SearchByProfileId onView={(p)=>setSearchViewProfile(p)} onBack={()=>setActiveTab('profile')} />
+          )
         )}
 
         {/* EDIT PHOTOS TAB */}
