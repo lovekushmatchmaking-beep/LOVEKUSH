@@ -87,9 +87,39 @@ import { calculateSectionCompleteness } from '../utils/completeness'
 const STEPS = ['Personal','Religion & Community','Location','Education','Lifestyle','Family','Preferences','Privacy','Photos']
 const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
+// Personal Details ab ek-ek sawaal karke (Jeevansathi jaisa one-question-
+// per-screen) poocha jaata hai — har entry ek chhoti screen hai. `skip`
+// function decide karta hai ki current form state me yeh question dikhana
+// hai ya nahi (jaise "Children Living With" sirf tab jab have_children
+// 'Yes' ho).
+const PERSONAL_QUESTIONS = [
+  { key:'first_name', label:'What is your first name?', type:'text', required:true, placeholder:'As per records' },
+  { key:'middle_name', label:'Middle name', hint:'Optional', type:'text', required:false, placeholder:'Optional' },
+  { key:'last_name', label:'What is your last name / surname?', type:'text', required:true, placeholder:'As per records' },
+  { key:'date_of_birth', label:'When were you born?', type:'date', required:true },
+  { key:'gender', label:'What is your gender?', type:'chips', required:true, options:['Male','Female'] },
+  { key:'height', label:'What is your height?', type:'select', options:HEIGHT_RANGES },
+  { key:'weight', label:'What is your weight?', type:'select', options:WEIGHT_RANGES },
+  { key:'complexion', label:'Your complexion', type:'select', options:COMPLEXIONS },
+  { key:'body_type', label:'Your body type', type:'select', options:BODY_TYPES },
+  { key:'marital_status', label:'What is your marital status?', type:'chips', options:MARITAL_STATUSES },
+  { key:'nationality', label:'What is your nationality?', type:'select', options:COUNTRIES.filter(c=>c!=='Open to All') },
+  { key:'have_children', label:'Do you have children?', type:'chips', options:HAVE_CHILDREN_OPTIONS },
+  { key:'children_living_with', label:'Who do your children live with?', type:'chips', options:CHILDREN_LIVING_WITH_OPTIONS,
+    skip: f=>f.have_children!=='Yes' },
+  { key:'blood_group', label:'Your blood group', hint:'Optional', type:'select', options:BLOOD_GROUPS },
+  { key:'health_info', label:'Any health information to share?', hint:'Optional', type:'select', options:HEALTH_INFO_OPTIONS },
+  { key:'languages_spoken', label:'Which languages do you speak?', type:'multiselect', options:LANGUAGES_SPOKEN, placeholder:'Select languages...' },
+  { key:'grew_up_in', label:'Where did you grow up?', type:'select', options:GREW_UP_IN_OPTIONS },
+  { key:'physical_disability', label:'Do you have a physical disability?', type:'chips', options:PHYSICAL_DISABILITY_OPTIONS },
+  { key:'disability_details', label:'Please share details', type:'text', placeholder:'Please provide details',
+    skip: f=>f.physical_disability!=='Yes' },
+]
+
 export default function CreateProfile({ user, adminMode, onComplete }) {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
+  const [personalQ, setPersonalQ] = useState(0) // one-question-per-screen index within the Personal Details step
   const [saving, setSaving] = useState(false)
   const [photos, setPhotos] = useState(Array(2).fill(null))
   const [photoFiles, setPhotoFiles] = useState(Array(2).fill(null))
@@ -189,6 +219,29 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       if (field === 'sisters_married_count' && n > p.sisters_count) next.sisters_married_count = p.sisters_count
       return next
     })
+  }
+
+  // Personal Details one-question-per-screen navigation helpers.
+  const isPersonalQVisible = (idx) => !(PERSONAL_QUESTIONS[idx].skip && PERSONAL_QUESTIONS[idx].skip(form))
+
+  const goToNextPersonalQ = () => {
+    const q = PERSONAL_QUESTIONS[personalQ]
+    if (q.required && !form[q.key]) { showToast('Please answer this question'); return }
+    if (q.key==='date_of_birth' && form.date_of_birth) {
+      const check = validateAge(form.date_of_birth, form.gender)
+      if (!check.valid) { showToast(check.message); return }
+    }
+    let next = personalQ + 1
+    while (next < PERSONAL_QUESTIONS.length && !isPersonalQVisible(next)) next++
+    if (next >= PERSONAL_QUESTIONS.length) { setStep(1); return }
+    setPersonalQ(next)
+  }
+
+  const goToPrevPersonalQ = () => {
+    let prev = personalQ - 1
+    while (prev >= 0 && !isPersonalQVisible(prev)) prev--
+    if (prev < 0) return // already at first question, nothing to go back to within this step
+    setPersonalQ(prev)
   }
 
   const showToast = (msg) => {
@@ -389,7 +442,9 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     setSaving(false)
   }
 
-  const pct = Math.round(((step+1)/STEPS.length)*100)
+  const pct = step===0
+    ? Math.round((((personalQ+1)/PERSONAL_QUESTIONS.length)/STEPS.length)*100)
+    : Math.round(((step+1)/STEPS.length)*100)
 
   return (
     <div style={{minHeight:'100vh',background:'#fff'}}>
@@ -413,12 +468,18 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
 
       <div className="page-container">
 
-        {step===0 && (
+        {step===0 && (() => {
+          const q = PERSONAL_QUESTIONS[personalQ]
+          return (
           <div>
-            <h2 className="page-title">Personal Details</h2>
-            <p className="page-subtitle">{adminMode ? "Enter the client's details" : 'Tell us about yourself'}</p>
+            {personalQ===0 && (
+              <div style={{fontSize:12,color:'#8e8e8e',marginBottom:8}}>Personal Details</div>
+            )}
+            <div style={{fontSize:11,color:'#8e8e8e',marginBottom:6}}>Question {personalQ+1} of {PERSONAL_QUESTIONS.length}</div>
+            <h2 className="page-title">{q.label}{q.required?' *':''}</h2>
+            {q.hint && <p className="page-subtitle">{q.hint}</p>}
 
-            {adminMode && (
+            {personalQ===0 && adminMode && (
               <div style={{background:'#fff8e1',borderRadius:12,padding:14,marginBottom:20}}>
                 <div style={{fontSize:12,fontWeight:600,marginBottom:10}}>Client Contact (internal — used to share matches, never shown on public profile)</div>
                 <div className="form-row">
@@ -437,162 +498,53 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             )}
 
             <div className="form-group">
-              <label className="form-label">First Name *</label>
-              <input className="form-input" placeholder="As per records" value={form.first_name}
-                onChange={e=>set('first_name',e.target.value)} autoFocus />
-            </div>
+              {q.type==='text' && (
+                <input className="form-input" placeholder={q.placeholder} value={form[q.key]}
+                  onChange={e=>set(q.key,e.target.value)} autoFocus
+                  onKeyDown={e=>{ if(e.key==='Enter') goToNextPersonalQ() }} />
+              )}
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Middle Name</label>
-                <input className="form-input" placeholder="Optional" value={form.middle_name}
-                  onChange={e=>set('middle_name',e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Last Name / Surname *</label>
-                <input className="form-input" placeholder="As per records" value={form.last_name}
-                  onChange={e=>set('last_name',e.target.value)} />
-              </div>
-            </div>
+              {q.type==='date' && (
+                <>
+                  <input className="form-input" type="date" value={form.date_of_birth}
+                    min={dobInputBounds().min} max={dobInputBounds().max}
+                    onChange={e=>set('date_of_birth',e.target.value)} autoFocus />
+                  {form.date_of_birth && (() => {
+                    const check = validateAge(form.date_of_birth, form.gender)
+                    return (
+                      <div style={{fontSize:12, marginTop:4, color: check.valid ? '#16a34a' : '#dc2626'}}>
+                        {check.valid ? `Age: ${check.age} years` : check.message}
+                      </div>
+                    )
+                  })()}
+                </>
+              )}
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Date of Birth *</label>
-                <input className="form-input" type="date" value={form.date_of_birth}
-                  min={dobInputBounds().min} max={dobInputBounds().max}
-                  onChange={e=>set('date_of_birth',e.target.value)} />
-                {form.date_of_birth && (() => {
-                  const check = validateAge(form.date_of_birth, form.gender)
-                  return (
-                    <div style={{fontSize:12, marginTop:4, color: check.valid ? '#16a34a' : '#dc2626'}}>
-                      {check.valid ? `Age: ${check.age} years` : check.message}
+              {q.type==='chips' && (
+                <div className="radio-group">
+                  {q.options.map(o=>(
+                    <div key={o} className={'radio-option ' + (form[q.key]===o?'selected':'')} onClick={()=>set(q.key,o)}>
+                      {form[q.key]===o?'◉':'○'} {o}
                     </div>
-                  )
-                })()}
-              </div>
-              <div className="form-group">
-                <label className="form-label">Gender *</label>
-                <select className="form-select" value={form.gender} onChange={e=>set('gender',e.target.value)}>
-                  <option>Male</option><option>Female</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Height</label>
-                <select className="form-select" value={form.height} onChange={e=>set('height',e.target.value)}>
-                  <option value="">Select</option>
-                  {HEIGHT_RANGES.map(h=><option key={h}>{h}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Weight</label>
-                <select className="form-select" value={form.weight} onChange={e=>set('weight',e.target.value)}>
-                  <option value="">Select</option>
-                  {WEIGHT_RANGES.map(w=><option key={w}>{w}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Complexion</label>
-                <select className="form-select" value={form.complexion} onChange={e=>set('complexion',e.target.value)}>
-                  <option value="">Select</option>
-                  {COMPLEXIONS.map(c=><option key={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Body Type</label>
-                <select className="form-select" value={form.body_type} onChange={e=>set('body_type',e.target.value)}>
-                  <option value="">Select</option>
-                  {BODY_TYPES.map(b=><option key={b}>{b}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Marital Status</label>
-                <select className="form-select" value={form.marital_status} onChange={e=>set('marital_status',e.target.value)}>
-                  {MARITAL_STATUSES.map(s=><option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Nationality</label>
-                <select className="form-select" value={form.nationality} onChange={e=>set('nationality',e.target.value)}>
-                  {COUNTRIES.filter(c=>c!=='Open to All').map(n=><option key={n}>{n}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Have Children?</label>
-                <select className="form-select" value={form.have_children} onChange={e=>set('have_children',e.target.value)}>
-                  <option value="">Select</option>
-                  {HAVE_CHILDREN_OPTIONS.map(h=><option key={h}>{h}</option>)}
-                </select>
-              </div>
-              {form.have_children === 'Yes' && (
-                <div className="form-group">
-                  <label className="form-label">Children Living With</label>
-                  <select className="form-select" value={form.children_living_with} onChange={e=>set('children_living_with',e.target.value)}>
-                    <option value="">Select</option>
-                    {CHILDREN_LIVING_WITH_OPTIONS.map(c=><option key={c}>{c}</option>)}
-                  </select>
+                  ))}
                 </div>
               )}
-            </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Blood Group</label>
-                <select className="form-select" value={form.blood_group} onChange={e=>set('blood_group',e.target.value)}>
+              {q.type==='select' && (
+                <select className="form-select" value={form[q.key]} onChange={e=>set(q.key,e.target.value)} autoFocus>
                   <option value="">Select</option>
-                  {BLOOD_GROUPS.map(b=><option key={b}>{b}</option>)}
+                  {q.options.map(o=><option key={o}>{o}</option>)}
                 </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Health Information</label>
-                <select className="form-select" value={form.health_info} onChange={e=>set('health_info',e.target.value)}>
-                  <option value="">Select</option>
-                  {HEALTH_INFO_OPTIONS.map(h=><option key={h}>{h}</option>)}
-                </select>
-              </div>
-            </div>
+              )}
 
-            <div className="form-group">
-              <label className="form-label">Languages I Speak</label>
-              <CheckboxDropdown options={LANGUAGES_SPOKEN} selected={form.languages_spoken}
-                onChange={v=>set('languages_spoken',v)} placeholder="Select languages..." />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Grew Up In</label>
-              <select className="form-select" value={form.grew_up_in} onChange={e=>set('grew_up_in',e.target.value)}>
-                <option value="">Select</option>
-                {GREW_UP_IN_OPTIONS.map(g=><option key={g}>{g}</option>)}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Physical Disability</label>
-              <div className="radio-group">
-                {PHYSICAL_DISABILITY_OPTIONS.map(o=>(
-                  <div key={o} className={'radio-option ' + (form.physical_disability===o?'selected':'')} onClick={()=>set('physical_disability',o)}>
-                    {form.physical_disability===o?'◉':'○'} {o}
-                  </div>
-                ))}
-              </div>
-              {form.physical_disability === 'Yes' && (
-                <input className="form-input" style={{marginTop:8}} placeholder="Please provide details"
-                  value={form.disability_details} onChange={e=>set('disability_details',e.target.value)} />
+              {q.type==='multiselect' && (
+                <CheckboxDropdown options={q.options} selected={form[q.key]}
+                  onChange={v=>set(q.key,v)} placeholder={q.placeholder} />
               )}
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {step===1 && (
           <div>
@@ -1576,15 +1528,21 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         )}
 
         <div style={{display:'flex',gap:10,marginTop:24}}>
-          {step>0&&(
-            <button className="btn btn-outline" style={{flex:1}} onClick={()=>setStep(s=>s-1)}>← Back</button>
+          {step===0 ? (
+            personalQ>0 && (
+              <button className="btn btn-outline" style={{flex:1}} onClick={goToPrevPersonalQ}>← Back</button>
+            )
+          ) : (
+            step>0&&(
+              <button className="btn btn-outline" style={{flex:1}} onClick={()=>setStep(s=>s-1)}>← Back</button>
+            )
           )}
-          {step<STEPS.length-1 ? (
+          {step===0 ? (
+            <button className="btn btn-black" style={{flex:2}} onClick={goToNextPersonalQ}>
+              Continue →
+            </button>
+          ) : step<STEPS.length-1 ? (
             <button className="btn btn-black" style={{flex:2}} onClick={()=>{
-              if(step===0&&!form.first_name) return showToast('Please enter your first name')
-              if(step===0&&!form.last_name) return showToast('Please enter your last name')
-              if(step===0&&!form.date_of_birth) return showToast('Please enter your date of birth')
-              if(step===0&&form.date_of_birth&&!validateAge(form.date_of_birth,form.gender).valid) return showToast(validateAge(form.date_of_birth,form.gender).message)
               if(step===2&&!form.city) return showToast('Please enter your city')
               setStep(s=>s+1)
             }}>
