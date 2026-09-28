@@ -83,6 +83,7 @@ import CheckboxDropdown from '../components/CheckboxDropdown'
 import { compressImage } from '../utils/compressImage'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { calculateSectionCompleteness } from '../utils/completeness'
+import SignupComplete from './SignupComplete'
 
 // Small-enum fields (short option lists) render as tap-friendly chips
 // instead of a native <select> dropdown — matches the rest of the app's
@@ -145,6 +146,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   const [personalQ, setPersonalQ] = useState(0) // one-question-per-screen index within the Personal Details step
   const [subQ, setSubQ] = useState(0) // one-question-per-screen index for steps 1-7
   const [saving, setSaving] = useState(false)
+  const [celebrating, setCelebrating] = useState(false) // true after a successful non-admin submit, shows SignupComplete
+  const [createdProfile, setCreatedProfile] = useState(null)
   const [photos, setPhotos] = useState(Array(2).fill(null))
   const [photoFiles, setPhotoFiles] = useState(Array(2).fill(null))
   const fileRefs = useRef(Array(2).fill(null).map(()=>React.createRef()))
@@ -1530,10 +1533,12 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
 
       if (photoErrors.length > 0) {
         showToast('Profile created, but ' + photoErrors.length + ' photo(s) failed: ' + photoErrors.join(' | '))
-        setTimeout(finish, 3500)
+        if (adminMode) setTimeout(finish, 3500)
+        else { setCreatedProfile(profile); setCelebrating(true) }
       } else {
         showToast('Profile created! Code: ' + code)
-        setTimeout(finish, 1500)
+        if (adminMode) setTimeout(finish, 1500)
+        else { setCreatedProfile(profile); setCelebrating(true) }
       }
     } catch(err) {
       showToast('Error: ' + err.message)
@@ -1547,6 +1552,13 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     : stepBlocksForPct
     ? Math.round((((Math.min(subQ,stepBlocksForPct.length-1)+1)/stepBlocksForPct.length)/STEPS.length + step/STEPS.length)*100)
     : Math.round(((step+1)/STEPS.length)*100)
+
+  if (celebrating) {
+    return (
+      <SignupComplete profile={createdProfile} photoPreview={photos[0]}
+        onContinue={()=>navigate('/dashboard')} />
+    )
+  }
 
   return (
     <div style={{minHeight:'100vh',background:'#fff'}}>
