@@ -24,6 +24,26 @@ import CheckboxDropdown from '../components/CheckboxDropdown'
 
 const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
+// Same tap-friendly chip picker as CreateProfile.js's ChipSelect — short
+// option lists render as .radio-option chips instead of a native <select>.
+// Long lists (castes, gotras, degrees, countries...) stay as <select>.
+function ChipSelect({ options, value, onChange, includeEmpty, emptyLabel }) {
+  return (
+    <div className="radio-group">
+      {includeEmpty && (
+        <div className={'radio-option ' + (!value?'selected':'')} onClick={()=>onChange('')}>
+          {!value?'◉':'○'} {emptyLabel || 'Not specified'}
+        </div>
+      )}
+      {options.map(o=>(
+        <div key={o} className={'radio-option ' + (value===o?'selected':'')} onClick={()=>onChange(o)}>
+          {value===o?'◉':'○'} {o}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Dashboard({ user }) {
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
@@ -1152,26 +1172,17 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           </div>
           <div className="form-group">
             <label className="form-label">Weight</label>
-            <select className="form-select" value={form.weight} onChange={e=>set('weight',e.target.value)}>
-              <option value="">Select</option>
-              {WEIGHT_RANGES.map(w=><option key={w}>{w}</option>)}
-            </select>
+            <ChipSelect options={WEIGHT_RANGES} value={form.weight} onChange={v=>set('weight',v)} includeEmpty />
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Complexion</label>
-            <select className="form-select" value={form.complexion} onChange={e=>set('complexion',e.target.value)}>
-              <option value="">Select</option>
-              {COMPLEXIONS.map(c=><option key={c}>{c}</option>)}
-            </select>
+            <ChipSelect options={COMPLEXIONS} value={form.complexion} onChange={v=>set('complexion',v)} includeEmpty />
           </div>
           <div className="form-group">
             <label className="form-label">Body Type</label>
-            <select className="form-select" value={form.body_type} onChange={e=>set('body_type',e.target.value)}>
-              <option value="">Select</option>
-              {BODY_TYPES.map(b=><option key={b}>{b}</option>)}
-            </select>
+            <ChipSelect options={BODY_TYPES} value={form.body_type} onChange={v=>set('body_type',v)} includeEmpty />
           </div>
         </div>
         <div className="form-row">
@@ -1219,17 +1230,11 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Blood Group</label>
-            <select className="form-select" value={form.blood_group} onChange={e=>set('blood_group',e.target.value)}>
-              <option value="">Select</option>
-              {BLOOD_GROUPS.map(b=><option key={b}>{b}</option>)}
-            </select>
+            <ChipSelect options={BLOOD_GROUPS} value={form.blood_group} onChange={v=>set('blood_group',v)} includeEmpty />
           </div>
           <div className="form-group">
             <label className="form-label">Health Information</label>
-            <select className="form-select" value={form.health_info} onChange={e=>set('health_info',e.target.value)}>
-              <option value="">Select</option>
-              {HEALTH_INFO_OPTIONS.map(h=><option key={h}>{h}</option>)}
-            </select>
+            <ChipSelect options={HEALTH_INFO_OPTIONS} value={form.health_info} onChange={v=>set('health_info',v)} includeEmpty />
           </div>
         </div>
         <div className="form-group">
@@ -1239,10 +1244,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-group">
           <label className="form-label">Grew Up In</label>
-          <select className="form-select" value={form.grew_up_in} onChange={e=>set('grew_up_in',e.target.value)}>
-            <option value="">Select</option>
-            {GREW_UP_IN_OPTIONS.map(g=><option key={g}>{g}</option>)}
-          </select>
+          <ChipSelect options={GREW_UP_IN_OPTIONS} value={form.grew_up_in} onChange={v=>set('grew_up_in',v)} includeEmpty />
         </div>
       </div>
 
@@ -1255,10 +1257,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           </div>
           <div className="form-group">
             <label className="form-label">Time of Birth Accuracy</label>
-            <select className="form-select" value={form.time_of_birth_accuracy} onChange={e=>set('time_of_birth_accuracy',e.target.value)}>
-              <option value="">Select</option>
-              {TIME_OF_BIRTH_ACCURACY.map(t=><option key={t}>{t}</option>)}
-            </select>
+            <ChipSelect options={TIME_OF_BIRTH_ACCURACY} value={form.time_of_birth_accuracy} onChange={v=>set('time_of_birth_accuracy',v)} includeEmpty />
           </div>
         </div>
         <div className="form-row">
@@ -1302,30 +1301,18 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Denomination / Sect</label>
-              <select className="form-select" value={form.islamic_denomination}
-                onChange={e=>set('islamic_denomination',e.target.value)}>
-                <option value="">Select</option>
-                {ISLAMIC_DENOMINATIONS.map(d=><option key={d}>{d}</option>)}
-              </select>
+              <ChipSelect options={ISLAMIC_DENOMINATIONS} value={form.islamic_denomination} onChange={v=>set('islamic_denomination',v)} includeEmpty />
             </div>
             {form.islamic_denomination === 'Sunni' && (
               <div className="form-group">
                 <label className="form-label">School of Thought (Madhab)</label>
-                <select className="form-select" value={form.islamic_school_of_thought}
-                  onChange={e=>set('islamic_school_of_thought',e.target.value)}>
-                  <option value="">Select</option>
-                  {SUNNI_SCHOOLS_OF_THOUGHT.map(s=><option key={s}>{s}</option>)}
-                </select>
+                <ChipSelect options={SUNNI_SCHOOLS_OF_THOUGHT} value={form.islamic_school_of_thought} onChange={v=>set('islamic_school_of_thought',v)} includeEmpty />
               </div>
             )}
             {form.islamic_denomination === 'Shia' && (
               <div className="form-group">
                 <label className="form-label">Shia Branch</label>
-                <select className="form-select" value={form.islamic_shia_branch}
-                  onChange={e=>set('islamic_shia_branch',e.target.value)}>
-                  <option value="">Select</option>
-                  {SHIA_BRANCHES.map(s=><option key={s}>{s}</option>)}
-                </select>
+                <ChipSelect options={SHIA_BRANCHES} value={form.islamic_shia_branch} onChange={v=>set('islamic_shia_branch',v)} includeEmpty />
               </div>
             )}
           </div>
@@ -1442,25 +1429,16 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Manglik</label>
-            <select className="form-select" value={form.manglik} onChange={e=>set('manglik',e.target.value)}>
-              <option value="">Select</option>
-              {MANGLIK_OPTIONS.map(m=><option key={m}>{m}</option>)}
-            </select>
+            <ChipSelect options={MANGLIK_OPTIONS} value={form.manglik} onChange={v=>set('manglik',v)} includeEmpty />
           </div>
           <div className="form-group">
             <label className="form-label">Kundli Available?</label>
-            <select className="form-select" value={form.kundli_available} onChange={e=>set('kundli_available',e.target.value)}>
-              <option value="">Select</option>
-              {KUNDLI_AVAILABLE.map(k=><option key={k}>{k}</option>)}
-            </select>
+            <ChipSelect options={KUNDLI_AVAILABLE} value={form.kundli_available} onChange={v=>set('kundli_available',v)} includeEmpty />
           </div>
         </div>
         <div className="form-group">
           <label className="form-label">Caste No Bar?</label>
-          <select className="form-select" value={form.caste_no_bar} onChange={e=>set('caste_no_bar',e.target.value)}>
-            <option value="">Select</option>
-            {CASTE_NO_BAR_OPTIONS.map(c=><option key={c}>{c}</option>)}
-          </select>
+          <ChipSelect options={CASTE_NO_BAR_OPTIONS} value={form.caste_no_bar} onChange={v=>set('caste_no_bar',v)} includeEmpty />
         </div>
       </div>
 
@@ -1493,10 +1471,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           </div>
           <div className="form-group">
             <label className="form-label">Relocation Preference</label>
-            <select className="form-select" value={form.relocation_preference} onChange={e=>set('relocation_preference',e.target.value)}>
-              <option value="">Select</option>
-              {RELOCATION_PREFERENCES.map(r=><option key={r}>{r}</option>)}
-            </select>
+            <ChipSelect options={RELOCATION_PREFERENCES} value={form.relocation_preference} onChange={v=>set('relocation_preference',v)} includeEmpty />
           </div>
         </div>
         <div className="form-group">
@@ -1509,9 +1484,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         <div className="section-label" style={{marginBottom:14}}>Education & Career</div>
         <div className="form-group">
           <label className="form-label">Highest Education *</label>
-          <select className="form-select" value={form.education} onChange={e=>set('education',e.target.value)}>
-            {EDUCATIONS.map(e=><option key={e}>{e}</option>)}
-          </select>
+          <ChipSelect options={EDUCATIONS} value={form.education} onChange={v=>set('education',v)} includeEmpty />
         </div>
         <div className="form-group">
           <label className="form-label">Degree</label>
@@ -1535,10 +1508,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Employment Type</label>
-            <select className="form-select" value={form.employment_type} onChange={e=>set('employment_type',e.target.value)}>
-              <option value="">Select</option>
-              {EMPLOYMENT_TYPES.map(e=><option key={e}>{e}</option>)}
-            </select>
+            <ChipSelect options={EMPLOYMENT_TYPES} value={form.employment_type} onChange={v=>set('employment_type',v)} includeEmpty />
           </div>
           <div className="form-group">
             <label className="form-label">Profession Category</label>
@@ -1555,10 +1525,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           </div>
           <div className="form-group">
             <label className="form-label">Working As</label>
-            <select className="form-select" value={form.working_as} onChange={e=>set('working_as',e.target.value)}>
-              <option value="">Select</option>
-              {WORKING_AS_OPTIONS.map(w=><option key={w}>{w}</option>)}
-            </select>
+            <ChipSelect options={WORKING_AS_OPTIONS} value={form.working_as} onChange={v=>set('working_as',v)} includeEmpty />
           </div>
         </div>
         <div className="form-row">
@@ -1600,15 +1567,11 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Smoking</label>
-            <select className="form-select" value={form.smoking} onChange={e=>set('smoking',e.target.value)}>
-              {HABITS.map(h=><option key={h}>{h}</option>)}
-            </select>
+            <ChipSelect options={HABITS} value={form.smoking} onChange={v=>set('smoking',v)} includeEmpty />
           </div>
           <div className="form-group">
             <label className="form-label">Drinking</label>
-            <select className="form-select" value={form.drinking} onChange={e=>set('drinking',e.target.value)}>
-              {HABITS.map(h=><option key={h}>{h}</option>)}
-            </select>
+            <ChipSelect options={HABITS} value={form.drinking} onChange={v=>set('drinking',v)} includeEmpty />
           </div>
         </div>
         <div className="form-group">
@@ -1638,10 +1601,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-group">
           <label className="form-label">Dress Style</label>
-          <select className="form-select" value={form.dress_style} onChange={e=>set('dress_style',e.target.value)}>
-            <option value="">Select</option>
-            {DRESS_STYLES.map(d=><option key={d}>{d}</option>)}
-          </select>
+          <ChipSelect options={DRESS_STYLES} value={form.dress_style} onChange={v=>set('dress_style',v)} includeEmpty />
         </div>
         <div className="form-group">
           <label className="form-label">About Me</label>
@@ -1735,17 +1695,11 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Own House</label>
-            <select className="form-select" value={form.own_house} onChange={e=>set('own_house',e.target.value)}>
-              <option value="">Select</option>
-              {OWN_HOUSE_OPTIONS.map(o=><option key={o}>{o}</option>)}
-            </select>
+            <ChipSelect options={OWN_HOUSE_OPTIONS} value={form.own_house} onChange={v=>set('own_house',v)} includeEmpty />
           </div>
           <div className="form-group">
             <label className="form-label">House Type</label>
-            <select className="form-select" value={form.house_type} onChange={e=>set('house_type',e.target.value)}>
-              <option value="">Select</option>
-              {HOUSE_TYPES.map(h=><option key={h}>{h}</option>)}
-            </select>
+            <ChipSelect options={HOUSE_TYPES} value={form.house_type} onChange={v=>set('house_type',v)} includeEmpty />
           </div>
         </div>
         <div className="form-row">
@@ -1804,10 +1758,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Vehicle Ownership</label>
-            <select className="form-select" value={form.vehicle_ownership} onChange={e=>set('vehicle_ownership',e.target.value)}>
-              <option value="">Select</option>
-              {VEHICLE_OWNERSHIP.map(v=><option key={v}>{v}</option>)}
-            </select>
+            <ChipSelect options={VEHICLE_OWNERSHIP} value={form.vehicle_ownership} onChange={v=>set('vehicle_ownership',v)} includeEmpty />
           </div>
           <div className="form-group">
             <label className="form-label">Vehicle Details</label>
@@ -1817,10 +1768,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Business / Commercial Asset</label>
-            <select className="form-select" value={form.business_asset_type} onChange={e=>set('business_asset_type',e.target.value)}>
-              <option value="">Select</option>
-              {BUSINESS_ASSET_TYPES.map(b=><option key={b}>{b}</option>)}
-            </select>
+            <ChipSelect options={BUSINESS_ASSET_TYPES} value={form.business_asset_type} onChange={v=>set('business_asset_type',v)} includeEmpty />
           </div>
           <div className="form-group">
             <label className="form-label">Business Detail</label>
@@ -1829,10 +1777,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-group">
           <label className="form-label">Family Status</label>
-          <select className="form-select" value={form.family_status} onChange={e=>set('family_status',e.target.value)}>
-            <option value="">Select</option>
-            {FAMILY_STATUS_OPTIONS.map(f=><option key={f}>{f}</option>)}
-          </select>
+          <ChipSelect options={FAMILY_STATUS_OPTIONS} value={form.family_status} onChange={v=>set('family_status',v)} includeEmpty />
         </div>
         <div className="form-group">
           <label className="form-label">Family Financial Status</label>
@@ -1859,18 +1804,12 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-group">
           <label className="form-label">Living With Parents?</label>
-          <select className="form-select" value={form.living_with_parents} onChange={e=>set('living_with_parents',e.target.value)}>
-            <option value="">Select</option>
-            {LIVING_WITH_PARENTS_OPTIONS.map(l=><option key={l}>{l}</option>)}
-          </select>
+          <ChipSelect options={LIVING_WITH_PARENTS_OPTIONS} value={form.living_with_parents} onChange={v=>set('living_with_parents',v)} includeEmpty />
         </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Profile Managed By</label>
-            <select className="form-select" value={form.profile_managed_by} onChange={e=>set('profile_managed_by',e.target.value)}>
-              <option value="">Select</option>
-              {PROFILE_MANAGED_BY.map(p=><option key={p}>{p}</option>)}
-            </select>
+            <ChipSelect options={PROFILE_MANAGED_BY} value={form.profile_managed_by} onChange={v=>set('profile_managed_by',v)} includeEmpty />
           </div>
           <div className="form-group">
             <label className="form-label">Alternate Email</label>
@@ -1946,10 +1885,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-group">
           <label className="form-label">Location Preference</label>
-          <select className="form-select" value={form.partner_location} onChange={e=>set('partner_location',e.target.value)}>
-            <option value="">Select</option>
-            {LOCATION_PREFERENCES.map(l=><option key={l}>{l}</option>)}
-          </select>
+          <ChipSelect options={LOCATION_PREFERENCES} value={form.partner_location} onChange={v=>set('partner_location',v)} includeEmpty />
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -1988,45 +1924,31 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <div className="section-label" style={{marginBottom:14}}>Privacy & Sensitive Info</div>
           <div className="form-group">
             <label className="form-label">Who can see your Community/Caste?</label>
-            <select className="form-select" value={form.community_privacy} onChange={e=>set('community_privacy',e.target.value)}>
-              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-            </select>
+            <ChipSelect options={PRIVACY_LEVELS} value={form.community_privacy} onChange={v=>set('community_privacy',v)} />
           </div>
           <div className="form-group">
             <label className="form-label">Who can see your College/Institution Name?</label>
-            <select className="form-select" value={form.college_privacy} onChange={e=>set('college_privacy',e.target.value)}>
-              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-            </select>
+            <ChipSelect options={PRIVACY_LEVELS} value={form.college_privacy} onChange={v=>set('college_privacy',v)} />
           </div>
           <div className="form-group">
             <label className="form-label">Who can see your Company Name?</label>
-            <select className="form-select" value={form.company_privacy} onChange={e=>set('company_privacy',e.target.value)}>
-              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-            </select>
+            <ChipSelect options={PRIVACY_LEVELS} value={form.company_privacy} onChange={v=>set('company_privacy',v)} />
           </div>
           <div className="form-group">
             <label className="form-label">Who can see your Income?</label>
-            <select className="form-select" value={form.income_privacy} onChange={e=>set('income_privacy',e.target.value)}>
-              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-            </select>
+            <ChipSelect options={PRIVACY_LEVELS} value={form.income_privacy} onChange={v=>set('income_privacy',v)} />
           </div>
           <div className="form-group">
             <label className="form-label">Who can see your Property details?</label>
-            <select className="form-select" value={form.property_privacy} onChange={e=>set('property_privacy',e.target.value)}>
-              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-            </select>
+            <ChipSelect options={PRIVACY_LEVELS} value={form.property_privacy} onChange={v=>set('property_privacy',v)} />
           </div>
           <div className="form-group">
             <label className="form-label">Who can see your Business/Commercial Asset details?</label>
-            <select className="form-select" value={form.business_privacy} onChange={e=>set('business_privacy',e.target.value)}>
-              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-            </select>
+            <ChipSelect options={PRIVACY_LEVELS} value={form.business_privacy} onChange={v=>set('business_privacy',v)} />
           </div>
           <div className="form-group">
             <label className="form-label">Who can see your Contact Details?</label>
-            <select className="form-select" value={form.contact_privacy} onChange={e=>set('contact_privacy',e.target.value)}>
-              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-            </select>
+            <ChipSelect options={PRIVACY_LEVELS} value={form.contact_privacy} onChange={v=>set('contact_privacy',v)} />
           </div>
         </div>
       )}
