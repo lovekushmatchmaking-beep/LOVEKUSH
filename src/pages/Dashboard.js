@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
+import AccountSettings from './AccountSettings'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
@@ -226,9 +227,6 @@ export default function Dashboard({ user }) {
                   </div>
                 ) : (
                   <div style={{display:'flex', gap:10, marginBottom:20}}>
-                    <button className="btn btn-outline" style={{fontSize:12,padding:'8px 14px'}} onClick={()=>{
-                      if (window.confirm('Hide your profile for 15 days? Other members won\'t see you in matches until then.')) hideProfile()
-                    }}>Hide Profile (15 days)</button>
                     <button className="btn btn-outline" style={{fontSize:12,padding:'8px 14px'}} onClick={()=>setActiveTab('biodata')}>Download Biodata</button>
                   </div>
                 )}
@@ -460,6 +458,9 @@ export default function Dashboard({ user }) {
                   <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('disliked')}>
                     Disliked Profiles
                   </button>
+                  <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('accountsettings')}>
+                    Account & Settings
+                  </button>
                   <button className="btn btn-outline" style={{width:'100%',color:'#e53e3e',borderColor:'#e53e3e'}} onClick={logout}>
                     Logout
                   </button>
@@ -488,6 +489,18 @@ export default function Dashboard({ user }) {
               setActiveTab('home')
             }}
             onCancel={() => setActiveTab('home')}
+            onManagePrivacy={() => setActiveTab('accountsettings')}
+          />
+        )}
+
+        {/* ACCOUNT & SETTINGS TAB */}
+        {activeTab === 'accountsettings' && profile && (
+          <AccountSettings
+            profile={profile}
+            user={user}
+            onProfileUpdate={(updated) => setProfile(updated)}
+            onBack={() => setActiveTab('profile')}
+            onDeleted={logout}
           />
         )}
 
@@ -873,7 +886,7 @@ function RequestsTab({ myProfile, introductions }) {
   )
 }
 
-export function EditProfileForm({ profile, user, onSave, onCancel }) {
+export function EditProfileForm({ profile, user, onSave, onCancel, onManagePrivacy }) {
   // Purana full_name ko First/Middle/Last mein todne ki koshish (best-effort —
   // agar profile purani hai aur sirf full_name mein bana tha)
   const nameParts = (profile.full_name || '').trim().split(/\s+/)
@@ -2031,51 +2044,63 @@ export function EditProfileForm({ profile, user, onSave, onCancel }) {
         </div>
       </div>
 
-      <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Privacy & Sensitive Info</div>
-        <div className="form-group">
-          <label className="form-label">Who can see your Community/Caste?</label>
-          <select className="form-select" value={form.community_privacy} onChange={e=>set('community_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
+      {onManagePrivacy ? (
+        <div className="card" style={{marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div>
+            <div className="section-label" style={{marginBottom:4}}>Privacy & Sensitive Info</div>
+            <div style={{fontSize:12,color:'#8e8e8e'}}>Community, income, contact & other visibility settings</div>
+          </div>
+          <button type="button" className="btn btn-outline btn-sm" style={{flexShrink:0}} onClick={onManagePrivacy}>
+            Manage →
+          </button>
         </div>
-        <div className="form-group">
-          <label className="form-label">Who can see your College/Institution Name?</label>
-          <select className="form-select" value={form.college_privacy} onChange={e=>set('college_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
+      ) : (
+        <div className="card" style={{marginBottom:12}}>
+          <div className="section-label" style={{marginBottom:14}}>Privacy & Sensitive Info</div>
+          <div className="form-group">
+            <label className="form-label">Who can see your Community/Caste?</label>
+            <select className="form-select" value={form.community_privacy} onChange={e=>set('community_privacy',e.target.value)}>
+              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Who can see your College/Institution Name?</label>
+            <select className="form-select" value={form.college_privacy} onChange={e=>set('college_privacy',e.target.value)}>
+              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Who can see your Company Name?</label>
+            <select className="form-select" value={form.company_privacy} onChange={e=>set('company_privacy',e.target.value)}>
+              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Who can see your Income?</label>
+            <select className="form-select" value={form.income_privacy} onChange={e=>set('income_privacy',e.target.value)}>
+              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Who can see your Property details?</label>
+            <select className="form-select" value={form.property_privacy} onChange={e=>set('property_privacy',e.target.value)}>
+              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Who can see your Business/Commercial Asset details?</label>
+            <select className="form-select" value={form.business_privacy} onChange={e=>set('business_privacy',e.target.value)}>
+              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Who can see your Contact Details?</label>
+            <select className="form-select" value={form.contact_privacy} onChange={e=>set('contact_privacy',e.target.value)}>
+              {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
         </div>
-        <div className="form-group">
-          <label className="form-label">Who can see your Company Name?</label>
-          <select className="form-select" value={form.company_privacy} onChange={e=>set('company_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Who can see your Income?</label>
-          <select className="form-select" value={form.income_privacy} onChange={e=>set('income_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Who can see your Property details?</label>
-          <select className="form-select" value={form.property_privacy} onChange={e=>set('property_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Who can see your Business/Commercial Asset details?</label>
-          <select className="form-select" value={form.business_privacy} onChange={e=>set('business_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Who can see your Contact Details?</label>
-          <select className="form-select" value={form.contact_privacy} onChange={e=>set('contact_privacy',e.target.value)}>
-            {PRIVACY_LEVELS.map(p=><option key={p}>{p}</option>)}
-          </select>
-        </div>
-      </div>
+      )}
 
       <div style={{display:'flex',gap:10,marginTop:8,marginBottom:20}}>
         <button className="btn btn-outline" style={{flex:1}} onClick={onCancel}>Cancel</button>
