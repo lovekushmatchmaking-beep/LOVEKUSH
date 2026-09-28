@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
 import AccountSettings from './AccountSettings'
 import ProfileView from './ProfileView'
+import ActivityTab from './ActivityTab'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
@@ -54,6 +55,9 @@ export default function Dashboard({ user }) {
   const [myActions, setMyActions] = useState([]) // match_actions rows where actor = me
   const [myIntroductions, setMyIntroductions] = useState([]) // introductions (Talk/Meeting requests) involving me
   const [viewingMatchId, setViewingMatchId] = useState(null) // set when a match card is tapped, opens ProfileView
+  const [receivedActions, setReceivedActions] = useState([]) // match_actions rows where target = me (others' interest in me)
+  const [profileViewsCount, setProfileViewsCount] = useState(0)
+  const [activityViewProfile, setActivityViewProfile] = useState(null) // set when a row in Activity tab is tapped, opens ProfileView
 
   useEffect(() => {
     loadProfile()
@@ -126,6 +130,47 @@ export default function Dashboard({ user }) {
         .select('*')
         .or(`from_profile.eq.${p.id},to_profile.eq.${p.id}`)
       setMyIntroductions(intros || [])
+
+      // Activity tab — dusre logo ne mujhe like/super-like kiya (Received),
+      // resolve actor ki basic info (naam+photo) profiles_public_view se,
+      // same join pattern jo matches ke liye upar use hua.
+      const { data: received } = await supabase
+        .from('match_actions')
+        .select('*')
+        .eq('target_profile_id', p.id)
+        .in('action', ['like', 'super_like'])
+      const receivedList = received || []
+      if (receivedList.length > 0) {
+        const actorIds = receivedList.map(r => r.actor_profile_id)
+        const { data: actorProfiles } = await supabase
+          .from('profiles_public_view')
+          .select('*')
+          .in('id', actorIds)
+        const { data: actorPhotos } = await supabase
+          .from('photos')
+          .select('*')
+          .in('profile_id', actorIds)
+          .eq('is_primary', true)
+        const actorPhotoByProfile = {}
+        ;(actorPhotos || []).forEach(ph => { actorPhotoByProfile[ph.profile_id] = ph.storage_path })
+        const actorById = {}
+        ;(actorProfiles || []).forEach(a => { actorById[a.id] = a })
+        setReceivedActions(receivedList.map(r => ({
+          ...r,
+          actorProfile: actorById[r.actor_profile_id] || null,
+          actorPhotoPath: actorPhotoByProfile[r.actor_profile_id] || null,
+        })))
+      } else {
+        setReceivedActions([])
+      }
+
+      // Profile Visits — distinct dusre profiles jinhone mera profile
+      // ProfileView me khola (profile_views table, ProfileView.js pe record hota hai).
+      const { count: viewsCount } = await supabase
+        .from('profile_views')
+        .select('*', { count: 'exact', head: true })
+        .eq('profile_id', p.id)
+      setProfileViewsCount(viewsCount || 0)
     }
     setLoading(false)
   }
@@ -431,7 +476,7 @@ export default function Dashboard({ user }) {
             const m = matches.find(x => x.id === viewingMatchId)
             if (!m) { setViewingMatchId(null); return null }
             return (
-              <ProfileView match={m} viewerIsPremium={!!profile.is_premium}
+              <ProfileView match={m} viewerIsPremium={!!profile.is_premium} viewerProfileId={profile.id}
                 myAction={myActions.find(a => a.target_profile_id === m.id)?.action || null}
                 introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
                 onSetAction={(action)=>setMatchAction(m.id, action)}
@@ -460,6 +505,26 @@ export default function Dashboard({ user }) {
               </div>
             )}
           </div>
+          )
+        )}
+
+        {/* ACTIVITY TAB */}
+        {activeTab === 'activity' && (
+          activityViewProfile ? (
+            <ProfileView match={activityViewProfile} viewerIsPremium={!!profile.is_premium} viewerProfileId={profile.id}
+              myAction={myActions.find(a => a.target_profile_id === activityViewProfile.id)?.action || null}
+              introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === activityViewProfile.id)}
+              onSetAction={(action)=>setMatchAction(activityViewProfile.id, action)}
+              onSendIntro={(type)=>sendIntroductionRequest(activityViewProfile.id, type)}
+              onBack={()=>setActivityViewProfile(null)} />
+          ) : (
+            <ActivityTab
+              myActions={myActions}
+              receivedActions={receivedActions}
+              matches={matches}
+              profileViewsCount={profileViewsCount}
+              onViewProfile={(p)=>setActivityViewProfile(p)}
+            />
           )
         )}
 
@@ -557,6 +622,7 @@ export default function Dashboard({ user }) {
         {[
           {id:'home',icon:'🏠',label:'Home'},
           {id:'matches',icon:'💝',label:'Matches'},
+          {id:'activity',icon:'🕐',label:'Activity'},
           {id:'requests',icon:'🤝',label:'Requests'},
           {id:'profile',icon:'👤',label:'Profile'},
         ].map(item=>(
