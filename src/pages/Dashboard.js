@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
 import AccountSettings from './AccountSettings'
+import BiodataView from './BiodataView'
 import ProfileView from './ProfileView'
 import ActivityTab from './ActivityTab'
 import SearchByProfileId from './SearchByProfileId'
@@ -659,88 +660,6 @@ export default function Dashboard({ user }) {
 // Match card — score ke saath "Why this match?" expand karke poora
 // breakdown dikhata hai (Strong Matches ✓ / Needs Discussion △) — fake
 // percentage nahi, actual matching.js se aaya hua real explanation.
-// ===== BIODATA — printable/shareable biodata (browser "Save as PDF" print,
-// no new PDF library dependency) =====
-function BiodataView({ profile: p, photo, onBack }) {
-  const rows = (pairs) => pairs.filter(([,v])=>v).map(([k,v])=>(
-    <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid rgba(0,0,0,0.06)',fontSize:13}}>
-      <span style={{color:'#8e8e8e'}}>{k}</span>
-      <span style={{fontWeight:500,textAlign:'right'}}>{v}</span>
-    </div>
-  ))
-
-  return (
-    <div>
-      <div className="no-print" style={{display:'flex',gap:10,marginBottom:16}}>
-        <button className="btn btn-outline" style={{flex:1}} onClick={onBack}>← Back</button>
-        <button className="btn btn-black" style={{flex:2}} onClick={()=>window.print()}>🖨️ Print / Save as PDF</button>
-      </div>
-
-      <div style={{border:'1px solid rgba(0,0,0,0.1)',borderRadius:16,padding:24,background:'#fff'}}>
-        <div style={{textAlign:'center',marginBottom:20,paddingBottom:16,borderBottom:'2px solid #000'}}>
-          <div style={{fontFamily:'Cormorant Garamond',fontSize:28,fontWeight:300,letterSpacing:'0.05em'}}>LOVEKUSH</div>
-          <div style={{fontSize:11,color:'#8e8e8e',letterSpacing:'0.15em',textTransform:'uppercase'}}>Matrimonial Biodata</div>
-        </div>
-
-        <div style={{display:'flex',gap:16,marginBottom:20}}>
-          <div style={{width:96,height:96,borderRadius:10,background:'#f0f0f0',overflow:'hidden',flexShrink:0}}>
-            {photo
-              ? <SignedImage path={photo.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
-              : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32}}>👤</div>
-            }
-          </div>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:600,fontSize:19,marginBottom:4}}>{p.full_name}</div>
-            <div style={{fontSize:13,color:'#555'}}>{p.age ? p.age + ' years' : ''}{p.height ? ' • ' + p.height : ''}</div>
-            <div style={{fontSize:13,color:'#555'}}>{p.city}{p.state ? ', ' + p.state : ''}</div>
-            <div className="profile-code" style={{marginTop:6}}>{p.profile_code}</div>
-          </div>
-        </div>
-
-        {p.about_me && (
-          <div style={{marginBottom:16,fontSize:13,color:'#333',lineHeight:1.6,fontStyle:'italic'}}>
-            "{p.about_me}"
-          </div>
-        )}
-
-        <div style={{fontSize:12,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#8e8e8e',marginTop:14,marginBottom:6}}>Basic Details</div>
-        {rows([
-          ['Marital Status', p.marital_status], ['Complexion', p.complexion], ['Body Type', p.body_type],
-          ['Nationality', p.nationality], ['Mother Tongue', p.mother_tongue],
-        ])}
-
-        <div style={{fontSize:12,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#8e8e8e',marginTop:14,marginBottom:6}}>Religious Background</div>
-        {rows([
-          ['Religion', p.religion], ['Community', p.community], ['Sub-Caste', p.sub_caste],
-          ['Gotra', p.gotra], ['Manglik', p.manglik],
-        ])}
-
-        <div style={{fontSize:12,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#8e8e8e',marginTop:14,marginBottom:6}}>Location, Education & Career</div>
-        {rows([
-          ['Living In', [p.city, p.state, p.country].filter(Boolean).join(', ')],
-          ['Highest Qualification', p.education], ['Degree', p.degree], ['College', p.college_name],
-          ['Occupation', p.occupation], ['Employer', p.employer], ['Annual Income', p.annual_income],
-        ])}
-
-        <div style={{fontSize:12,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#8e8e8e',marginTop:14,marginBottom:6}}>Family Details</div>
-        {rows([
-          ['Family Type', p.family_type], ["Father's Profession", p.father_profession],
-          ["Mother's Profession", p.mother_profession], ['Family Financial Status', p.family_financial_status],
-        ])}
-
-        <div style={{fontSize:12,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#8e8e8e',marginTop:14,marginBottom:6}}>Contact</div>
-        {rows([
-          ['Contact No.', p.client_phone], ['Email ID', p.client_email || p.alternate_email],
-        ])}
-
-        <div style={{textAlign:'center',marginTop:20,paddingTop:12,borderTop:'1px solid rgba(0,0,0,0.08)',fontSize:10,color:'#b0b0b0'}}>
-          Generated via LOVEKUSH Matchmaking
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, onView }) {
   // "You match X/Y preferences" — existing matching.js strengths/needsDiscussion
   // se hi nikala, koi naya scoring logic nahi. Strength = matched, needsDiscussion
