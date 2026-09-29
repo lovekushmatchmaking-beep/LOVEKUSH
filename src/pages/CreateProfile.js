@@ -6,9 +6,6 @@ import {
   DIETS,
   EDUCATIONS,
   DEGREE_OPTIONS,
-  FAMILY_TYPES,
-  FAMILY_VALUES,
-  HABITS,
   HEIGHT_RANGES,
   INCOME_RANGES,
   LOCATION_PREFERENCES,
@@ -29,49 +26,25 @@ import {
   JAIN_GOTRAS,
   SENSITIVE_COMMUNITIES,
   SENSITIVE_COMMUNITY_NOTE,
-  COMPLEXIONS,
-  BODY_TYPES,
   PROPERTY_TYPES,
   PROPERTY_OWNERSHIP,
-  VEHICLE_OWNERSHIP,
   BUSINESS_ASSET_TYPES,
   PARTNER_COMMUNITY_SPECIAL_OPTIONS,
   PARTNER_COMMUNITY_NO_BAR,
-  WEIGHT_RANGES,
   COUNTRIES,
   MANGLIK_OPTIONS,
-  KUNDLI_AVAILABLE,
-  RELOCATION_PREFERENCES,
   EMPLOYMENT_TYPES,
-  OWN_HOUSE_OPTIONS,
-  HOUSE_TYPES,
-  FAMILY_INCOME_RANGES,
-  USD_FAMILY_INCOME_RANGES,
   CURRENCIES,
   USD_INCOME_RANGES,
-  PHYSICAL_DISABILITY_OPTIONS,
   PROFESSION_CATEGORIES,
-  HEALTH_INFO_OPTIONS,
-  BLOOD_GROUPS,
   PROFILE_MANAGED_BY,
-  FAMILY_STATUS_OPTIONS,
-  LIVING_WITH_PARENTS_OPTIONS,
-  HOBBIES_INTERESTS,
-  HOBBIES_MAX_SELECT,
   CUISINES,
   SPORTS_LIST,
-  TIME_OF_BIRTH_ACCURACY,
-  CASTE_NO_BAR_OPTIONS,
-  PRIVACY_LEVELS,
-  FAMILY_FINANCIAL_STATUS,
-  WORKING_AS_OPTIONS,
   FAVOURITE_MUSIC,
   FAVOURITE_BOOKS,
-  DRESS_STYLES,
   LANGUAGES_SPOKEN,
   HAVE_CHILDREN_OPTIONS,
   CHILDREN_LIVING_WITH_OPTIONS,
-  GREW_UP_IN_OPTIONS,
   PARTNER_HEIGHT_MIN_INCHES,
   PARTNER_HEIGHT_MAX_INCHES,
   formatHeightFromInches,
@@ -108,7 +81,7 @@ function ChipSelect({ options, value, onChange, includeEmpty, emptyLabel }) {
   )
 }
 
-const STEPS = ['Personal','Religion & Community','Location','Education','Lifestyle','Family','Preferences','Privacy','Photos']
+const STEPS = ['Personal','Religion & Community','Location','Education','Lifestyle','Family','Preferences','Photos']
 const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
 // Personal Details ab ek-ek sawaal karke (Jeevansathi jaisa one-question-
@@ -123,22 +96,17 @@ const PERSONAL_QUESTIONS = [
   { key:'date_of_birth', label:'When were you born?', type:'date', required:true },
   { key:'gender', label:'What is your gender?', type:'chips', required:true, options:['Male','Female'] },
   { key:'height', label:'What is your height?', type:'select', options:HEIGHT_RANGES },
-  { key:'weight', label:'What is your weight?', type:'chips', options:WEIGHT_RANGES },
-  { key:'complexion', label:'Your complexion', type:'chips', options:COMPLEXIONS },
-  { key:'body_type', label:'Your body type', type:'chips', options:BODY_TYPES },
   { key:'marital_status', label:'What is your marital status?', type:'chips', options:MARITAL_STATUSES },
   { key:'nationality', label:'What is your nationality?', type:'select', options:COUNTRIES.filter(c=>c!=='Open to All') },
   { key:'have_children', label:'Do you have children?', type:'chips', options:HAVE_CHILDREN_OPTIONS },
   { key:'children_living_with', label:'Who do your children live with?', type:'chips', options:CHILDREN_LIVING_WITH_OPTIONS,
     skip: f=>f.have_children!=='Yes' },
-  { key:'blood_group', label:'Your blood group', hint:'Optional', type:'chips', options:BLOOD_GROUPS },
-  { key:'health_info', label:'Any health information to share?', hint:'Optional', type:'chips', options:HEALTH_INFO_OPTIONS },
   { key:'languages_spoken', label:'Which languages do you speak?', type:'multiselect', options:LANGUAGES_SPOKEN, placeholder:'Select languages...' },
-  { key:'grew_up_in', label:'Where did you grow up?', type:'chips', options:GREW_UP_IN_OPTIONS },
-  { key:'physical_disability', label:'Do you have a physical disability?', type:'chips', options:PHYSICAL_DISABILITY_OPTIONS },
-  { key:'disability_details', label:'Please share details', type:'text', placeholder:'Please provide details',
-    skip: f=>f.physical_disability!=='Yes' },
 ]
+// Weight, Complexion, Body Type, Blood Group, Health Information, Grew Up In
+// and Physical Disability were removed from the signup wizard (user's ask:
+// too many screens for a new signup) — these still exist as DB columns and
+// can be filled in later via Edit Profile.
 
 export default function CreateProfile({ user, adminMode, onComplete }) {
   const navigate = useNavigate()
@@ -454,83 +422,11 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         </div>
       ),
     },
-    {
-      title: 'Caste No Bar?',
-      render: () => (
-        <div className="form-group">
-          <ChipSelect options={CASTE_NO_BAR_OPTIONS} value={form.caste_no_bar} onChange={v=>set('caste_no_bar',v)} includeEmpty />
-          <div className="form-hint">"Yes" ka matlab aap doosri caste ke profiles bhi consider karenge</div>
-        </div>
-      ),
-    },
-    {
-      title: 'Kundli Available?',
-      render: () => (
-        <div className="form-group">
-          <ChipSelect options={KUNDLI_AVAILABLE} value={form.kundli_available} onChange={v=>set('kundli_available',v)} includeEmpty />
-        </div>
-      ),
-    },
-    {
-      title: 'Birth Time',
-      render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Birth Time</label>
-            <input className="form-input" type="time" value={form.birth_time} onChange={e=>set('birth_time',e.target.value)} />
-            <div style={{fontSize:11,color:'#8e8e8e',marginTop:4}}>Optional — exact time nahi pata to khaali chhod do</div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Time of Birth Accuracy</label>
-            <ChipSelect options={TIME_OF_BIRTH_ACCURACY} value={form.time_of_birth_accuracy} onChange={v=>set('time_of_birth_accuracy',v)} includeEmpty />
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Birth Place',
-      render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Birth Place (City)</label>
-            <input className="form-input" placeholder="City where born" value={form.birth_place} onChange={e=>set('birth_place',e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Country of Birth</label>
-            <select className="form-select" value={form.country_of_birth} onChange={e=>set('country_of_birth',e.target.value)}>
-              <option value="">Select</option>
-              {COUNTRIES.filter(c=>c!=='Open to All').map(c=><option key={c}>{c}</option>)}
-            </select>
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Horoscope Match Required?',
-      render: () => (
-        <div className="form-group">
-          <select className="form-select" value={form.horoscope_match_required} onChange={e=>set('horoscope_match_required',e.target.value)}>
-            <option value="">Select</option>
-            <option>Yes</option>
-            <option>No</option>
-            <option>Flexible</option>
-          </select>
-        </div>
-      ),
-    },
-    {
-      title: 'Astrology Consent',
-      render: () => (
-        <div className="form-group" style={{display:'flex',alignItems:'flex-start',gap:8}}>
-          <input type="checkbox" id="astro_consent" checked={form.astrology_consent}
-            onChange={e=>set('astrology_consent',e.target.checked)} style={{marginTop:3}} />
-          <label htmlFor="astro_consent" style={{fontSize:12,color:'#555',cursor:'pointer'}}>
-            I consent to LOVEKUSH collecting, processing and analysing my astrology/birth details for kundli-matching purposes.
-          </label>
-        </div>
-      ),
-    },
   ]
+  // Caste No Bar, Kundli Available, Birth Time, Birth Place, Horoscope
+  // Match Required and Astrology Consent were removed from the signup
+  // wizard (too many screens for a new signup) — fields still exist and
+  // can be filled in later via Edit Profile.
 
   const locationBlocks = () => [
     {
@@ -568,40 +464,10 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         </div>
       ),
     },
-    {
-      title: 'Current Address',
-      subtitle: 'Optional — used internally for verification',
-      render: () => (
-        <div className="form-group">
-          <textarea className="form-textarea" placeholder="Optional — used internally for verification"
-            value={form.current_address} onChange={e=>set('current_address',e.target.value)} />
-        </div>
-      ),
-    },
-    {
-      title: 'Zip Code & Ethnic Origin',
-      render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Zip / PIN Code</label>
-            <input className="form-input" value={form.zip_code} onChange={e=>set('zip_code',e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Ethnic Origin</label>
-            <input className="form-input" placeholder="e.g. Indian" value={form.ethnic_origin} onChange={e=>set('ethnic_origin',e.target.value)} />
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Relocation Preference',
-      render: () => (
-        <div className="form-group">
-          <ChipSelect options={RELOCATION_PREFERENCES} value={form.relocation_preference} onChange={v=>set('relocation_preference',v)} includeEmpty />
-        </div>
-      ),
-    },
   ]
+  // Current Address, Zip Code & Ethnic Origin, and Relocation Preference
+  // were removed from the signup wizard — fields still exist and can be
+  // filled in later via Edit Profile.
 
   const educationBlocks = () => [
     {
@@ -632,15 +498,6 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
-      title: 'College / Institution Name',
-      render: () => (
-        <div className="form-group">
-          <input className="form-input" placeholder="Optional" value={form.college_name}
-            onChange={e=>set('college_name',e.target.value)} />
-        </div>
-      ),
-    },
-    {
       title: 'Employment Type & Profession',
       render: () => (
         <div className="form-row">
@@ -659,61 +516,21 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
-      title: 'Occupation',
-      render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Current Occupation *</label>
-            <input className="form-input" placeholder="Software Engineer, Doctor..." value={form.occupation}
-              onChange={e=>set('occupation',e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Working As</label>
-            <ChipSelect options={WORKING_AS_OPTIONS} value={form.working_as} onChange={v=>set('working_as',v)} includeEmpty />
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Employer & Work Location',
-      render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Employer / Company</label>
-            <input className="form-input" placeholder="TCS, Infosys, Self-employed..." value={form.employer}
-              onChange={e=>set('employer',e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Work Location</label>
-            <input className="form-input" placeholder="City where you work" value={form.work_location}
-              onChange={e=>set('work_location',e.target.value)} />
-          </div>
-        </div>
-      ),
-    },
-    {
       title: 'Annual Income',
       render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Annual Income</label>
-            <select className="form-select" value={form.annual_income}
-              onChange={e=>set('annual_income',e.target.value)}>
-              {(form.annual_income_currency === 'USD' ? USD_INCOME_RANGES : INCOME_RANGES).map(i=><option key={i}>{i}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Currency</label>
-            <select className="form-select" value={form.annual_income_currency} onChange={e=>{
-              setForm(p=>({...p, annual_income_currency:e.target.value, annual_income:''}))
-            }}>
-              {CURRENCIES.map(c=><option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
-            </select>
-          </div>
+        <div className="form-group">
+          <select className="form-select" value={form.annual_income}
+            onChange={e=>set('annual_income',e.target.value)}>
+            {(form.annual_income_currency === 'USD' ? USD_INCOME_RANGES : INCOME_RANGES).map(i=><option key={i}>{i}</option>)}
+          </select>
         </div>
       ),
     },
   ]
+  // College/Institution Name, Occupation (+ Working As), Employer & Work
+  // Location, and the Currency toggle (defaults to INR) were removed from
+  // the signup wizard — fields still exist and can be filled in later via
+  // Edit Profile.
 
   const lifestyleBlocks = () => [
     {
@@ -727,44 +544,6 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               </div>
             ))}
           </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Smoking & Drinking',
-      render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Smoking</label>
-            <ChipSelect options={HABITS} value={form.smoking} onChange={v=>set('smoking',v)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Drinking</label>
-            <ChipSelect options={HABITS} value={form.drinking} onChange={v=>set('drinking',v)} />
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Hobbies & Interests',
-      subtitle: 'Separate with commas',
-      render: () => (
-        <div className="form-group">
-          <input className="form-input" placeholder="Reading, Travel, Music, Cricket..." value={form.hobbies}
-            onChange={e=>set('hobbies',e.target.value)} />
-        </div>
-      ),
-    },
-    {
-      title: `Interests (select up to ${HOBBIES_MAX_SELECT})`,
-      render: () => (
-        <div className="form-group">
-          <MultiSelectChips
-            groups={HOBBIES_INTERESTS}
-            selected={form.hobbies_interests}
-            onChange={(v)=>set('hobbies_interests',v)}
-            maxSelect={HOBBIES_MAX_SELECT}
-          />
         </div>
       ),
     },
@@ -809,14 +588,6 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
-      title: 'Dress Style',
-      render: () => (
-        <div className="form-group">
-          <ChipSelect options={DRESS_STYLES} value={form.dress_style} onChange={v=>set('dress_style',v)} includeEmpty />
-        </div>
-      ),
-    },
-    {
       title: 'About Me *',
       render: () => (
         <div className="form-group">
@@ -827,36 +598,11 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
   ]
+  // Smoking & Drinking, Hobbies & Interests (free text + chips), and
+  // Dress Style were removed from the signup wizard — fields still exist
+  // and can be filled in later via Edit Profile.
 
   const familyBlocks = () => [
-    {
-      title: 'Family Type *',
-      render: () => (
-        <div className="form-group">
-          <div className="radio-group">
-            {FAMILY_TYPES.map(f=>(
-              <div key={f} className={'radio-option ' + (form.family_type===f?'selected':'')} onClick={()=>set('family_type',f)}>
-                {form.family_type===f?'◉':'○'} {f} Family
-              </div>
-            ))}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Family Values',
-      render: () => (
-        <div className="form-group">
-          <div className="radio-group">
-            {FAMILY_VALUES.map(f=>(
-              <div key={f} className={'radio-option ' + (form.family_values===f?'selected':'')} onClick={()=>set('family_values',f)}>
-                {form.family_values===f?'◉':'○'} {f}
-              </div>
-            ))}
-          </div>
-        </div>
-      ),
-    },
     {
       title: "Father's & Mother's Profession",
       render: () => (
@@ -945,43 +691,6 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
-      title: 'Own House',
-      render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Own House</label>
-            <ChipSelect options={OWN_HOUSE_OPTIONS} value={form.own_house} onChange={v=>set('own_house',v)} includeEmpty />
-          </div>
-          <div className="form-group">
-            <label className="form-label">House Type</label>
-            <ChipSelect options={HOUSE_TYPES} value={form.house_type} onChange={v=>set('house_type',v)} includeEmpty />
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Family Income Range',
-      render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Family Income Range</label>
-            <select className="form-select" value={form.family_income_range} onChange={e=>set('family_income_range',e.target.value)}>
-              <option value="">Select</option>
-              {(form.family_income_currency === 'USD' ? USD_FAMILY_INCOME_RANGES : FAMILY_INCOME_RANGES).map(f=><option key={f}>{f}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Currency</label>
-            <select className="form-select" value={form.family_income_currency} onChange={e=>{
-              setForm(p=>({...p, family_income_currency:e.target.value, family_income_range:''}))
-            }}>
-              {CURRENCIES.map(c=><option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
-            </select>
-          </div>
-        </div>
-      ),
-    },
-    {
       title: 'Property',
       render: () => (
         <div className="form-row">
@@ -1037,22 +746,6 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
-      title: 'Vehicle',
-      render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Vehicle Ownership</label>
-            <ChipSelect options={VEHICLE_OWNERSHIP} value={form.vehicle_ownership} onChange={v=>set('vehicle_ownership',v)} includeEmpty />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Vehicle Details</label>
-            <input className="form-input" placeholder="Optional, e.g. Hyundai Creta" value={form.vehicle_model}
-              onChange={e=>set('vehicle_model',e.target.value)} />
-          </div>
-        </div>
-      ),
-    },
-    {
       title: 'Business / Commercial Asset',
       render: () => (
         <div className="form-row">
@@ -1065,48 +758,6 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             <input className="form-input" placeholder="Optional, e.g. Garment Business" value={form.business_detail}
               onChange={e=>set('business_detail',e.target.value)} />
           </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Family Status',
-      render: () => (
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Family Status</label>
-            <ChipSelect options={FAMILY_STATUS_OPTIONS} value={form.family_status} onChange={v=>set('family_status',v)} includeEmpty />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Family Financial Status</label>
-            <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              {FAMILY_FINANCIAL_STATUS.map(f=>{
-                const isSelected = form.family_financial_status === f.label
-                return (
-                  <div key={f.label} onClick={()=>set('family_financial_status', f.label)}
-                    style={{border:'1.5px solid ' + (isSelected ? '#000' : 'rgba(0,0,0,0.1)'), borderRadius:10, overflow:'hidden', cursor:'pointer'}}>
-                    <div style={{padding:'12px 16px', fontWeight:600, fontSize:14,
-                      background: isSelected ? '#000' : 'transparent', color: isSelected ? '#fff' : '#333'}}>
-                      {isSelected ? '◉' : '○'} {f.label}
-                    </div>
-                    {isSelected && (
-                      <div style={{padding:'10px 16px 14px', fontSize:12, color:'#555', lineHeight:1.6}}>
-                        <div>{f.desc}</div>
-                        <div style={{marginTop:4, fontWeight:500}}>Annual family income: {f.range}</div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Living With Parents?',
-      render: () => (
-        <div className="form-group">
-          <ChipSelect options={LIVING_WITH_PARENTS_OPTIONS} value={form.living_with_parents} onChange={v=>set('living_with_parents',v)} includeEmpty />
         </div>
       ),
     },
@@ -1127,6 +778,10 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
   ]
+  // Family Type, Family Values, Own House/House Type, Family Income
+  // Range, Vehicle, Family Status/Financial Status, and Living With
+  // Parents were removed from the signup wizard — fields still exist and
+  // can be filled in later via Edit Profile.
 
   const preferencesBlocks = () => [
     {
@@ -1261,43 +916,10 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     },
   ]
 
-  const privacyBlocks = () => [
-    { title: 'Who can see your Community/Caste?', render: () => (
-      <div className="form-group">
-        <ChipSelect options={PRIVACY_LEVELS} value={form.community_privacy} onChange={v=>set('community_privacy',v)} />
-      </div>
-    )},
-    { title: 'Who can see your College/Institution Name?', render: () => (
-      <div className="form-group">
-        <ChipSelect options={PRIVACY_LEVELS} value={form.college_privacy} onChange={v=>set('college_privacy',v)} />
-      </div>
-    )},
-    { title: 'Who can see your Company Name?', render: () => (
-      <div className="form-group">
-        <ChipSelect options={PRIVACY_LEVELS} value={form.company_privacy} onChange={v=>set('company_privacy',v)} />
-      </div>
-    )},
-    { title: 'Who can see your Income?', render: () => (
-      <div className="form-group">
-        <ChipSelect options={PRIVACY_LEVELS} value={form.income_privacy} onChange={v=>set('income_privacy',v)} />
-      </div>
-    )},
-    { title: 'Who can see your Property details?', render: () => (
-      <div className="form-group">
-        <ChipSelect options={PRIVACY_LEVELS} value={form.property_privacy} onChange={v=>set('property_privacy',v)} />
-      </div>
-    )},
-    { title: 'Who can see your Business/Commercial Asset details?', render: () => (
-      <div className="form-group">
-        <ChipSelect options={PRIVACY_LEVELS} value={form.business_privacy} onChange={v=>set('business_privacy',v)} />
-      </div>
-    )},
-    { title: 'Who can see your Contact Details?', render: () => (
-      <div className="form-group">
-        <ChipSelect options={PRIVACY_LEVELS} value={form.contact_privacy} onChange={v=>set('contact_privacy',v)} />
-      </div>
-    )},
-  ]
+  // All Privacy toggles (Community/College/Company/Income/Property/
+  // Business/Contact) were removed from the signup wizard per the user's
+  // ask — they keep their existing default values and can be managed
+  // later via Account & Settings → Privacy Settings.
 
   const getStepBlocks = (s) => {
     if (s===1) return religionBlocks()
@@ -1306,7 +928,6 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     if (s===4) return lifestyleBlocks()
     if (s===5) return familyBlocks()
     if (s===6) return preferencesBlocks()
-    if (s===7) return privacyBlocks()
     return []
   }
 
@@ -1546,7 +1167,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     setSaving(false)
   }
 
-  const stepBlocksForPct = (step>=1 && step<=7) ? getStepBlocks(step) : null
+  const stepBlocksForPct = (step>=1 && step<=6) ? getStepBlocks(step) : null
   const pct = step===0
     ? Math.round((((personalQ+1)/PERSONAL_QUESTIONS.length)/STEPS.length)*100)
     : stepBlocksForPct
@@ -1660,7 +1281,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           )
         })()}
 
-        {step>=1 && step<=7 && (() => {
+        {step>=1 && step<=6 && (() => {
           const blocks = getStepBlocks(step)
           const idx = Math.min(subQ, blocks.length-1)
           const blk = blocks[idx]
@@ -1673,7 +1294,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             </div>
           )
         })()}
-        {step===8 && (
+        {step===7 && (
           <div>
             <h2 className="page-title">Your Photos</h2>
             <p className="page-subtitle">Profile photo required, Secondary photo optional.</p>
@@ -1740,7 +1361,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             personalQ>0 && (
               <button className="btn btn-outline" style={{flex:1}} onClick={goToPrevPersonalQ}>← Back</button>
             )
-          ) : step>=1 && step<=7 ? (
+          ) : step>=1 && step<=6 ? (
             <button className="btn btn-outline" style={{flex:1}} onClick={goBackOverall}>← Back</button>
           ) : (
             step>0&&(
