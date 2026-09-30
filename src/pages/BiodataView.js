@@ -146,7 +146,7 @@ export default function BiodataView({ profile: p, photo, onBack }) {
         {rows([
           ['Living In', [p.city, p.state, p.country].filter(Boolean).join(', ')],
           ['Highest Qualification', p.education], ['Degree', p.degree], ['College', p.college_name],
-          ['Occupation', p.occupation], ['Employer', p.employer], ['Annual Income', p.annual_income],
+          ['Employer', p.employer], ['Annual Income', p.annual_income],
         ])}
 
         <div className="section-label" style={{ marginTop: 14, marginBottom: 6 }}>Family Details</div>

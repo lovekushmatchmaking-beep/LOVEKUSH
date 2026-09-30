@@ -142,7 +142,6 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
         {tab === 'Career & Education' && (
           <div>
             <FactCard title="Career" fields={[
-              ['Occupation', m.occupation],
               ['Company', viewerIsPremium ? m.employer : (m.employer ? '🔒 Premium only' : null)],
               ['Annual Income', m.annual_income],
             ]} />

@@ -71,8 +71,6 @@ function PrivacySettingsView({ profile, onSave, showToast }) {
     college_privacy: profile.college_privacy || 'Matches Only',
     company_privacy: profile.company_privacy || 'Matches Only',
     income_privacy: profile.income_privacy || 'Private',
-    property_privacy: profile.property_privacy || 'Matches Only',
-    business_privacy: profile.business_privacy || 'Private',
     contact_privacy: profile.contact_privacy || 'Matches Only',
   })
   const [saving, setSaving] = useState(false)
@@ -83,8 +81,6 @@ function PrivacySettingsView({ profile, onSave, showToast }) {
     ['college_privacy', 'College / Institution Name'],
     ['company_privacy', 'Company Name'],
     ['income_privacy', 'Income'],
-    ['property_privacy', 'Property Details'],
-    ['business_privacy', 'Business / Commercial Asset Details'],
     ['contact_privacy', 'Mobile Number Visibility'],
   ]
 

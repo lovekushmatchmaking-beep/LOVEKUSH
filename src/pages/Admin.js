@@ -414,7 +414,7 @@ export default function Admin({ staffUser }) {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{p.full_name}</div>
-                    <div style={{ fontSize: 12, color: '#8e8e8e' }}>{p.age}y · {p.city} · {p.religion} · {p.occupation}</div>
+                    <div style={{ fontSize: 12, color: '#8e8e8e' }}>{p.age}y · {p.city} · {p.religion}</div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <div className={"badge badge-" + p.profile_status} style={{ fontSize: 10 }}>{p.profile_status}</div>
@@ -431,7 +431,6 @@ export default function Admin({ staffUser }) {
                         ['Sub-Caste / Gotra', [p.sub_caste, p.gotra].filter(Boolean).join(' / ') || null],
                         ['Manglik', p.manglik],
                         ['Education', p.education],
-                        ['Occupation', p.occupation],
                         ['Income', p.annual_income],
                         ['Family Type', p.family_type],
                         ['Diet', p.diet],

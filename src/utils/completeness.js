@@ -4,9 +4,9 @@
 const SECTIONS = {
   Personal: ['first_name', 'last_name', 'date_of_birth', 'gender', 'height', 'weight', 'complexion', 'body_type', 'marital_status', 'nationality'],
   'Religion & Community': ['religion', 'community', 'sub_caste', 'gotra', 'mother_tongue', 'manglik'],
-  Location: ['city', 'state', 'native_place', 'current_address'],
+  Location: ['city', 'state', 'native_place'],
   Education: ['education', 'field_of_study', 'specialization'],
-  Career: ['occupation', 'designation', 'industry', 'employment_type', 'annual_income'],
+  Career: ['designation', 'industry', 'employment_type', 'annual_income'],
   Family: ['family_type', 'family_values', 'father_profession', 'mother_profession', 'siblings', 'own_house', 'family_income_range'],
   Lifestyle: ['diet', 'smoking', 'drinking', 'hobbies', 'about_me'],
   Preferences: ['partner_age_min', 'partner_age_max', 'partner_religion', 'partner_education', 'partner_location'],

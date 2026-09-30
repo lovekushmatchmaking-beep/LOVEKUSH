@@ -12,8 +12,8 @@ import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CA
   ISLAMIC_SUB_CASTE_DIVISIONS, SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE,
   CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES,
   RELIGION_HIERARCHY, NO_RELIGION_VALUES, JAIN_GOTRAS, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, BODY_TYPES, WEIGHT_RANGES,
-  PROPERTY_TYPES, PROPERTY_OWNERSHIP, VEHICLE_OWNERSHIP, BUSINESS_ASSET_TYPES,
-  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, COUNTRIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, PROFILE_MANAGED_BY, FAMILY_STATUS_OPTIONS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, WORKING_AS_OPTIONS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
+  VEHICLE_OWNERSHIP,
+  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, COUNTRIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
   LANGUAGES_SPOKEN, HAVE_CHILDREN_OPTIONS, CHILDREN_LIVING_WITH_OPTIONS, GREW_UP_IN_OPTIONS,
   PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, formatHeightFromInches,
   PARTNER_INCOME_BOUNDS } from '../constants/profileOptions'
@@ -376,10 +376,7 @@ export default function Dashboard({ user }) {
                     ['College/Institution Name', profile.college_name],
                     ['Employment Type', profile.employment_type],
                     ['Profession Category', profile.profession],
-                    ['Occupation', profile.occupation],
-                    ['Working As', profile.working_as],
                     ['Employer', profile.employer],
-                    ['Work Location', profile.work_location],
                     ['Annual Income', profile.annual_income],
                     ['Diet', profile.diet],
                     ['Smoking', profile.smoking],
@@ -395,14 +392,8 @@ export default function Dashboard({ user }) {
                     ['Own House', profile.own_house],
                     ['House Type', profile.house_type],
                     ['Family Income Range', profile.family_income_range],
-                    ['Property Type', profile.property_type],
-                    ['Property Ownership', profile.property_ownership],
-                    ['Property Location', [profile.property_city, profile.property_state].filter(Boolean).join(', ')],
-                    ['Property Size', profile.property_size],
                     ['Vehicle Ownership', profile.vehicle_ownership],
                     ['Vehicle Details', profile.vehicle_model],
-                    ['Business / Commercial Asset', profile.business_asset_type],
-                    ['Business Detail', profile.business_detail],
                   ].filter(([,v])=>v).map(([k,v])=>(
                     <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
                       <span style={{color:'#8e8e8e'}}>{k}</span>
@@ -892,11 +883,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     hobbies_interests: profile.hobbies_interests || [],
     cuisines: profile.cuisines || [],
     sports: profile.sports || [],
-    profile_managed_by: profile.profile_managed_by || '',
-    family_status: profile.family_status || '',
     living_with_parents: profile.living_with_parents || '',
     alternate_email: profile.alternate_email || '',
-    working_as: profile.working_as || '',
     zip_code: profile.zip_code || '',
     ethnic_origin: profile.ethnic_origin || '',
     country_of_birth: profile.country_of_birth || '',
@@ -916,14 +904,11 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     manglik: profile.manglik || '',
     kundli_available: profile.kundli_available || '',
     native_place: profile.native_place || '',
-    current_address: profile.current_address || '',
     relocation_preference: profile.relocation_preference || '',
     education: profile.education || '',
     degree: profile.degree || '', degree_other: '',
     college_name: profile.college_name || '',
-    occupation: profile.occupation || '',
     employment_type: profile.employment_type || '',
-    work_location: profile.work_location || '',
     employer: profile.employer || '',
     annual_income: profile.annual_income || '',
     annual_income_currency: profile.annual_income_currency || 'INR',
@@ -942,13 +927,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     family_city: profile.family_city || '',
     own_house: profile.own_house || '',
     house_type: profile.house_type || '',
-    property_type: profile.property_type || '', property_ownership: profile.property_ownership || '',
-    property_city: profile.property_city || '', property_state: profile.property_state || '',
-    property_country: profile.property_country || 'India', property_size: profile.property_size || '',
-    property_privacy: profile.property_privacy || 'Matches Only',
     vehicle_ownership: profile.vehicle_ownership || '', vehicle_model: profile.vehicle_model || '',
-    business_asset_type: profile.business_asset_type || '', business_detail: profile.business_detail || '',
-    business_privacy: profile.business_privacy || 'Private',
     family_income_range: profile.family_income_range || '',
     family_income_currency: profile.family_income_currency || 'INR',
     partner_age_min: profile.partner_age_min || 18,
@@ -1478,10 +1457,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             <ChipSelect options={RELOCATION_PREFERENCES} value={form.relocation_preference} onChange={v=>set('relocation_preference',v)} includeEmpty />
           </div>
         </div>
-        <div className="form-group">
-          <label className="form-label">Current Address</label>
-          <textarea className="form-textarea" value={form.current_address} onChange={e=>set('current_address',e.target.value)} />
-        </div>
       </div>
 
       <div className="card" style={{marginBottom:12}}>
@@ -1522,25 +1497,9 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             </select>
           </div>
         </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Occupation</label>
-            <input className="form-input" value={form.occupation} onChange={e=>set('occupation',e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Working As</label>
-            <ChipSelect options={WORKING_AS_OPTIONS} value={form.working_as} onChange={v=>set('working_as',v)} includeEmpty />
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Employer</label>
-            <input className="form-input" value={form.employer} onChange={e=>set('employer',e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Work Location</label>
-            <input className="form-input" value={form.work_location} onChange={e=>set('work_location',e.target.value)} />
-          </div>
+        <div className="form-group">
+          <label className="form-label">Employer</label>
+          <input className="form-input" value={form.employer} onChange={e=>set('employer',e.target.value)} />
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -1725,42 +1684,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Property Type</label>
-            <select className="form-select" value={form.property_type} onChange={e=>set('property_type',e.target.value)}>
-              <option value="">Select</option>
-              {PROPERTY_TYPES.map(p=><option key={p}>{p}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Property Ownership</label>
-            <select className="form-select" value={form.property_ownership} onChange={e=>set('property_ownership',e.target.value)}>
-              <option value="">Select</option>
-              {PROPERTY_OWNERSHIP.map(p=><option key={p}>{p}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Property City</label>
-            <input className="form-input" value={form.property_city} onChange={e=>set('property_city',e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Property State</label>
-            <input className="form-input" value={form.property_state} onChange={e=>set('property_state',e.target.value)} />
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Property Country</label>
-            <input className="form-input" value={form.property_country} onChange={e=>set('property_country',e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Property Size</label>
-            <input className="form-input" placeholder="Optional, e.g. 1200 sq.ft" value={form.property_size} onChange={e=>set('property_size',e.target.value)} />
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
             <label className="form-label">Vehicle Ownership</label>
             <ChipSelect options={VEHICLE_OWNERSHIP} value={form.vehicle_ownership} onChange={v=>set('vehicle_ownership',v)} includeEmpty />
           </div>
@@ -1768,20 +1691,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             <label className="form-label">Vehicle Details</label>
             <input className="form-input" placeholder="Optional, e.g. Hyundai Creta" value={form.vehicle_model} onChange={e=>set('vehicle_model',e.target.value)} />
           </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Business / Commercial Asset</label>
-            <ChipSelect options={BUSINESS_ASSET_TYPES} value={form.business_asset_type} onChange={v=>set('business_asset_type',v)} includeEmpty />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Business Detail</label>
-            <input className="form-input" placeholder="Optional, e.g. Garment Business" value={form.business_detail} onChange={e=>set('business_detail',e.target.value)} />
-          </div>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Family Status</label>
-          <ChipSelect options={FAMILY_STATUS_OPTIONS} value={form.family_status} onChange={v=>set('family_status',v)} includeEmpty />
         </div>
         <div className="form-group">
           <label className="form-label">Family Financial Status</label>
@@ -1810,15 +1719,9 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <label className="form-label">Living With Parents?</label>
           <ChipSelect options={LIVING_WITH_PARENTS_OPTIONS} value={form.living_with_parents} onChange={v=>set('living_with_parents',v)} includeEmpty />
         </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Profile Managed By</label>
-            <ChipSelect options={PROFILE_MANAGED_BY} value={form.profile_managed_by} onChange={v=>set('profile_managed_by',v)} includeEmpty />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Alternate Email</label>
-            <input className="form-input" value={form.alternate_email} onChange={e=>set('alternate_email',e.target.value)} />
-          </div>
+        <div className="form-group">
+          <label className="form-label">Alternate Email</label>
+          <input className="form-input" value={form.alternate_email} onChange={e=>set('alternate_email',e.target.value)} />
         </div>
       </div>
 
@@ -1941,14 +1844,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <div className="form-group">
             <label className="form-label">Who can see your Income?</label>
             <ChipSelect options={PRIVACY_LEVELS} value={form.income_privacy} onChange={v=>set('income_privacy',v)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Who can see your Property details?</label>
-            <ChipSelect options={PRIVACY_LEVELS} value={form.property_privacy} onChange={v=>set('property_privacy',v)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Who can see your Business/Commercial Asset details?</label>
-            <ChipSelect options={PRIVACY_LEVELS} value={form.business_privacy} onChange={v=>set('business_privacy',v)} />
           </div>
           <div className="form-group">
             <label className="form-label">Who can see your Contact Details?</label>

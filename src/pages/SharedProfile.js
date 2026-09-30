@@ -53,7 +53,6 @@ export default function SharedProfile() {
     ['Religion', profile.religion],
     ['Community', profile.community],
     ['Education', profile.education],
-    ['Occupation', profile.occupation],
     ['Annual Income', profile.annual_income],
     ['Diet', profile.diet],
     ['Complexion', profile.complexion],

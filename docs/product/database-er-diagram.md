@@ -54,7 +54,6 @@ degree_other text              -- free-text "Others / Not in list" entry for deg
 college_name text              -- free-text, own field separate from college_privacy (who can see it)
 field_of_study text            -- legacy, kept for backward compat, no longer shown in UI
 specialization text            -- legacy, kept for backward compat, no longer shown in UI
-occupation text
 designation text               -- legacy, kept for backward compat, no longer shown in UI (was a free-text duplicate of Occupation/Working As)
 industry text                  -- legacy, kept for backward compat, no longer shown in UI (was a duplicate of Profession Category)
 working_with text              -- legacy, kept for backward compat, no longer shown in UI (was a duplicate of Employment Type)
@@ -81,18 +80,8 @@ brothers_count int             -- 0-10, clamped client-side
 brothers_married_count int     -- clamped to <= brothers_count
 sisters_count int              -- 0-10, clamped client-side
 sisters_married_count int      -- clamped to <= sisters_count
-property_type text            -- structured, replaces old property_details UI (column kept for backward compat)
-property_ownership text
-property_city text
-property_state text
-property_country text
-property_size text
-property_privacy text         -- 3-tier: Public / Matches Only / Private, default 'Matches Only'
 vehicle_ownership text        -- structured, replaces old vehicle_details UI (column kept for backward compat)
 vehicle_model text            -- optional free-text model name (e.g. "Hyundai Creta")
-business_asset_type text
-business_detail text
-business_privacy text         -- 3-tier: Public / Matches Only / Private, default 'Private'
 family_city text
 family_income_currency text    -- 'INR' | 'USD', default 'INR' -- swaps which range list Family Income Range shows
 languages_spoken text[]        -- multi-select, same list as mother_tongue (LANGUAGES_SPOKEN alias of MOTHER_TONGUES)
@@ -283,3 +272,7 @@ business
 ## Data principle
 
 Phase 1 may keep profile fields flat for speed, but every schema choice must allow later normalization into master tables without data loss.
+
+## Permanently removed columns (profiles)
+
+Per an explicit user request, these columns were dropped from `profiles` (not just hidden from the UI) — any data they held is gone: `current_address`, `occupation`, `working_as`, `work_location`, `property_type`, `property_ownership`, `property_city`, `property_state`, `property_country`, `property_size`, `property_privacy`, `property_details` (legacy alias), `business_asset_type`, `business_detail`, `business_privacy`, `profile_managed_by`, `family_status` (the "Rich / Affluent / Middle Class" field — not to be confused with `family_financial_status`, which is kept).

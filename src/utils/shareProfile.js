@@ -13,7 +13,6 @@ export function buildMaskedShareText(profile) {
     profile.city ? `${profile.city}${profile.state ? ', ' + profile.state : ''}` : '',
     [profile.religion, profile.community].filter(Boolean).join(' • '),
     profile.education,
-    profile.occupation,
     '',
     'For full details and to connect, please contact LOVEKUSH Global Matchmaking Services.',
   ].filter(Boolean)
