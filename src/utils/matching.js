@@ -143,17 +143,12 @@ export function computeMatchScore(me, other) {
     }
   }
 
-  // Income / Occupation (basic presence-based signal — real income-range
-  // comparison ke liye INCOME_RANGES ko ordered-scale banana hoga, abhi
-  // simple compatibility check)
+  // Income (basic presence-based signal — real income-range comparison
+  // ke liye INCOME_RANGES ko ordered-scale banana hoga, abhi simple
+  // compatibility check). Occupation field removed from the app.
   if (me.annual_income && other.partner_notes !== undefined) {
     possible += WEIGHTS.incomeOccupation
-    if (me.occupation && other.occupation) {
-      earned += WEIGHTS.incomeOccupation
-      strengths.push('Occupation: ' + other.occupation)
-    } else {
-      earned += WEIGHTS.incomeOccupation * 0.4
-    }
+    earned += WEIGHTS.incomeOccupation
   }
 
   // Location
