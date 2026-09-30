@@ -216,6 +216,14 @@ export default function Dashboard({ user }) {
     setMyIntroductions(prev => [...prev, { from_profile: profile.id, to_profile: targetProfileId, request_type: requestType, status: 'pending' }])
   }
 
+  // Received request ko Accept/Decline karna — sirf Accept hone par hi
+  // admin ke Coordination Requests list me dikhta hai (Admin.js).
+  const respondToIntroduction = async (introId, newStatus) => {
+    const { error } = await supabase.from('introductions').update({ status: newStatus }).eq('id', introId)
+    if (error) { alert('Could not update: ' + error.message); return }
+    setMyIntroductions(prev => prev.map(i => i.id === introId ? { ...i, status: newStatus } : i))
+  }
+
   const logout = async () => {
     await supabase.auth.signOut()
     navigate('/')
@@ -524,7 +532,7 @@ export default function Dashboard({ user }) {
 
         {/* REQUESTS TAB */}
         {activeTab === 'requests' && (
-          <RequestsTab myProfile={profile} introductions={myIntroductions} />
+          <RequestsTab myProfile={profile} introductions={myIntroductions} onRespond={respondToIntroduction} />
         )}
 
         {/* PROFILE TAB */}
@@ -746,7 +754,7 @@ function DislikedProfilesView({ myProfile, dislikedActions, onUndo, onBack }) {
   )
 }
 
-function RequestsTab({ myProfile, introductions }) {
+function RequestsTab({ myProfile, introductions, onRespond }) {
   const [subTab, setSubTab] = useState('received') // 'received' | 'sent'
   const [profilesById, setProfilesById] = useState({})
   const [loading, setLoading] = useState(true)
@@ -799,9 +807,27 @@ function RequestsTab({ myProfile, introductions }) {
             {received.map(i => (
               <div key={i.id} style={{padding:'14px',background:'#f5f5f5',borderRadius:12}}>
                 <div style={{fontSize:14,fontWeight:500,marginBottom:6}}>{profilesById[i.from_profile] || 'A member'}</div>
-                <div style={{fontSize:12,color:'#555',lineHeight:1.6}}>
-                  Interested in {i.request_type === 'meeting' ? 'meeting' : 'talking to'} you. Our relationship manager will contact you shortly to coordinate.
-                </div>
+                {(!i.status || i.status === 'pending') ? (
+                  <>
+                    <div style={{fontSize:12,color:'#555',lineHeight:1.6,marginBottom:10}}>
+                      Wants to {i.request_type === 'meeting' ? 'meet' : 'talk to'} you.
+                    </div>
+                    <div style={{display:'flex',gap:8}}>
+                      <button className="btn btn-black btn-sm" style={{flex:1}} onClick={()=>onRespond(i.id,'accepted')}>Accept</button>
+                      <button className="btn btn-outline btn-sm" style={{flex:1}} onClick={()=>onRespond(i.id,'declined')}>Decline</button>
+                    </div>
+                  </>
+                ) : i.status === 'accepted' ? (
+                  <div style={{fontSize:12,color:'#16a34a',lineHeight:1.6}}>
+                    You accepted — our relationship manager will contact you shortly to coordinate.
+                  </div>
+                ) : i.status === 'declined' ? (
+                  <div style={{fontSize:12,color:'#8e8e8e',lineHeight:1.6}}>You declined this request.</div>
+                ) : (
+                  <div style={{fontSize:12,color:'#555',lineHeight:1.6}}>
+                    Our relationship manager will contact you shortly to coordinate.
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -818,9 +844,9 @@ function RequestsTab({ myProfile, introductions }) {
                   <div style={{fontSize:11,color:'#8e8e8e',textTransform:'capitalize'}}>{i.request_type === 'meeting' ? 'Meeting request' : 'Talk request'}</div>
                 </div>
                 <span style={{fontSize:11,fontWeight:600,padding:'3px 10px',borderRadius:20,
-                  background: i.status==='closed'?'#f5f5f5':i.status==='contacted'?'#f0fdf4':'#fff8e1',
-                  color: i.status==='closed'?'#8e8e8e':i.status==='contacted'?'#16a34a':'#b45309',
-                  textTransform:'capitalize'}}>{i.status}</span>
+                  background: i.status==='declined'?'#f5f5f5':i.status==='closed'?'#f5f5f5':(i.status==='contacted'||i.status==='accepted')?'#f0fdf4':'#fff8e1',
+                  color: i.status==='declined'?'#8e8e8e':i.status==='closed'?'#8e8e8e':(i.status==='contacted'||i.status==='accepted')?'#16a34a':'#b45309',
+                  textTransform:'capitalize'}}>{i.status==='declined' ? 'Not Accepted' : i.status}</span>
               </div>
             ))}
           </div>

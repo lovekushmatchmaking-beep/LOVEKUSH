@@ -767,6 +767,7 @@ function CoordinationRequestsView({ onBack }) {
       const { data, error } = await supabase
         .from('introductions')
         .select('*')
+        .in('status', ['accepted', 'contacted', 'closed'])
         .order('created_at', { ascending: false })
       if (error) throw error
       const rows = data || []
