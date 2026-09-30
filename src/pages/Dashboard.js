@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import EditPhotos from './EditPhotos'
 import AccountSettings from './AccountSettings'
 import BiodataView from './BiodataView'
+import MatchSearch from './MatchSearch'
 import ProfileView from './ProfileView'
 import ActivityTab from './ActivityTab'
 import SearchByProfileId from './SearchByProfileId'
@@ -487,7 +488,11 @@ export default function Dashboard({ user }) {
             )
           })() : (
           <div>
-            <h2 style={{fontFamily:'Cormorant Garamond',fontSize:26,fontWeight:300,marginBottom:20}}>Your Matches</h2>
+            <h2 style={{fontFamily:'Cormorant Garamond',fontSize:26,fontWeight:300,marginBottom:14}}>Your Matches</h2>
+            <div onClick={()=>setActiveTab('matchsearch')}
+              style={{display:'flex',alignItems:'center',gap:10,padding:'12px 18px',borderRadius:30,background:'#f5f5f5',color:'#8e8e8e',fontSize:13,marginBottom:20,cursor:'pointer'}}>
+              <span>🔍</span> Tell us what you're looking for
+            </div>
             {matches.length === 0 ? (
               <div style={{textAlign:'center',padding:'60px 0',color:'#8e8e8e'}}>
                 <div style={{fontSize:48,marginBottom:16}}>💝</div>
@@ -508,6 +513,13 @@ export default function Dashboard({ user }) {
             )}
           </div>
           )
+        )}
+
+        {/* MATCH SEARCH (Tell us what you're looking for) */}
+        {activeTab === 'matchsearch' && (
+          <MatchSearch profile={profile}
+            onSearch={async () => { await loadProfile(); setActiveTab('matches') }}
+            onBack={()=>setActiveTab('matches')} />
         )}
 
         {/* ACTIVITY TAB */}
