@@ -117,7 +117,7 @@ updated_at timestamptz
 
 ### profiles_public_view
 
-Read-only view over `profiles`, `where profile_status = 'active' and (hidden_until is null or hidden_until < now())`. Used for browsing/matching other members — excludes sensitive columns (contact info, income privacy-gated fields, family/asset details) by only selecting a fixed safe column list. Includes `about_me`, `employer`, `college_name` (added for the match-card "About"/premium-look features) alongside the core biodata fields.
+Read-only view over `profiles`, `where profile_status = 'active' and (hidden_until is null or hidden_until < now())`. Used for browsing/matching other members — excludes sensitive columns (contact info, income privacy-gated fields, property/business/asset details) by only selecting a fixed safe column list. Includes `about_me`, `employer`, `college_name` (added for the match-card "About"/premium-look features) alongside the core biodata fields. Extended for the ProfileView.js multi-tab redesign to also include `father_profession`, `mother_profession`, `brothers_count`/`brothers_married_count`, `sisters_count`/`sisters_married_count`, `family_city`, `kundli_available`, and the full `partner_*` preference set (`partner_height_min/max`, `partner_income_min/max`, `partner_income_currency`, `partner_community_ids`, `partner_education_level_preferences`, `partner_city/state/country_preference`, `partner_notes`) — none of these are contact info, so safe to expose for the Family/Horoscope/"Looking For" tabs.
 
 ### photos
 
