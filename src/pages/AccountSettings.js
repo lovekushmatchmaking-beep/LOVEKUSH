@@ -99,13 +99,9 @@ function PrivacySettingsView({ profile, onSave, showToast }) {
         {FIELDS.map(([key, label]) => (
           <div className="form-group" key={key}>
             <label className="form-label">Who can see your {label}?</label>
-            <div className="radio-group">
-              {PRIVACY_LEVELS.map(p=>(
-                <div key={p} className={'radio-option ' + (form[key]===p?'selected':'')} onClick={()=>set(key,p)}>
-                  {form[key]===p?'◉':'○'} {p}
-                </div>
-              ))}
-            </div>
+            <select className="form-select" value={form[key]} onChange={e=>set(key,e.target.value)}>
+              {PRIVACY_LEVELS.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
           </div>
         ))}
       </div>

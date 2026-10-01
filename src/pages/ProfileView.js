@@ -15,8 +15,10 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
   const [showIntroChoice, setShowIntroChoice] = useState(false)
   const [introJustSent, setIntroJustSent] = useState(false)
   const [photos, setPhotos] = useState(null) // null = not loaded yet
+  const [heroIndex, setHeroIndex] = useState(0) // which photo is showing in the swipeable hero
   const sectionRefs = useRef({})
   const isClickScrolling = useRef(false)
+  const touchStartX = useRef(null)
 
   // Profile Visits — ek baar record karte hain jab yeh profile khula
   // (Activity tab ke "Profile Visits" stat ke liye). Fire-and-forget,
@@ -39,6 +41,36 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
     supabase.from('photos').select('*').eq('profile_id', m.id)
       .then(({ data, error }) => { if (!error) setPhotos(data || []) })
   }, [m.id])
+
+  // Jab profile change ho (ek match se doosre match pe jaate waqt), hero
+  // photo index reset karte hain taaki pichhle profile ki 2nd photo pe
+  // atka na rahe.
+  useEffect(() => { setHeroIndex(0) }, [m.id])
+
+  // Hero mein dikhane wale photos — "photos" table se load hone ke baad
+  // primary photo pehle, phir baaki (secondary). Load hone se pehle sirf
+  // match list se mila primaryPhotoPath dikhate hain.
+  const heroPhotos = (photos && photos.length > 0)
+    ? [...photos].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0)).map(p => p.storage_path)
+    : (m.primaryPhotoPath ? [m.primaryPhotoPath] : [])
+  const clampedHeroIndex = Math.min(heroIndex, Math.max(heroPhotos.length - 1, 0))
+
+  const goHero = (delta) => {
+    if (heroPhotos.length <= 1) return
+    setHeroIndex(i => {
+      const next = Math.min(heroPhotos.length - 1, Math.max(0, i + delta))
+      return next
+    })
+  }
+
+  const handleHeroTouchStart = (e) => { touchStartX.current = e.touches[0].clientX }
+  const handleHeroTouchEnd = (e) => {
+    if (touchStartX.current == null) return
+    const delta = e.changedTouches[0].clientX - touchStartX.current
+    touchStartX.current = null
+    if (Math.abs(delta) < 40) return // not a real swipe
+    goHero(delta < 0 ? 1 : -1)
+  }
 
   // Scrollspy — jaise jaise user neeche scroll karta hai, upar ka tab bar
   // khud ba khud us section par highlight ho jaata hai jo abhi viewport
@@ -95,21 +127,37 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
   return (
     <div style={{minHeight:'100vh',background:'#fff',paddingBottom:40}}>
-      <div style={{position:'relative',width:'100%',aspectRatio:'4/5',background:'#e0e0e0'}}>
-        {m.primaryPhotoPath
-          ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(10px)'}} />
+      <div style={{position:'relative',width:'100%',aspectRatio:'4/5',background:'#e0e0e0'}}
+        onTouchStart={handleHeroTouchStart} onTouchEnd={handleHeroTouchEnd}>
+        {heroPhotos.length > 0
+          ? <SignedImage path={heroPhotos[clampedHeroIndex]} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(10px)'}} />
           : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:48}}>👤</div>
         }
-        {!viewerIsPremium && m.primaryPhotoPath && (
+        {!viewerIsPremium && heroPhotos.length > 0 && (
           <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)'}}>
             <span style={{fontSize:32}}>🔒</span>
           </div>
         )}
         <div style={{position:'absolute',inset:0,background:'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 40%)'}} />
+
+        {heroPhotos.length > 1 && (
+          <>
+            <div style={{position:'absolute',top:10,left:12,right:12,display:'flex',gap:4}}>
+              {heroPhotos.map((_,i)=>(
+                <div key={i} style={{flex:1,height:3,borderRadius:2,background: i===clampedHeroIndex ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.35)'}} />
+              ))}
+            </div>
+            <button onClick={()=>goHero(-1)} aria-label="Previous photo"
+              style={{position:'absolute',top:0,bottom:0,left:0,width:'35%',background:'transparent',border:'none',cursor: clampedHeroIndex>0 ? 'pointer' : 'default'}} />
+            <button onClick={()=>goHero(1)} aria-label="Next photo"
+              style={{position:'absolute',top:0,bottom:0,right:0,width:'35%',background:'transparent',border:'none',cursor: clampedHeroIndex<heroPhotos.length-1 ? 'pointer' : 'default'}} />
+          </>
+        )}
+
         <button onClick={onBack} style={{position:'absolute',top:16,left:16,width:36,height:36,borderRadius:'50%',background:'rgba(0,0,0,0.4)',border:'none',color:'#fff',fontSize:18,cursor:'pointer'}}>←</button>
-        {photos !== null && photos.length > 0 && (
+        {heroPhotos.length > 0 && (
           <div style={{position:'absolute',top:16,right:16,padding:'6px 12px',borderRadius:20,background:'rgba(0,0,0,0.4)',color:'#fff',fontSize:12,display:'flex',alignItems:'center',gap:4}}>
-            🖼️ {photos.length}
+            🖼️ {clampedHeroIndex+1}/{heroPhotos.length}
           </div>
         )}
         <div style={{position:'absolute',bottom:16,left:20,right:20,color:'#fff'}}>

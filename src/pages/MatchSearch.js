@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { supabase } from '../supabase'
 import DualRangeSlider from '../components/DualRangeSlider'
-import MultiSelectChips from '../components/MultiSelectChips'
+import CheckboxDropdown from '../components/CheckboxDropdown'
 import {
   RELIGIONS, CASTES, ISLAMIC_COMMUNITIES, CHRISTIAN_COMMUNITIES, RELIGION_HIERARCHY,
   PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, EDUCATIONS, LOCATION_PREFERENCES,
@@ -145,8 +145,8 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
       <AccordionSection title="Education & Occupation" icon="🎓">
         <div className="form-group">
           <label className="form-label">Education Level Preference</label>
-          <MultiSelectChips options={EDUCATIONS} selected={form.partner_education_level_preferences}
-            onChange={v => set('partner_education_level_preferences', v)} />
+          <CheckboxDropdown options={EDUCATIONS} selected={form.partner_education_level_preferences}
+            onChange={v => set('partner_education_level_preferences', v)} placeholder="Select education levels..." />
           <div className="form-hint">Khaali chhodne par sab education levels acceptable maane jaayenge</div>
         </div>
         <div className="form-group">
@@ -180,7 +180,7 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
         {form.partner_religion !== 'Any' && (
           <div className="form-group">
             <label className="form-label">Preferred Community</label>
-            <MultiSelectChips options={communityOptions} selected={form.partner_community_ids} onChange={setPartnerCommunity} />
+            <CheckboxDropdown options={communityOptions} selected={form.partner_community_ids} onChange={setPartnerCommunity} placeholder="Select communities..." />
             <div className="form-hint">"Any Community / No Bar" select karne par baaki communities apne aap unselect ho jaayengi</div>
           </div>
         )}
