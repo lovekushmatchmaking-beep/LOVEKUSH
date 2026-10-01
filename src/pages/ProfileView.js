@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react'
 import SignedImage from '../components/SignedImage'
 import { supabase } from '../supabase'
+import { formatHeightFromInches } from '../constants/profileOptions'
 
-const TABS = ['About', 'Career & Education', 'Family & Lifestyle']
+const TABS = ['About', 'Photos', 'Career', 'Education', 'Family', 'Horoscope', 'Looking For']
 
 export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId, myAction, introSent, onSetAction, onSendIntro, onBack }) {
   const [tab, setTab] = useState('About')
   const [showIntroChoice, setShowIntroChoice] = useState(false)
   const [introJustSent, setIntroJustSent] = useState(false)
+  const [photos, setPhotos] = useState(null) // null = not loaded yet
 
   // Profile Visits — ek baar record karte hain jab yeh profile khula
   // (Activity tab ke "Profile Visits" stat ke liye). Fire-and-forget,
@@ -22,6 +24,15 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
       .then(({ error }) => { if (error) console.error('profile_views upsert failed:', error.message) })
   }, [m.id, viewerProfileId])
 
+  // Photos tab ke liye — sirf jab profile khulta hai tab lazily fetch
+  // karte hain (Profile + Secondary dono slots), Dashboard ke matches-list
+  // load ko bulk photo-join se bhari nahi karna.
+  useEffect(() => {
+    if (!m.id) return
+    supabase.from('photos').select('*').eq('profile_id', m.id)
+      .then(({ data, error }) => { if (!error) setPhotos(data || []) })
+  }, [m.id])
+
   const matchedCount = (m.matchStrengths || []).length
   const totalCount = matchedCount + (m.matchNeedsDiscussion || []).length
 
@@ -32,6 +43,14 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
   }
 
   const requestSent = introSent || introJustSent
+  const firstName = m.full_name?.split(' ')[0] || 'them'
+
+  const incomeLabel = (min, max, currency) => {
+    if (min == null && max == null) return null
+    const symbol = currency === 'USD' ? '$' : '₹'
+    const fmt = v => symbol + Number(v).toLocaleString(currency === 'USD' ? 'en-US' : 'en-IN')
+    return `${fmt(min || 0)} - ${fmt(max || 0)}`
+  }
 
   return (
     <div style={{minHeight:'100vh',background:'#fff',paddingBottom:40}}>
@@ -47,6 +66,11 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
         )}
         <div style={{position:'absolute',inset:0,background:'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 40%)'}} />
         <button onClick={onBack} style={{position:'absolute',top:16,left:16,width:36,height:36,borderRadius:'50%',background:'rgba(0,0,0,0.4)',border:'none',color:'#fff',fontSize:18,cursor:'pointer'}}>←</button>
+        {photos !== null && photos.length > 0 && (
+          <div style={{position:'absolute',top:16,right:16,padding:'6px 12px',borderRadius:20,background:'rgba(0,0,0,0.4)',color:'#fff',fontSize:12,display:'flex',alignItems:'center',gap:4}}>
+            🖼️ {photos.length}
+          </div>
+        )}
         <div style={{position:'absolute',bottom:16,left:20,right:20,color:'#fff'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <span style={{fontSize:24,fontWeight:600}}>{m.full_name}, {m.age}</span>
@@ -110,14 +134,20 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
             {m.about_me && (
               <div className="card" style={{marginBottom:12}}>
-                <div className="section-label" style={{marginBottom:8}}>About {m.full_name?.split(' ')[0]}</div>
+                <div className="section-label" style={{marginBottom:8}}>About {firstName}</div>
                 <p style={{fontSize:13,lineHeight:1.7,color:'#333'}}>{m.about_me}</p>
               </div>
             )}
 
             <FactCard fields={[
               ['Height', m.height], ['Weight', m.weight], ['Complexion', m.complexion], ['Body Type', m.body_type],
-              ['Marital Status', m.marital_status], ['Nationality', m.nationality],
+              ['Marital Status', m.marital_status], ['Nationality', m.nationality], ['Sub-Caste', m.sub_caste],
+              ['Mother Tongue', m.mother_tongue],
+            ]} />
+
+            <FactCard title="Lifestyle" fields={[
+              ['Diet', m.diet], ['Smoking', m.smoking], ['Drinking', m.drinking],
+              ['Relocation Preference', m.relocation_preference],
             ]} />
 
             {m.matchStrengths && m.matchStrengths.length > 0 && (
@@ -139,31 +169,116 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
           </div>
         )}
 
-        {tab === 'Career & Education' && (
+        {tab === 'Photos' && (
           <div>
-            <FactCard title="Career" fields={[
-              ['Company', viewerIsPremium ? m.employer : (m.employer ? '🔒 Premium only' : null)],
-              ['Annual Income', m.annual_income],
-            ]} />
-            <FactCard title="Education" fields={[
-              ['Highest Education', m.education],
-              ['College', viewerIsPremium ? m.college_name : (m.college_name ? '🔒 Premium only' : null)],
+            {photos === null ? (
+              <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+            ) : photos.length === 0 ? (
+              <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No photos yet</div>
+            ) : (
+              <div style={{display:'grid',gridTemplateColumns:'repeat(2, 1fr)',gap:10}}>
+                {photos.map(p => (
+                  <div key={p.id} style={{position:'relative',aspectRatio:'3/4',borderRadius:12,overflow:'hidden',background:'#e0e0e0'}}>
+                    <SignedImage path={p.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(10px)'}} />
+                    {!viewerIsPremium && (
+                      <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)'}}>
+                        <span style={{fontSize:24}}>🔒</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'Career' && (
+          <FactCard title="Career" fields={[
+            ['Company', viewerIsPremium ? m.employer : (m.employer ? '🔒 Premium only' : null)],
+            ['Annual Income', m.annual_income],
+          ]} />
+        )}
+
+        {tab === 'Education' && (
+          <FactCard title="Education" fields={[
+            ['Highest Education', m.education],
+            ['College', viewerIsPremium ? m.college_name : (m.college_name ? '🔒 Premium only' : null)],
+          ]} />
+        )}
+
+        {tab === 'Family' && (
+          <div>
+            <div className="card" style={{marginBottom:12}}>
+              <div className="section-label" style={{marginBottom:12}}>Family</div>
+              <div style={{display:'flex',flexDirection:'column',gap:14}}>
+                {m.father_profession && (
+                  <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                    <span style={{fontSize:18}}>👨</span>
+                    <div>
+                      <div style={{fontSize:11,color:'#8e8e8e'}}>Father</div>
+                      <div style={{fontSize:13,fontWeight:500}}>{m.father_profession}</div>
+                    </div>
+                  </div>
+                )}
+                {m.mother_profession && (
+                  <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                    <span style={{fontSize:18}}>👩</span>
+                    <div>
+                      <div style={{fontSize:11,color:'#8e8e8e'}}>Mother</div>
+                      <div style={{fontSize:13,fontWeight:500}}>{m.mother_profession}</div>
+                    </div>
+                  </div>
+                )}
+                {(m.brothers_count || m.sisters_count) && (
+                  <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                    <span style={{fontSize:18}}>👨‍👩‍👧‍👦</span>
+                    <div>
+                      <div style={{fontSize:11,color:'#8e8e8e'}}>Siblings</div>
+                      {m.brothers_count ? <div style={{fontSize:13,fontWeight:500}}>{m.brothers_count} Brother(s) ({m.brothers_married_count || 0} Married)</div> : null}
+                      {m.sisters_count ? <div style={{fontSize:13,fontWeight:500}}>{m.sisters_count} Sister(s) ({m.sisters_married_count || 0} Married)</div> : null}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <FactCard fields={[
+              ['Family Type', m.family_type], ['Family Values', m.family_values], ['Family City', m.family_city],
             ]} />
           </div>
         )}
 
-        {tab === 'Family & Lifestyle' && (
+        {tab === 'Horoscope' && (
+          <FactCard fields={[
+            ['Manglik', m.manglik], ['Kundli Available', m.kundli_available],
+            ['Date of Birth', m.age ? m.age + ' years' : null],
+            ['Religion', m.religion], ['Gotra', m.gotra], ['Community / Caste', m.community],
+          ]} />
+        )}
+
+        {tab === 'Looking For' && (
           <div>
-            <FactCard title="Religion & Community" fields={[
-              ['Religion', m.religion], ['Community / Caste', m.community], ['Sub-Caste', m.sub_caste],
-              ['Gotra', m.gotra], ['Manglik', m.manglik], ['Mother Tongue', m.mother_tongue],
+            <div style={{textAlign:'center',padding:'10px 0 18px'}}>
+              <div style={{fontSize:16,fontWeight:600}}>Who is {firstName} looking for...</div>
+              <div style={{fontSize:12,color:'#8e8e8e',marginTop:4}}>These are their desired partner preferences</div>
+            </div>
+            <FactCard title="Basic Details" fields={[
+              ['Age', (m.partner_age_min || m.partner_age_max) ? `${m.partner_age_min || '18'} - ${m.partner_age_max || '70'} yrs` : null],
+              ['Height', (m.partner_height_min && m.partner_height_max) ? `${formatHeightFromInches(m.partner_height_min)} - ${formatHeightFromInches(m.partner_height_max)}` : null],
+              ['Location Preference', m.partner_location],
+              ['City Preference', m.partner_city_preference],
+              ['State Preference', m.partner_state_preference],
+              ['Country Preference', m.partner_country_preference],
             ]} />
-            <FactCard title="Family" fields={[
-              ['Family Type', m.family_type], ['Family Values', m.family_values],
+            <FactCard title="Education & Occupation" fields={[
+              ['Education Level', (m.partner_education_level_preferences || []).join(', ') || null],
+              ['Income', incomeLabel(m.partner_income_min, m.partner_income_max, m.partner_income_currency)],
             ]} />
-            <FactCard title="Lifestyle" fields={[
-              ['Diet', m.diet], ['Smoking', m.smoking], ['Drinking', m.drinking],
-              ['Relocation Preference', m.relocation_preference],
+            <FactCard title="Religion & Ethnicity" fields={[
+              ['Religion', m.partner_religion && m.partner_religion !== 'Any' ? m.partner_religion : null],
+              ['Community', (m.partner_community_ids || []).join(', ') || null],
+            ]} />
+            <FactCard title="Additional Preferences" fields={[
+              ['Notes', m.partner_notes],
             ]} />
           </div>
         )}
