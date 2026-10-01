@@ -28,23 +28,15 @@ import CheckboxDropdown from '../components/CheckboxDropdown'
 
 const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
-// Same tap-friendly chip picker as CreateProfile.js's ChipSelect — short
-// option lists render as .radio-option chips instead of a native <select>.
-// Long lists (castes, gotras, degrees, countries...) stay as <select>.
+// Single-choice fields render as a native <select> dropdown — keeps the
+// screen compact instead of spreading every option out as chips. Multi-
+// select fields (MultiSelectChips/CheckboxDropdown) stay as checklists.
 function ChipSelect({ options, value, onChange, includeEmpty, emptyLabel }) {
   return (
-    <div className="radio-group">
-      {includeEmpty && (
-        <div className={'radio-option ' + (!value?'selected':'')} onClick={()=>onChange('')}>
-          {!value?'◉':'○'} {emptyLabel || 'Not specified'}
-        </div>
-      )}
-      {options.map(o=>(
-        <div key={o} className={'radio-option ' + (value===o?'selected':'')} onClick={()=>onChange(o)}>
-          {value===o?'◉':'○'} {o}
-        </div>
-      ))}
-    </div>
+    <select className="form-select" value={value || ''} onChange={e=>onChange(e.target.value)}>
+      {includeEmpty && <option value="">{emptyLabel || 'Not specified'}</option>}
+      {options.map(o=><option key={o} value={o}>{o}</option>)}
+    </select>
   )
 }
 
@@ -354,59 +346,80 @@ export default function Dashboard({ user }) {
                     </button>
                   </div>
                   {[
-                    ['Gender', profile.gender],
-                    ['Age', profile.age ? profile.age + ' years' : null],
-                    ['Date of Birth', profile.date_of_birth],
-                    ['Marital Status', profile.marital_status],
-                    ['Height', profile.height],
-                    ['Weight', profile.weight],
-                    ['Complexion', profile.complexion],
-                    ['Body Type', profile.body_type],
-                    ['Nationality', profile.nationality],
-                    ['Have Children', profile.have_children],
-                    ['Children Living With', profile.children_living_with],
-                    ['Languages I Speak', Array.isArray(profile.languages_spoken) && profile.languages_spoken.length ? profile.languages_spoken.join(', ') : null],
-                    ['Grew Up In', profile.grew_up_in],
-                    ['Physical Disability', profile.physical_disability === 'Yes' ? (profile.disability_details || 'Yes') : null],
-                    ['Religion', profile.religion],
-                    ['Community / Caste', profile.community],
-                    ['Sub-Caste', profile.sub_caste],
-                    ['Gotra', profile.gotra],
-                    ['Manglik', profile.manglik],
-                    ['Kundli Available', profile.kundli_available],
-                    ['Mother Tongue', profile.mother_tongue],
-                    ['City', profile.city],
-                    ['State', profile.state],
-                    ['Country', profile.country],
-                    ['Native Place', profile.native_place],
-                    ['Relocation Preference', profile.relocation_preference],
-                    ['Highest Education', profile.education],
-                    ['Degree', profile.degree],
-                    ['College/Institution Name', profile.college_name],
-                    ['Employment Type', profile.employment_type],
-                    ['Profession Category', profile.profession],
-                    ['Employer', profile.employer],
-                    ['Annual Income', profile.annual_income],
-                    ['Diet', profile.diet],
-                    ['Smoking', profile.smoking],
-                    ['Drinking', profile.drinking],
-                    ['Hobbies', profile.hobbies],
-                    ['Family Type', profile.family_type],
-                    ['Family Values', profile.family_values],
-                    ["Father's Profession", profile.father_profession],
-                    ["Mother's Profession", profile.mother_profession],
-                    ['Brothers', profile.brothers_count ? profile.brothers_count + ' (' + (profile.brothers_married_count || 0) + ' married)' : null],
-                    ['Sisters', profile.sisters_count ? profile.sisters_count + ' (' + (profile.sisters_married_count || 0) + ' married)' : null],
-                    ['Family City', profile.family_city],
-                    ['Own House', profile.own_house],
-                    ['House Type', profile.house_type],
-                    ['Family Income Range', profile.family_income_range],
-                    ['Vehicle Ownership', profile.vehicle_ownership],
-                    ['Vehicle Details', profile.vehicle_model],
-                  ].filter(([,v])=>v).map(([k,v])=>(
-                    <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
-                      <span style={{color:'#8e8e8e'}}>{k}</span>
-                      <span style={{fontWeight:500}}>{v}</span>
+                    { group: 'Personal', rows: [
+                      ['Gender', profile.gender],
+                      ['Age', profile.age ? profile.age + ' years' : null],
+                      ['Date of Birth', profile.date_of_birth],
+                      ['Marital Status', profile.marital_status],
+                      ['Height', profile.height],
+                      ['Weight', profile.weight],
+                      ['Complexion', profile.complexion],
+                      ['Body Type', profile.body_type],
+                      ['Nationality', profile.nationality],
+                      ['Have Children', profile.have_children],
+                      ['Children Living With', profile.children_living_with],
+                      ['Languages I Speak', Array.isArray(profile.languages_spoken) && profile.languages_spoken.length ? profile.languages_spoken.join(', ') : null],
+                      ['Grew Up In', profile.grew_up_in],
+                      ['Physical Disability', profile.physical_disability === 'Yes' ? (profile.disability_details || 'Yes') : null],
+                    ]},
+                    { group: 'Horoscope', rows: [
+                      ['Manglik', profile.manglik],
+                      ['Kundli Available', profile.kundli_available],
+                    ]},
+                    { group: 'Religion & Community', rows: [
+                      ['Religion', profile.religion],
+                      ['Community / Caste', profile.community],
+                      ['Sub-Caste', profile.sub_caste],
+                      ['Gotra', profile.gotra],
+                      ['Mother Tongue', profile.mother_tongue],
+                    ]},
+                    { group: 'Location', rows: [
+                      ['City', profile.city],
+                      ['State', profile.state],
+                      ['Country', profile.country],
+                      ['Native Place', profile.native_place],
+                      ['Relocation Preference', profile.relocation_preference],
+                    ]},
+                    { group: 'Education & Career', rows: [
+                      ['Highest Education', profile.education],
+                      ['Degree', profile.degree],
+                      ['College/Institution Name', profile.college_name],
+                      ['Employment Type', profile.employment_type],
+                      ['Profession Category', profile.profession],
+                      ['Employer', profile.employer],
+                      ['Annual Income', profile.annual_income],
+                    ]},
+                    { group: 'Lifestyle', rows: [
+                      ['Diet', profile.diet],
+                      ['Smoking', profile.smoking],
+                      ['Drinking', profile.drinking],
+                      ['Hobbies', profile.hobbies],
+                    ]},
+                    { group: 'Family Background', rows: [
+                      ['Family Type', profile.family_type],
+                      ['Family Values', profile.family_values],
+                      ["Father's Profession", profile.father_profession],
+                      ["Mother's Profession", profile.mother_profession],
+                      ['Brothers', profile.brothers_count ? profile.brothers_count + ' (' + (profile.brothers_married_count || 0) + ' married)' : null],
+                      ['Sisters', profile.sisters_count ? profile.sisters_count + ' (' + (profile.sisters_married_count || 0) + ' married)' : null],
+                      ['Family City', profile.family_city],
+                    ]},
+                    { group: 'Assets', rows: [
+                      ['Own House', profile.own_house],
+                      ['House Type', profile.house_type],
+                      ['Family Income Range', profile.family_income_range],
+                      ['Vehicle Ownership', profile.vehicle_ownership],
+                      ['Vehicle Details', profile.vehicle_model],
+                    ]},
+                  ].map(({group, rows}) => ({group, rows: rows.filter(([,v])=>v)})).filter(({rows})=>rows.length).map(({group, rows}, gi)=>(
+                    <div key={group} style={{marginTop: gi>0 ? 18 : 0}}>
+                      <div style={{fontSize:11,fontWeight:600,letterSpacing:'0.08em',textTransform:'uppercase',color:'#8e8e8e',marginBottom:4}}>{group}</div>
+                      {rows.map(([k,v])=>(
+                        <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
+                          <span style={{color:'#8e8e8e'}}>{k}</span>
+                          <span style={{fontWeight:500}}>{v}</span>
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
@@ -1267,6 +1280,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <label className="form-label">Grew Up In</label>
           <ChipSelect options={GREW_UP_IN_OPTIONS} value={form.grew_up_in} onChange={v=>set('grew_up_in',v)} includeEmpty />
         </div>
+        <div className="form-group">
+          <label className="form-label">Alternate Email</label>
+          <input className="form-input" value={form.alternate_email} onChange={e=>set('alternate_email',e.target.value)} />
+        </div>
       </div>
 
       <div className="card" style={{marginBottom:12}}>
@@ -1292,6 +1309,16 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
               <option value="">Select</option>
               {COUNTRIES.filter(c=>c!=='Open to All').map(c=><option key={c}>{c}</option>)}
             </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Manglik</label>
+            <ChipSelect options={MANGLIK_OPTIONS} value={form.manglik} onChange={v=>set('manglik',v)} includeEmpty />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Kundli Available?</label>
+            <ChipSelect options={KUNDLI_AVAILABLE} value={form.kundli_available} onChange={v=>set('kundli_available',v)} includeEmpty />
           </div>
         </div>
         <div className="form-group">
@@ -1446,16 +1473,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
               )}
             </div>
           )}
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Manglik</label>
-            <ChipSelect options={MANGLIK_OPTIONS} value={form.manglik} onChange={v=>set('manglik',v)} includeEmpty />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Kundli Available?</label>
-            <ChipSelect options={KUNDLI_AVAILABLE} value={form.kundli_available} onChange={v=>set('kundli_available',v)} includeEmpty />
-          </div>
         </div>
         <div className="form-group">
           <label className="form-label">Caste No Bar?</label>
@@ -1693,43 +1710,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <label className="form-label">Family City</label>
           <input className="form-input" value={form.family_city} onChange={e=>set('family_city',e.target.value)} />
         </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Own House</label>
-            <ChipSelect options={OWN_HOUSE_OPTIONS} value={form.own_house} onChange={v=>set('own_house',v)} includeEmpty />
-          </div>
-          <div className="form-group">
-            <label className="form-label">House Type</label>
-            <ChipSelect options={HOUSE_TYPES} value={form.house_type} onChange={v=>set('house_type',v)} includeEmpty />
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Family Income Range</label>
-            <select className="form-select" value={form.family_income_range} onChange={e=>set('family_income_range',e.target.value)}>
-              <option value="">Select</option>
-              {(form.family_income_currency === 'USD' ? USD_FAMILY_INCOME_RANGES : FAMILY_INCOME_RANGES).map(f=><option key={f}>{f}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Currency</label>
-            <select className="form-select" value={form.family_income_currency} onChange={e=>{
-              setForm(p=>({...p, family_income_currency:e.target.value, family_income_range:''}))
-            }}>
-              {CURRENCIES.map(c=><option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Vehicle Ownership</label>
-            <ChipSelect options={VEHICLE_OWNERSHIP} value={form.vehicle_ownership} onChange={v=>set('vehicle_ownership',v)} includeEmpty />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Vehicle Details</label>
-            <input className="form-input" placeholder="Optional, e.g. Hyundai Creta" value={form.vehicle_model} onChange={e=>set('vehicle_model',e.target.value)} />
-          </div>
-        </div>
         <div className="form-group">
           <label className="form-label">Family Financial Status</label>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
@@ -1757,9 +1737,46 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <label className="form-label">Living With Parents?</label>
           <ChipSelect options={LIVING_WITH_PARENTS_OPTIONS} value={form.living_with_parents} onChange={v=>set('living_with_parents',v)} includeEmpty />
         </div>
-        <div className="form-group">
-          <label className="form-label">Alternate Email</label>
-          <input className="form-input" value={form.alternate_email} onChange={e=>set('alternate_email',e.target.value)} />
+      </div>
+
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-label" style={{marginBottom:14}}>Assets</div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Own House</label>
+            <ChipSelect options={OWN_HOUSE_OPTIONS} value={form.own_house} onChange={v=>set('own_house',v)} includeEmpty />
+          </div>
+          <div className="form-group">
+            <label className="form-label">House Type</label>
+            <ChipSelect options={HOUSE_TYPES} value={form.house_type} onChange={v=>set('house_type',v)} includeEmpty />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Vehicle Ownership</label>
+            <ChipSelect options={VEHICLE_OWNERSHIP} value={form.vehicle_ownership} onChange={v=>set('vehicle_ownership',v)} includeEmpty />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Vehicle Details</label>
+            <input className="form-input" placeholder="Optional, e.g. Hyundai Creta" value={form.vehicle_model} onChange={e=>set('vehicle_model',e.target.value)} />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Family Income Range</label>
+            <select className="form-select" value={form.family_income_range} onChange={e=>set('family_income_range',e.target.value)}>
+              <option value="">Select</option>
+              {(form.family_income_currency === 'USD' ? USD_FAMILY_INCOME_RANGES : FAMILY_INCOME_RANGES).map(f=><option key={f}>{f}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Currency</label>
+            <select className="form-select" value={form.family_income_currency} onChange={e=>{
+              setForm(p=>({...p, family_income_currency:e.target.value, family_income_range:''}))
+            }}>
+              {CURRENCIES.map(c=><option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 

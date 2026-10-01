@@ -42,26 +42,17 @@ import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import SignupComplete from './SignupComplete'
 
-// Small-enum fields (short option lists) render as tap-friendly chips
-// instead of a native <select> dropdown — matches the rest of the app's
-// existing .radio-option/.radio-group pattern (already used for gender,
-// diet, family type etc.). Long lists (castes, gotras, countries,
-// degrees, mother tongues...) stay as native <select> since a chip grid
-// with 50-1000+ options would be unusable.
+// Single-choice fields render as a native <select> dropdown — keeps the
+// screen compact instead of spreading every option out as chips. Long
+// lists (castes, gotras, countries, degrees, mother tongues...) already
+// use <select>; this makes short lists (manglik, gotra, etc.) consistent
+// with them instead of taking up the whole screen as chips.
 function ChipSelect({ options, value, onChange, includeEmpty, emptyLabel }) {
   return (
-    <div className="radio-group">
-      {includeEmpty && (
-        <div className={'radio-option ' + (!value?'selected':'')} onClick={()=>onChange('')}>
-          {!value?'◉':'○'} {emptyLabel || 'Not specified'}
-        </div>
-      )}
-      {options.map(o=>(
-        <div key={o} className={'radio-option ' + (value===o?'selected':'')} onClick={()=>onChange(o)}>
-          {value===o?'◉':'○'} {o}
-        </div>
-      ))}
-    </div>
+    <select className="form-select" value={value || ''} onChange={e=>onChange(e.target.value)}>
+      {includeEmpty && <option value="">{emptyLabel || 'Not specified'}</option>}
+      {options.map(o=><option key={o} value={o}>{o}</option>)}
+    </select>
   )
 }
 
@@ -80,10 +71,10 @@ const PERSONAL_QUESTIONS = [
   { key:'date_of_birth', label:'When were you born?', type:'date', required:true },
   { key:'gender', label:'What is your gender?', type:'chips', required:true, options:['Male','Female'] },
   { key:'height', label:'What is your height?', type:'select', options:HEIGHT_RANGES },
-  { key:'marital_status', label:'What is your marital status?', type:'chips', options:MARITAL_STATUSES },
+  { key:'marital_status', label:'What is your marital status?', type:'select', options:MARITAL_STATUSES },
   { key:'nationality', label:'What is your nationality?', type:'select', options:COUNTRIES.filter(c=>c!=='Open to All') },
-  { key:'have_children', label:'Do you have children?', type:'chips', options:HAVE_CHILDREN_OPTIONS },
-  { key:'children_living_with', label:'Who do your children live with?', type:'chips', options:CHILDREN_LIVING_WITH_OPTIONS,
+  { key:'have_children', label:'Do you have children?', type:'select', options:HAVE_CHILDREN_OPTIONS },
+  { key:'children_living_with', label:'Who do your children live with?', type:'select', options:CHILDREN_LIVING_WITH_OPTIONS,
     skip: f=>f.have_children!=='Yes' },
   { key:'languages_spoken', label:'Which languages do you speak?', type:'multiselect', options:LANGUAGES_SPOKEN, placeholder:'Select languages...' },
 ]
