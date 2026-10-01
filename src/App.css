@@ -11,6 +11,13 @@
   --radius-lg: 22px;
   --radius-sm: 10px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Elevation scale — har jagah inhi ko reuse karo, naye rgba shadows mat likho */
+  --shadow-xs: 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-sm: 0 2px 14px rgba(0,0,0,0.04);
+  --shadow-md: 0 6px 20px rgba(0,0,0,0.08);
+  --shadow-lg: 0 12px 30px rgba(0,0,0,0.12);
+  --shadow-up: 0 -4px 20px rgba(0,0,0,0.06);
+  --ring: 0 0 0 3px rgba(0,0,0,0.05);
 }
 
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -115,7 +122,7 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 .form-input:focus, .form-select:focus, .form-textarea:focus {
   background: var(--white);
   border-color: var(--black);
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+  box-shadow: var(--ring);
 }
 
 .form-select {
@@ -137,7 +144,7 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   border-radius: var(--radius-lg);
   padding: 20px;
   margin-bottom: 12px;
-  box-shadow: 0 2px 14px rgba(0,0,0,0.04);
+  box-shadow: var(--shadow-sm);
   transition: box-shadow 0.25s var(--ease), transform 0.25s var(--ease);
 }
 
@@ -285,9 +292,12 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   background: rgba(255,255,255,0.97);
   backdrop-filter: blur(20px);
   border-top: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-up);
   display: flex;
+  gap: 4px;
   z-index: 100;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: 0 8px env(safe-area-inset-bottom);
 }
 
 .bottom-nav-item {
@@ -300,8 +310,13 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   cursor: pointer;
   background: transparent;
   border: none;
-  transition: opacity 0.25s var(--ease);
+  border-radius: var(--radius);
+  outline: none;
+  transition: opacity 0.25s var(--ease), transform 0.2s var(--ease), background 0.2s;
 }
+
+.bottom-nav-item:active { transform: scale(0.94); }
+.bottom-nav-item:focus-visible { background: var(--gray1); }
 
 .bottom-nav-item .nav-icon {
   font-size: 20px;
@@ -409,12 +424,22 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 .notice {
   background: var(--gray1);
   border-radius: var(--radius);
-  padding: 12px 16px 12px 14px;
+  padding: 12px 16px 12px 20px;
   font-size: 13px;
   color: var(--gray3);
   line-height: 1.6;
   margin-bottom: 16px;
-  box-shadow: inset 3px 0 0 var(--black);
+  position: relative;
+}
+
+/* Left accent ab ek rounded pill hai, sharp inset edge nahi */
+.notice::before {
+  content: '';
+  position: absolute;
+  left: 8px; top: 10px; bottom: 10px;
+  width: 3px;
+  border-radius: 50px;
+  background: var(--black);
 }
 
 .notice strong { color: var(--black); }
@@ -447,6 +472,46 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 }
 
 .admin-table tr:hover td { background: var(--gray1); }
+
+/* Pill tabs — Admin status tabs aur Requests sub-tabs ke liye (pehle sharp underline thi) */
+.pill-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--gray1);
+  border-radius: 50px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pill-tabs::-webkit-scrollbar { display: none; }
+
+.pill-tab {
+  padding: 7px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 50px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--gray3);
+  cursor: pointer;
+  white-space: nowrap;
+  text-transform: capitalize;
+  transition: background 0.25s var(--ease), color 0.2s, box-shadow 0.25s var(--ease);
+}
+.pill-tab:hover { color: var(--black); }
+.pill-tab.active { background: var(--white); color: var(--black); font-weight: 600; box-shadow: var(--shadow-xs); }
+
+/* Admin list rows — rounded card + elevation on hover */
+.list-row {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow 0.25s var(--ease), transform 0.25s var(--ease);
+}
+.list-row.clickable { cursor: pointer; }
+.list-row.clickable:hover { box-shadow: var(--shadow-md); }
 
 .badge {
   display: inline-flex;

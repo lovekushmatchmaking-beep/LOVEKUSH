@@ -312,7 +312,7 @@ export default function Admin({ staffUser }) {
             { label: 'Active', val: stats.active, bg: '#f0fdf4' },
             { label: 'Blocked', val: stats.blocked, bg: '#fef2f2' },
           ].map(s => (
-            <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '14px 16px' }}>
+            <div key={s.label} style={{ background: s.bg, borderRadius: 'var(--radius)', padding: '14px 16px' }}>
               <div style={{ fontFamily: 'Cormorant Garamond', fontSize: 28, fontWeight: 300 }}>{s.val}</div>
               <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{s.label}</div>
             </div>
@@ -327,7 +327,7 @@ export default function Admin({ staffUser }) {
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             style={{
-              flex: 1, padding: '10px 14px', borderRadius: 10,
+              flex: 1, padding: '10px 14px', borderRadius: 'var(--radius)',
               border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, outline: 'none',
             }}
           />
@@ -342,7 +342,7 @@ export default function Admin({ staffUser }) {
 
         {/* ADVANCED FILTERS PANEL */}
         {showFilters && (
-          <div style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, padding: 14, marginBottom: 14 }}>
+          <div className="list-row" style={{ marginBottom: 14 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <select className="form-select" value={filters.religion} onChange={e=>setFilters(f=>({...f,religion:e.target.value}))}>
                 <option value="">Any Religion</option>
@@ -377,20 +377,15 @@ export default function Admin({ staffUser }) {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: 0 }}>
-          {['all', 'pending', 'active', 'blocked'].map(t => (
-            <button key={t} onClick={() => setActiveTab(t)}
-              style={{
-                padding: '8px 16px', border: 'none', background: 'transparent',
-                fontSize: 13, fontWeight: activeTab === t ? 600 : 400,
-                color: activeTab === t ? '#000' : '#8e8e8e',
-                borderBottom: activeTab === t ? '2px solid #000' : '2px solid transparent',
-                cursor: 'pointer', textTransform: 'capitalize', letterSpacing: '0.03em'
-              }}>
-              {t}
-            </button>
-          ))}
-          <button className="btn btn-black btn-sm" style={{ marginLeft: 'auto', marginBottom: 4 }} onClick={() => runQuery(0)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <div className="pill-tabs">
+            {['all', 'pending', 'active', 'blocked'].map(t => (
+              <button key={t} className={'pill-tab ' + (activeTab === t ? 'active' : '')} onClick={() => setActiveTab(t)}>
+                {t}
+              </button>
+            ))}
+          </div>
+          <button className="btn btn-black btn-sm" style={{ marginLeft: 'auto' }} onClick={() => runQuery(0)}>
             {loading ? 'Loading...' : '↺ Refresh'}
           </button>
         </div>
@@ -411,10 +406,8 @@ export default function Admin({ staffUser }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {profiles.map(p => (
-              <div key={p.id} style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, padding: '14px 16px', cursor: 'pointer', transition: 'background 0.2s' }}
-                onClick={() => setSelected(selected?.id === p.id ? null : p)}
-                onMouseEnter={e => e.currentTarget.style.background = '#f9f9f9'}
-                onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+              <div key={p.id} className="list-row clickable"
+                onClick={() => setSelected(selected?.id === p.id ? null : p)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#f0f0f0', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {photos[p.id]
@@ -545,7 +538,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
             const mailLink = linkState?.url ? buildMailtoLink(profile.client_email, 'A match for you — LOVEKUSH', `Hi,\n\nWe found a match for you. View secure profile:\n${linkState.url}\n\n(This link expires in 7 days)\n\nRegards,\nLOVEKUSH Global Matchmaking Services`) : null
 
             return (
-              <div key={other.id} style={{border:'1px solid rgba(0,0,0,0.08)',borderRadius:12,padding:14}}>
+              <div key={other.id} className="list-row">
                 <div style={{display:'flex',gap:12,alignItems:'center'}}>
                   <div style={{width:48,height:48,borderRadius:'50%',background:'#f0f0f0',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
                     {r.photoPath
@@ -664,7 +657,7 @@ function ShareLinksView({ staffUserId, onBack }) {
             const status = l.revoked ? 'Revoked' : isExpired ? 'Expired' : 'Active'
             const statusColor = l.revoked ? '#8e8e8e' : isExpired ? '#b45309' : '#16a34a'
             return (
-              <div key={l.id} style={{border:'1px solid rgba(0,0,0,0.08)',borderRadius:12,padding:14}}>
+              <div key={l.id} className="list-row">
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                   <div>
                     <div style={{fontSize:12,fontFamily:'monospace',color:'#8e8e8e'}}>/{l.token.slice(0,12)}...</div>
@@ -739,7 +732,7 @@ function CasteSuggestionsView({ onBack }) {
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
           {suggestions.map(s => (
-            <div key={s.id} style={{border:'1px solid rgba(0,0,0,0.08)',borderRadius:12,padding:14}}>
+            <div key={s.id} className="list-row">
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                 <div>
                   <div style={{fontSize:14,fontWeight:600}}>{s.suggested_name}</div>
@@ -828,7 +821,7 @@ function CoordinationRequestsView({ onBack }) {
             const from = profilesById[r.from_profile]
             const to = profilesById[r.to_profile]
             return (
-              <div key={r.id} style={{border:'1px solid rgba(0,0,0,0.08)',borderRadius:12,padding:14}}>
+              <div key={r.id} className="list-row">
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                   <div>
                     <div style={{fontSize:14,fontWeight:600}}>
