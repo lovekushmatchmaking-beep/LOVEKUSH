@@ -972,7 +972,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                       ) : (
                         <button className="remove-btn" onClick={e=>{e.stopPropagation();removePhoto(idx)}}>✕</button>
                       )}
-                      <div style={{position:'absolute',bottom:4,left:4,background:'rgba(0,0,0,0.7)',color:'#fff',fontSize:9,padding:'2px 6px',borderRadius:4,letterSpacing:'0.1em'}}>{idx===0?'PROFILE':'SECONDARY'}</div>
+                      <div style={{position:'absolute',bottom:6,left:6,background:'rgba(0,0,0,0.65)',backdropFilter:'blur(4px)',color:'#fff',fontSize:9,padding:'3px 8px',borderRadius:20,letterSpacing:'0.1em'}}>{idx===0?'PROFILE':'SECONDARY'}</div>
                     </>
                   ) : (
                     <>
