@@ -695,7 +695,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     setSaving(true)
     try {
       const fullName = [form.first_name, form.middle_name, form.last_name].filter(Boolean).join(' ')
-      const code = generateProfileCode(form.gender, form.religion)
+      const code = await generateProfileCode()
       const communityIsOther = form.community === 'Other' || form.community === 'Others / Not in list'
       const finalCommunity = communityIsOther ? (form.community_other || form.custom_caste_text) : form.community
       const finalMotherTongue = form.mother_tongue === 'Other' ? form.mother_tongue_other : form.mother_tongue
@@ -764,6 +764,15 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         .select().single()
 
       if(pErr) throw pErr
+
+      // Profile ID metadata — admin-only audit record (kab bani, kaise
+      // bani, kis admin ne banayi) alag table mein, taaki normal users
+      // ko kabhi na dikhe (RLS staff-only hai).
+      await supabase.from('profile_id_metadata').insert({
+        profile_id: profile.id,
+        source: adminMode ? 'admin-added' : 'self-registered',
+        created_by: adminMode ? user.id : null,
+      })
 
       const photoUploads = photoFiles.filter(Boolean)
       const photoErrors = []
