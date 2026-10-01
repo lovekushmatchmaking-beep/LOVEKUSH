@@ -4,21 +4,47 @@ import { supabase } from '../supabase'
 
 export default function Register() {
   const navigate = useNavigate()
+  const [step, setStep] = useState('details') // 'details' | 'otp'
   const [form, setForm] = useState({ email:'', password:'', confirm:'' })
+  const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [resendMsg, setResendMsg] = useState('')
 
   const set = (k,v) => setForm(p=>({...p,[k]:v}))
 
+  // Step 1 — account create karte hain lekin signUp() khud hi ek
+  // confirmation email bhej deta hai (jisme OTP code hota hai, agar
+  // Supabase ke "Confirm signup" email template me {{ .Token }} set hai).
+  // User ko turant Create Profile pe navigate nahi karte — pehle woh OTP
+  // verify kare, taaki koi bhi random/fake email daal ke signup na kar
+  // sake.
   const handleRegister = async (e) => {
     e.preventDefault()
     setError('')
     if(form.password !== form.confirm) return setError('Passwords do not match')
     if(form.password.length < 6) return setError('Password must be at least 6 characters')
     setLoading(true)
-    const { data: signUpData, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
+    })
+    setLoading(false)
+    if(error) return setError(error.message)
+    setStep('otp')
+  }
+
+  // Step 2 — email par aaya 6-digit code verify karte hain. Success par
+  // Supabase khud hi session bana deta hai (login ho jaata hai).
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault()
+    setError('')
+    if (!otp.trim()) return setError('Please enter the code sent to your email')
+    setLoading(true)
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: form.email,
+      token: otp.trim(),
+      type: 'signup',
     })
     if(error) { setLoading(false); return setError(error.message) }
 
@@ -26,7 +52,7 @@ export default function Register() {
     // (Admin-Assisted Matchmaking se), usse yahan "claim" kar lete hain —
     // taaki dobara khaali profile na bane, jo already bhari hui hai wahi
     // ab is naye account se link ho jaaye.
-    const newUserId = signUpData?.user?.id
+    const newUserId = data?.user?.id
     let claimedExisting = false
     if (newUserId) {
       const { data: existingProfile } = await supabase
@@ -50,6 +76,13 @@ export default function Register() {
     navigate(claimedExisting ? '/dashboard' : '/create-profile')
   }
 
+  const handleResend = async () => {
+    setError(''); setResendMsg('')
+    const { error } = await supabase.auth.resend({ type: 'signup', email: form.email })
+    if (error) return setError(error.message)
+    setResendMsg('Code dobara bhej diya gaya hai.')
+  }
+
   return (
     <div style={{minHeight:'100vh',background:'#fff'}}>
       <nav className="navbar">
@@ -65,53 +98,85 @@ export default function Register() {
               <circle cx="30" cy="37" r="2.5" fill="black"/>
             </g>
           </svg>
-          <h1 className="page-title">Create Account</h1>
-          <p className="page-subtitle">Begin your journey to finding a life partner</p>
+          <h1 className="page-title">{step === 'details' ? 'Create Account' : 'Verify Your Email'}</h1>
+          <p className="page-subtitle">
+            {step === 'details'
+              ? 'Begin your journey to finding a life partner'
+              : `Hamne ${form.email} par ek verification code bheja hai`}
+          </p>
         </div>
 
-        <div className="notice">
-          <strong>This service is for serious marriage seekers only.</strong> All profiles are reviewed by our team before activation.
-        </div>
+        {step === 'details' ? (
+          <>
+            <div className="notice">
+              <strong>This service is for serious marriage seekers only.</strong> All profiles are reviewed by our team before activation.
+            </div>
 
-        <form onSubmit={handleRegister}>
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input className="form-input" type="email" placeholder="your@email.com"
-              value={form.email} onChange={e=>set('email',e.target.value)} required />
-          </div>
+            <form onSubmit={handleRegister}>
+              <div className="form-group">
+                <label className="form-label">Email Address</label>
+                <input className="form-input" type="email" placeholder="your@email.com"
+                  value={form.email} onChange={e=>set('email',e.target.value)} required />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input className="form-input" type="password" placeholder="Minimum 6 characters"
-              value={form.password} onChange={e=>set('password',e.target.value)} required />
-          </div>
+              <div className="form-group">
+                <label className="form-label">Password</label>
+                <input className="form-input" type="password" placeholder="Minimum 6 characters"
+                  value={form.password} onChange={e=>set('password',e.target.value)} required />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label">Confirm Password</label>
-            <input className="form-input" type="password" placeholder="Repeat password"
-              value={form.confirm} onChange={e=>set('confirm',e.target.value)} required />
-          </div>
+              <div className="form-group">
+                <label className="form-label">Confirm Password</label>
+                <input className="form-input" type="password" placeholder="Repeat password"
+                  value={form.confirm} onChange={e=>set('confirm',e.target.value)} required />
+              </div>
 
-          {error && <div className="form-error" style={{marginBottom:12}}>{error}</div>}
+              {error && <div className="form-error" style={{marginBottom:12}}>{error}</div>}
 
-          <div style={{marginBottom:16,fontSize:12,color:'#8e8e8e',lineHeight:1.6}}>
-            By registering, you agree to our{' '}
-            <span style={{color:'#000',cursor:'pointer',textDecoration:'underline'}}>Terms of Service</span>
-            {' '}and{' '}
-            <span style={{color:'#000',cursor:'pointer',textDecoration:'underline'}}>Privacy Policy</span>.
-          </div>
+              <div style={{marginBottom:16,fontSize:12,color:'#8e8e8e',lineHeight:1.6}}>
+                By registering, you agree to our{' '}
+                <span style={{color:'#000',cursor:'pointer',textDecoration:'underline'}}>Terms of Service</span>
+                {' '}and{' '}
+                <span style={{color:'#000',cursor:'pointer',textDecoration:'underline'}}>Privacy Policy</span>.
+              </div>
 
-          <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading}>
-            {loading ? 'Creating account...' : 'Create Free Account →'}
-          </button>
-        </form>
+              <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading}>
+                {loading ? 'Sending code...' : 'Continue →'}
+              </button>
+            </form>
 
-        <div className="divider">or</div>
+            <div className="divider">or</div>
 
-        <div style={{textAlign:'center',fontSize:14,color:'#8e8e8e'}}>
-          Already registered?{' '}
-          <Link to="/login" style={{color:'#000',fontWeight:500,textDecoration:'none'}}>Login here</Link>
-        </div>
+            <div style={{textAlign:'center',fontSize:14,color:'#8e8e8e'}}>
+              Already registered?{' '}
+              <Link to="/login" style={{color:'#000',fontWeight:500,textDecoration:'none'}}>Login here</Link>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={handleVerifyOtp}>
+            <div className="form-group">
+              <label className="form-label">Verification Code</label>
+              <input className="form-input" type="text" inputMode="numeric" placeholder="6-digit code"
+                value={otp} onChange={e=>setOtp(e.target.value)} autoFocus required />
+            </div>
+
+            {error && <div className="form-error" style={{marginBottom:12}}>{error}</div>}
+            {resendMsg && <div className="form-hint" style={{marginBottom:12,color:'#16a34a'}}>{resendMsg}</div>}
+
+            <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading}>
+              {loading ? 'Verifying...' : 'Verify & Continue →'}
+            </button>
+
+            <div style={{textAlign:'center',marginTop:16,fontSize:13,color:'#8e8e8e'}}>
+              Code nahi mila?{' '}
+              <span onClick={handleResend} style={{color:'#000',fontWeight:500,textDecoration:'underline',cursor:'pointer'}}>Resend</span>
+            </div>
+            <div style={{textAlign:'center',marginTop:8}}>
+              <span onClick={()=>{ setStep('details'); setError(''); setOtp('') }}
+                style={{color:'#8e8e8e',fontSize:12,textDecoration:'underline',cursor:'pointer'}}>← Change email</span>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   )
