@@ -34,7 +34,9 @@ export default function Register() {
     setStep('otp')
   }
 
-  // Step 2 — email par aaya 6-digit code verify karte hain. Success par
+  // Step 2 — email par aaya verification code verify karte hain (code ki
+  // length Supabase Dashboard ke "Email OTP length" setting se control
+  // hoti hai, isliye hardcode nahi karte). Success par
   // Supabase khud hi session bana deta hai (login ho jaata hai).
   const handleVerifyOtp = async (e) => {
     e.preventDefault()
@@ -156,7 +158,7 @@ export default function Register() {
           <form onSubmit={handleVerifyOtp}>
             <div className="form-group">
               <label className="form-label">Verification Code</label>
-              <input className="form-input" type="text" inputMode="numeric" placeholder="6-digit code"
+              <input className="form-input" type="text" inputMode="numeric" placeholder="Enter verification code"
                 value={otp} onChange={e=>setOtp(e.target.value)} autoFocus required />
             </div>
 
