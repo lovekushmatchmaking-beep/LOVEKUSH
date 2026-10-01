@@ -9,23 +9,16 @@ import {
   PARTNER_INCOME_BOUNDS,
 } from '../constants/profileOptions'
 
-// Same tap-friendly chip picker used throughout the app (duplicated
+// Single-choice fields render as a native <select> dropdown (duplicated
 // module-scope, same as CreateProfile.js/Dashboard.js — not exported
-// as a shared component, matching the existing pattern).
+// as a shared component, matching the existing pattern). Keeps the screen
+// compact instead of spreading every option out as chips.
 function ChipSelect({ options, value, onChange, includeEmpty, emptyLabel }) {
   return (
-    <div className="radio-group">
-      {includeEmpty && (
-        <div className={'radio-option ' + (!value?'selected':'')} onClick={()=>onChange('')}>
-          {!value?'◉':'○'} {emptyLabel || 'Not specified'}
-        </div>
-      )}
-      {options.map(o=>(
-        <div key={o} className={'radio-option ' + (value===o?'selected':'')} onClick={()=>onChange(o)}>
-          {value===o?'◉':'○'} {o}
-        </div>
-      ))}
-    </div>
+    <select className="form-select" value={value || ''} onChange={e=>onChange(e.target.value)}>
+      {includeEmpty && <option value="">{emptyLabel || 'Not specified'}</option>}
+      {options.map(o=><option key={o} value={o}>{o}</option>)}
+    </select>
   )
 }
 
