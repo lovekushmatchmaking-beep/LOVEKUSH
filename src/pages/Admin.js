@@ -27,6 +27,7 @@ export default function Admin({ staffUser }) {
   const [activeTab, setActiveTab] = useState('all')
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, blocked: 0 })
   const [selected, setSelected] = useState(null)
+  const [idMetadata, setIdMetadata] = useState({}) // profile_id -> {created_at, source, created_by} — admin-only, staff_users RLS gated
   const [view, setView] = useState('list') // 'list' | 'createClient' | 'findMatches' | 'editProfile' | 'shareLinks'
   const [editingProfile, setEditingProfile] = useState(null)
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
@@ -55,6 +56,15 @@ export default function Admin({ staffUser }) {
   useEffect(() => {
     runQuery(0)
   }, [activeTab, search, filters])
+
+  // Profile ID metadata (kab/kaise/kiske dwara bani) — sirf tab fetch
+  // karte hain jab admin kisi profile ko expand karta hai, lazily, aur
+  // RLS staff_users check ke through sirf admin ko hi dikhta hai.
+  useEffect(() => {
+    if (!selected || idMetadata[selected.id]) return
+    supabase.from('profile_id_metadata').select('*').eq('profile_id', selected.id).maybeSingle()
+      .then(({ data }) => { if (data) setIdMetadata(prev => ({ ...prev, [selected.id]: data })) })
+  }, [selected, idMetadata])
 
   const loadStats = async () => {
     const counts = await Promise.all([
@@ -446,6 +456,12 @@ export default function Admin({ staffUser }) {
                       ))}
                     </div>
                     {p.about_me && <div style={{ fontSize: 13, color: '#555', background: '#f9f9f9', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>{p.about_me}</div>}
+                    {idMetadata[p.id] && (
+                      <div style={{ fontSize: 11, color: '#8e8e8e', background: '#f5f5f5', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
+                        🔒 Admin only — Profile ID <strong style={{ fontFamily: 'monospace' }}>{p.profile_code}</strong> generated {new Date(idMetadata[p.id].created_at).toLocaleString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
+                        {idMetadata[p.id].created_by && <> (staff id: {idMetadata[p.id].created_by.slice(0, 8)})</>}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {p.profile_status !== 'active' && (
                         <button className="btn btn-black btn-sm" onClick={e => { e.stopPropagation(); updateStatus(p.id, 'active') }}>✓ Approve</button>
