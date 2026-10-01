@@ -404,7 +404,7 @@ export default function Dashboard({ user }) {
                       ['Sisters', profile.sisters_count ? profile.sisters_count + ' (' + (profile.sisters_married_count || 0) + ' married)' : null],
                       ['Family City', profile.family_city],
                     ]},
-                    { group: 'Assets & Property', rows: [
+                    { group: 'Assets', rows: [
                       ['Own House', profile.own_house],
                       ['House Type', profile.house_type],
                       ['Family Income Range', profile.family_income_range],
@@ -1740,7 +1740,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
       </div>
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Assets & Property</div>
+        <div className="section-label" style={{marginBottom:14}}>Assets</div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Own House</label>
