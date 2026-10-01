@@ -73,7 +73,8 @@ const PERSONAL_QUESTIONS = [
   { key:'height', label:'What is your height?', type:'select', options:HEIGHT_RANGES },
   { key:'marital_status', label:'What is your marital status?', type:'select', options:MARITAL_STATUSES },
   { key:'nationality', label:'What is your nationality?', type:'select', options:COUNTRIES.filter(c=>c!=='Open to All') },
-  { key:'have_children', label:'Do you have children?', type:'select', options:HAVE_CHILDREN_OPTIONS },
+  { key:'have_children', label:'Do you have children?', type:'select', options:HAVE_CHILDREN_OPTIONS,
+    skip: f=>f.marital_status==='Never Married' },
   { key:'children_living_with', label:'Who do your children live with?', type:'select', options:CHILDREN_LIVING_WITH_OPTIONS,
     skip: f=>f.have_children!=='Yes' },
   { key:'languages_spoken', label:'Which languages do you speak?', type:'multiselect', options:LANGUAGES_SPOKEN, placeholder:'Select languages...' },
@@ -145,7 +146,18 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     partner_notes:''
   })
 
-  const set = (k,v) => setForm(p=>({...p,[k]:v}))
+  // Nationality badalne par income currency apne aap sync hoti hai — India
+  // ke liye INR, kisi aur country ke liye USD (dono currencies dropdown mein
+  // available rehti hain, yeh sirf ek sensible default set karta hai).
+  const set = (k,v) => setForm(p=>{
+    const next = {...p,[k]:v}
+    if (k === 'nationality') {
+      const curr = v === 'India' ? 'INR' : 'USD'
+      if (p.annual_income_currency !== curr) { next.annual_income_currency = curr; next.annual_income = '' }
+      if (p.family_income_currency !== curr) { next.family_income_currency = curr; next.family_income_range = '' }
+    }
+    return next
+  })
 
   const setCommunity = (v) => setForm(p=>({
     ...p,

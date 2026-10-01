@@ -1001,7 +1001,18 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
 
-  const set = (k,v) => setForm(p=>({...p,[k]:v}))
+  // Nationality badalne par income currency apne aap sync hoti hai — India
+  // ke liye INR, kisi aur country ke liye USD (dono currencies dropdown mein
+  // available rehti hain, yeh sirf ek sensible default set karta hai).
+  const set = (k,v) => setForm(p=>{
+    const next = {...p,[k]:v}
+    if (k === 'nationality') {
+      const curr = v === 'India' ? 'INR' : 'USD'
+      if (p.annual_income_currency !== curr) { next.annual_income_currency = curr; next.annual_income = '' }
+      if (p.family_income_currency !== curr) { next.family_income_currency = curr; next.family_income_range = '' }
+    }
+    return next
+  })
 
   const setCommunity = (v) => setForm(p=>({
     ...p,
@@ -1233,24 +1244,26 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             </select>
           </div>
         </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Have Children?</label>
-            <select className="form-select" value={form.have_children} onChange={e=>set('have_children',e.target.value)}>
-              <option value="">Select</option>
-              {HAVE_CHILDREN_OPTIONS.map(h=><option key={h}>{h}</option>)}
-            </select>
-          </div>
-          {form.have_children === 'Yes' && (
+        {form.marital_status !== 'Never Married' && (
+          <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Children Living With</label>
-              <select className="form-select" value={form.children_living_with} onChange={e=>set('children_living_with',e.target.value)}>
+              <label className="form-label">Have Children?</label>
+              <select className="form-select" value={form.have_children} onChange={e=>set('have_children',e.target.value)}>
                 <option value="">Select</option>
-                {CHILDREN_LIVING_WITH_OPTIONS.map(c=><option key={c}>{c}</option>)}
+                {HAVE_CHILDREN_OPTIONS.map(h=><option key={h}>{h}</option>)}
               </select>
             </div>
-          )}
-        </div>
+            {form.have_children === 'Yes' && (
+              <div className="form-group">
+                <label className="form-label">Children Living With</label>
+                <select className="form-select" value={form.children_living_with} onChange={e=>set('children_living_with',e.target.value)}>
+                  <option value="">Select</option>
+                  {CHILDREN_LIVING_WITH_OPTIONS.map(c=><option key={c}>{c}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
         <div className="form-group">
           <label className="form-label">Physical Disability</label>
           <select className="form-select" value={form.physical_disability} onChange={e=>set('physical_disability',e.target.value)}>
@@ -1603,19 +1616,19 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-group">
           <label className="form-label">Favourite Cuisines</label>
-          <MultiSelectChips options={CUISINES} selected={form.cuisines} onChange={(v)=>set('cuisines',v)} />
+          <CheckboxDropdown options={CUISINES} selected={form.cuisines} onChange={(v)=>set('cuisines',v)} placeholder="Select cuisines..." />
         </div>
         <div className="form-group">
           <label className="form-label">Sports & Activities</label>
-          <MultiSelectChips options={SPORTS_LIST} selected={form.sports} onChange={(v)=>set('sports',v)} />
+          <CheckboxDropdown options={SPORTS_LIST} selected={form.sports} onChange={(v)=>set('sports',v)} placeholder="Select sports..." />
         </div>
         <div className="form-group">
           <label className="form-label">Favourite Music</label>
-          <MultiSelectChips options={FAVOURITE_MUSIC} selected={form.favourite_music} onChange={(v)=>set('favourite_music',v)} />
+          <CheckboxDropdown options={FAVOURITE_MUSIC} selected={form.favourite_music} onChange={(v)=>set('favourite_music',v)} placeholder="Select music..." />
         </div>
         <div className="form-group">
           <label className="form-label">Favourite Books</label>
-          <MultiSelectChips options={FAVOURITE_BOOKS} selected={form.favourite_books} onChange={(v)=>set('favourite_books',v)} />
+          <CheckboxDropdown options={FAVOURITE_BOOKS} selected={form.favourite_books} onChange={(v)=>set('favourite_books',v)} placeholder="Select books..." />
         </div>
         <div className="form-group">
           <label className="form-label">Dress Style</label>
@@ -1824,7 +1837,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         {form.partner_religion !== 'Any' && (
           <div className="form-group">
             <label className="form-label">Preferred Community</label>
-            <MultiSelectChips
+            <CheckboxDropdown
               options={[
                 ...(form.partner_religion === 'Muslim' ? ISLAMIC_COMMUNITIES
                   : form.partner_religion === 'Christian' ? CHRISTIAN_COMMUNITIES
@@ -1835,14 +1848,15 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
               ]}
               selected={form.partner_community_ids}
               onChange={setPartnerCommunity}
+              placeholder="Select communities..."
             />
             <div className="form-hint">"Any Community / No Bar" select karne par baaki communities apne aap unselect ho jaayengi</div>
           </div>
         )}
         <div className="form-group">
           <label className="form-label">Education Level Preference</label>
-          <MultiSelectChips options={EDUCATIONS} selected={form.partner_education_level_preferences}
-            onChange={v=>set('partner_education_level_preferences',v)} />
+          <CheckboxDropdown options={EDUCATIONS} selected={form.partner_education_level_preferences}
+            onChange={v=>set('partner_education_level_preferences',v)} placeholder="Select education levels..." />
           <div className="form-hint">Khaali chhodne par sab education levels acceptable maane jaayenge</div>
         </div>
         <div className="form-group">
