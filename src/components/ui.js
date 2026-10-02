@@ -95,9 +95,9 @@ export function PopoverMenu({ items, label = 'More options', light }) {
   )
 }
 
-// Support contact — Vercel env var REACT_APP_SUPPORT_EMAIL se aata hai.
-// Set na ho to Report/Help profile ID copy karke toast dikhate hain.
-export const SUPPORT_EMAIL = process.env.REACT_APP_SUPPORT_EMAIL || ''
+// Support contact (Report / Help). Vercel env var REACT_APP_SUPPORT_EMAIL
+// se override ho sakta hai, warna LOVEKUSH ka default support inbox.
+export const SUPPORT_EMAIL = process.env.REACT_APP_SUPPORT_EMAIL || 'lovekushmatchmaking@gmail.com'
 
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true } catch { return false }
