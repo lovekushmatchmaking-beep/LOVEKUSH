@@ -41,6 +41,9 @@ import {
   PARTNER_HEIGHT_MIN_INCHES,
   PARTNER_HEIGHT_MAX_INCHES,
   PARTNER_INCOME_BOUNDS,
+  PROFILE_FOR_OPTIONS,
+  PROFILE_FOR_GENDER,
+  SCHOOL_ONLY_EDUCATIONS,
 } from '../constants/profileOptions'
 import CheckboxDropdown from '../components/CheckboxDropdown'
 import { compressImage } from '../utils/compressImage'
@@ -72,12 +75,15 @@ const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 // function decide karta hai ki current form state me yeh question dikhana
 // hai ya nahi (jaise "Children Living With" sirf tab jab have_children
 // 'Yes' ho).
+// Pehla sawaal "Who is this profile for?" hai, uske baad poora naam (First,
+// Middle, Last) ek hi screen pe. Son/Daughter/Brother/Sister chunne par
+// gender apne aap set ho jaata hai, isliye gender wali screen skip hoti hai.
 const PERSONAL_QUESTIONS = [
-  { key:'first_name', label:'What is your first name?', type:'text', required:true, placeholder:'As per records' },
-  { key:'middle_name', label:'Middle name', hint:'Optional', type:'text', required:false, placeholder:'Optional' },
-  { key:'last_name', label:'What is your last name / surname?', type:'text', required:true, placeholder:'As per records' },
+  { key:'profile_for', label:'Who is this profile for?', type:'chips', required:true, options:PROFILE_FOR_OPTIONS },
+  { key:'first_name', label:'What is your name?', type:'name', required:true },
   { key:'date_of_birth', label:'When were you born?', type:'date', required:true },
-  { key:'gender', label:'What is your gender?', type:'chips', required:true, options:['Male','Female'] },
+  { key:'gender', label:'What is your gender?', type:'chips', required:true, options:['Male','Female'],
+    skip: f=>!!PROFILE_FOR_GENDER[f.profile_for] },
   { key:'height', label:'What is your height?', type:'select', options:HEIGHT_RANGES },
   { key:'marital_status', label:'What is your marital status?', type:'select', options:MARITAL_STATUSES },
   { key:'nationality', label:'What is your nationality?', type:'select', options:COUNTRIES.filter(c=>c!=='Open to All') },
@@ -91,6 +97,23 @@ const PERSONAL_QUESTIONS = [
 // and Physical Disability were removed from the signup wizard (user's ask:
 // too many screens for a new signup) — these still exist as DB columns and
 // can be filled in later via Edit Profile.
+
+// Profile kisi aur ke liye ban rahi ho to sawaal "your" ki jagah "their"
+// mein poochhe jaate hain ("What is their name?").
+const questionLabel = (label, form) => (!form.profile_for || form.profile_for === 'Myself')
+  ? label
+  : label.replace(/\bwere you\b/g, 'were they').replace(/\bdo you\b/g, 'do they').replace(/\byour\b/g, 'their')
+
+// Default partner age range: ladke ke liye apni umar se thoda chhota
+// (age-7 .. age+2), ladki ke liye thoda bada (age-2 .. age+8). Legal
+// minimum (ladki 18, ladka 21) se neeche nahi jaata.
+function defaultPartnerAgeRange(age, gender) {
+  if (!age) return { partner_age_min: 18, partner_age_max: 40 }
+  const clamp = v => Math.max(18, Math.min(70, v))
+  return gender === 'Female'
+    ? { partner_age_min: clamp(Math.max(21, age - 2)), partner_age_max: clamp(age + 8) }
+    : { partner_age_min: clamp(age - 7), partner_age_max: clamp(age + 2) }
+}
 
 // Bada soft icon badge — har question screen ke upar (Jeevansathi/IG style)
 function QuestionBadge({ label, fallback }) {
@@ -126,7 +149,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     company_privacy:'Matches Only', college_privacy:'Matches Only',
     vehicle_ownership:'', vehicle_model:'',
     income_privacy:'Private', contact_privacy:'Matches Only',
-    first_name:'', middle_name:'', last_name:'', gender:'Male', date_of_birth:'',
+    profile_for:'', first_name:'', middle_name:'', last_name:'', gender:'Male', date_of_birth:'',
     city:'', state:'', country:'India', religion:'Hindu',
     community:'', community_other:'', mother_tongue:'', mother_tongue_other:'',
     islamic_denomination:'', islamic_school_of_thought:'', islamic_shia_branch:'',
@@ -165,10 +188,17 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   // available rehti hain, yeh sirf ek sensible default set karta hai).
   const set = (k,v) => setForm(p=>{
     const next = {...p,[k]:v}
+    if (k === 'profile_for' && PROFILE_FOR_GENDER[v]) next.gender = PROFILE_FOR_GENDER[v]
+    if (k === 'education' && SCHOOL_ONLY_EDUCATIONS.includes(v)) { next.degree = ''; next.degree_other = '' }
     if (k === 'nationality') {
       const curr = v === 'India' ? 'INR' : 'USD'
       if (p.annual_income_currency !== curr) { next.annual_income_currency = curr; next.annual_income = '' }
       if (p.family_income_currency !== curr) { next.family_income_currency = curr; next.family_income_range = '' }
+      if (p.partner_income_currency !== curr) {
+        next.partner_income_currency = curr
+        next.partner_income_min = PARTNER_INCOME_BOUNDS[curr].min
+        next.partner_income_max = PARTNER_INCOME_BOUNDS[curr].max
+      }
     }
     return next
   })
@@ -204,6 +234,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
 
   const goToNextPersonalQ = () => {
     const q = PERSONAL_QUESTIONS[personalQ]
+    if (q.type==='name' && (!form.first_name.trim() || !form.last_name.trim())) { showToast('Please enter first name and last name'); return }
     if (q.required && !form[q.key]) { showToast('Please answer this question'); return }
     if (q.key==='date_of_birth' && form.date_of_birth) {
       const check = validateAge(form.date_of_birth, form.gender)
@@ -428,6 +459,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     },
     {
       title: 'Degree',
+      skip: () => SCHOOL_ONLY_EDUCATIONS.includes(form.education),
       render: () => (
         <div className="form-group">
           <select className="form-select" value={form.degree} onChange={e=>set('degree',e.target.value)}>
@@ -459,6 +491,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         <div className="form-group">
           <select className="form-select" value={form.annual_income}
             onChange={e=>set('annual_income',e.target.value)}>
+            <option value="">Select</option>
             {(form.annual_income_currency === 'USD' ? USD_INCOME_RANGES : INCOME_RANGES).map(i=><option key={i}>{i}</option>)}
           </select>
         </div>
@@ -567,12 +600,12 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
   ]
-  // Family City, Property (Type/Ownership/Location/Country/Size),
-  // Business / Commercial Asset, Profile Managed By, Family Type, Family
-  // Values, Own House/House Type, Family Income Range, Vehicle, Family
-  // Status/Financial Status, and Living With Parents were removed from
-  // the signup wizard — fields still exist and can be filled in later via
-  // Edit Profile.
+  // Family City, Family Type, Family Values, Family Income Range, Assets
+  // (Own Vehicle / Own House), Family Financial Status and Living With
+  // Parents are not asked in the signup wizard — they can be filled in
+  // later via Edit Profile. Property, Business and Vehicle Details fields
+  // were removed entirely. "Profile Managed By" is now the first signup
+  // question ("Who is this profile for?", profiles.profile_for).
 
   // The entire Partner Preferences step (Age/Height/Income Preference,
   // Religion/Community/Location Preference, Partner City-State-Country
@@ -769,8 +802,10 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           father_profession: finalFatherProfession,
           mother_profession: finalMotherProfession,
           age: ageCheck.age,
-          partner_age_min: parseInt(form.partner_age_min) || null,
-          partner_age_max: parseInt(form.partner_age_max) || null,
+          // Partner Preferences signup mein nahi poochhi jaati, isliye age
+          // range profile ke data se logically set hoti hai (baad mein Edit
+          // Profile se badal sakte hain).
+          ...defaultPartnerAgeRange(ageCheck.age, form.gender),
           partner_height_min: parseInt(form.partner_height_min) || null,
           partner_height_max: parseInt(form.partner_height_max) || null,
           partner_income_min: parseInt(form.partner_income_min) || null,
@@ -883,7 +918,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           <div>
             <QuestionBadge label={q.label} fallback={User} />
             <div style={{fontSize:11,color:'var(--gray3)',marginBottom:6}}>{personalQ+1} / {PERSONAL_QUESTIONS.length}</div>
-            <h2 className="page-title">{q.label}{q.required?' *':''}</h2>
+            <h2 className="page-title">{questionLabel(q.label, form)}{q.required?' *':''}</h2>
             {q.hint && <p className="page-subtitle">{q.hint}</p>}
 
             {personalQ===0 && adminMode && (
@@ -909,6 +944,21 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                 <input className="form-input" placeholder={q.placeholder} value={form[q.key]}
                   onChange={e=>set(q.key,e.target.value)} autoFocus
                   onKeyDown={e=>{ if(e.key==='Enter') goToNextPersonalQ() }} />
+              )}
+
+              {q.type==='name' && (
+                <>
+                  <FormLabel>First Name *</FormLabel>
+                  <input className="form-input" placeholder="As per records" value={form.first_name}
+                    onChange={e=>set('first_name',e.target.value)} autoFocus />
+                  <FormLabel style={{marginTop:14}}>Middle Name</FormLabel>
+                  <input className="form-input" placeholder="Optional" value={form.middle_name}
+                    onChange={e=>set('middle_name',e.target.value)} />
+                  <FormLabel style={{marginTop:14}}>Last Name / Surname *</FormLabel>
+                  <input className="form-input" placeholder="As per records" value={form.last_name}
+                    onChange={e=>set('last_name',e.target.value)}
+                    onKeyDown={e=>{ if(e.key==='Enter') goToNextPersonalQ() }} />
+                </>
               )}
 
               {q.type==='date' && (

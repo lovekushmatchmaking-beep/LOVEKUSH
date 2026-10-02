@@ -22,10 +22,10 @@ import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CA
   CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES,
   RELIGION_HIERARCHY, NO_RELIGION_VALUES, JAIN_GOTRAS, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, BODY_TYPES, WEIGHT_RANGES,
   VEHICLE_OWNERSHIP,
-  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, COUNTRIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, HOUSE_TYPES, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
+  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, COUNTRIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
   LANGUAGES_SPOKEN, HAVE_CHILDREN_OPTIONS, CHILDREN_LIVING_WITH_OPTIONS, GREW_UP_IN_OPTIONS,
   PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, formatHeightFromInches,
-  PARTNER_INCOME_BOUNDS } from '../constants/profileOptions'
+  PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS, formatIncomeShort, PROFILE_FOR_OPTIONS, SCHOOL_ONLY_EDUCATIONS, profileManagedByLabel } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
@@ -382,6 +382,7 @@ export default function Dashboard({ user }) {
                       ['Weight', profile.weight],
                       ['Complexion', profile.complexion],
                       ['Body Type', profile.body_type],
+                      ['Profile Created For', profile.profile_for],
                       ['Nationality', profile.nationality],
                       ['Have Children', profile.have_children],
                       ['Children Living With', profile.children_living_with],
@@ -430,13 +431,11 @@ export default function Dashboard({ user }) {
                       ['Brothers', profile.brothers_count ? profile.brothers_count + ' (' + (profile.brothers_married_count || 0) + ' married)' : null],
                       ['Sisters', profile.sisters_count ? profile.sisters_count + ' (' + (profile.sisters_married_count || 0) + ' married)' : null],
                       ['Family City', profile.family_city],
+                      ['Family Income Range', profile.family_income_range],
                     ]},
                     { group: 'Assets', rows: [
+                      ['Own Vehicle', profile.vehicle_ownership],
                       ['Own House', profile.own_house],
-                      ['House Type', profile.house_type],
-                      ['Family Income Range', profile.family_income_range],
-                      ['Vehicle Ownership', profile.vehicle_ownership],
-                      ['Vehicle Details', profile.vehicle_model],
                     ]},
                   ].map(({group, rows}) => ({group, rows: rows.filter(([,v])=>v)})).filter(({rows})=>rows.length).map(({group, rows}, gi)=>(
                     <div key={group} style={{marginTop: gi>0 ? 16 : 4}}>
@@ -452,7 +451,7 @@ export default function Dashboard({ user }) {
                   {[
                     ['Age Range', profile.partner_age_min && profile.partner_age_max ? profile.partner_age_min + ' - ' + profile.partner_age_max + ' years' : null],
                     ['Height Range', profile.partner_height_min && profile.partner_height_max ? formatHeightFromInches(profile.partner_height_min) + ' - ' + formatHeightFromInches(profile.partner_height_max) : null],
-                    ['Income Range', profile.partner_income_max ? (profile.partner_income_currency === 'USD' ? '$' : '₹') + Number(profile.partner_income_min || 0).toLocaleString() + ' - ' + (profile.partner_income_currency === 'USD' ? '$' : '₹') + Number(profile.partner_income_max).toLocaleString() : null],
+                    ['Income Range', profile.partner_income_max ? formatIncomeShort(profile.partner_income_min, profile.partner_income_currency) + ' - ' + formatIncomeShort(profile.partner_income_max, profile.partner_income_currency) : null],
                     ['Religion', profile.partner_religion],
                     ['Preferred Community', Array.isArray(profile.partner_community_ids) ? profile.partner_community_ids.join(', ') : null],
                     ['Education Level', Array.isArray(profile.partner_education_level_preferences) && profile.partner_education_level_preferences.length ? profile.partner_education_level_preferences.join(', ') : null],
@@ -771,6 +770,9 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
             {totalCount > 0 && (
               <span className="chip chip-primary" title="Preferences matched"><CircleCheck size={11} /> {matchedCount}/{totalCount}</span>
             )}
+            {profileManagedByLabel(m.profile_for) && (
+              <span className="chip chip-muted" title={'Profile created for: ' + m.profile_for}><UserRound size={11} /> {profileManagedByLabel(m.profile_for)}</span>
+            )}
           </div>
         </div>
         <ProfileActionsMenu profile={m} onBlock={()=>onSetAction('dislike')} onToast={onToast} />
@@ -1007,6 +1009,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     body_type: profile.body_type || 'Average',
     marital_status: profile.marital_status || 'Never Married',
     nationality: profile.nationality || 'India',
+    profile_for: profile.profile_for || '',
     physical_disability: profile.physical_disability || 'No',
     blood_group: profile.blood_group || '',
     health_info: profile.health_info || '',
@@ -1064,8 +1067,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     sisters_count: profile.sisters_count || 0, sisters_married_count: profile.sisters_married_count || 0,
     family_city: profile.family_city || '',
     own_house: profile.own_house || '',
-    house_type: profile.house_type || '',
-    vehicle_ownership: profile.vehicle_ownership || '', vehicle_model: profile.vehicle_model || '',
+    vehicle_ownership: profile.vehicle_ownership || '',
     family_income_range: profile.family_income_range || '',
     family_income_currency: profile.family_income_currency || 'INR',
     partner_age_min: profile.partner_age_min || 18,
@@ -1093,10 +1095,16 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
   // available rehti hain, yeh sirf ek sensible default set karta hai).
   const set = (k,v) => setForm(p=>{
     const next = {...p,[k]:v}
+    if (k === 'education' && SCHOOL_ONLY_EDUCATIONS.includes(v)) { next.degree = ''; next.degree_other = '' }
     if (k === 'nationality') {
       const curr = v === 'India' ? 'INR' : 'USD'
       if (p.annual_income_currency !== curr) { next.annual_income_currency = curr; next.annual_income = '' }
       if (p.family_income_currency !== curr) { next.family_income_currency = curr; next.family_income_range = '' }
+      if (p.partner_income_currency !== curr) {
+        next.partner_income_currency = curr
+        next.partner_income_min = PARTNER_INCOME_BOUNDS[curr].min
+        next.partner_income_max = PARTNER_INCOME_BOUNDS[curr].max
+      }
     }
     return next
   })
@@ -1255,6 +1263,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
       <div className="card" style={{marginBottom:12}}>
         <SectionLabel style={{marginBottom:14}}>Personal Info</SectionLabel>
 
+        <div className="form-group">
+          <FormLabel>Profile Created For</FormLabel>
+          <ChipSelect options={PROFILE_FOR_OPTIONS} value={form.profile_for} onChange={v=>set('profile_for',v)} includeEmpty />
+        </div>
         <div className="form-group">
           <FormLabel>First Name *</FormLabel>
           <input className="form-input" value={form.first_name} onChange={e=>set('first_name',e.target.value)} />
@@ -1617,6 +1629,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <FormLabel>Highest Education *</FormLabel>
           <ChipSelect options={EDUCATIONS} value={form.education} onChange={v=>set('education',v)} includeEmpty />
         </div>
+        {!SCHOOL_ONLY_EDUCATIONS.includes(form.education) && (
         <div className="form-group">
           <FormLabel>Degree</FormLabel>
           <select className="form-select" value={form.degree} onChange={e=>set('degree',e.target.value)}>
@@ -1632,6 +1645,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
               value={form.degree_other} onChange={e=>set('degree_other',e.target.value)} />
           )}
         </div>
+        )}
         <div className="form-group">
           <FormLabel>College/Institution Name</FormLabel>
           <input className="form-input" value={form.college_name} onChange={e=>set('college_name',e.target.value)} />
@@ -1829,34 +1843,6 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             })}
           </div>
         </div>
-        <div className="form-group">
-          <FormLabel>Living With Parents?</FormLabel>
-          <ChipSelect options={LIVING_WITH_PARENTS_OPTIONS} value={form.living_with_parents} onChange={v=>set('living_with_parents',v)} includeEmpty />
-        </div>
-      </div>
-
-      <div className="card" style={{marginBottom:12}}>
-        <SectionLabel style={{marginBottom:14}}>Assets</SectionLabel>
-        <div className="form-row">
-          <div className="form-group">
-            <FormLabel>Own House</FormLabel>
-            <ChipSelect options={OWN_HOUSE_OPTIONS} value={form.own_house} onChange={v=>set('own_house',v)} includeEmpty />
-          </div>
-          <div className="form-group">
-            <FormLabel>House Type</FormLabel>
-            <ChipSelect options={HOUSE_TYPES} value={form.house_type} onChange={v=>set('house_type',v)} includeEmpty />
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <FormLabel>Vehicle Ownership</FormLabel>
-            <ChipSelect options={VEHICLE_OWNERSHIP} value={form.vehicle_ownership} onChange={v=>set('vehicle_ownership',v)} includeEmpty />
-          </div>
-          <div className="form-group">
-            <FormLabel>Vehicle Details</FormLabel>
-            <input className="form-input" placeholder="Optional, e.g. Hyundai Creta" value={form.vehicle_model} onChange={e=>set('vehicle_model',e.target.value)} />
-          </div>
-        </div>
         <div className="form-row">
           <div className="form-group">
             <FormLabel>Family Income Range</FormLabel>
@@ -1872,6 +1858,25 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             }}>
               {CURRENCIES.map(c=><option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
             </select>
+          </div>
+        </div>
+
+        <div className="form-group">
+          <FormLabel>Living With Parents?</FormLabel>
+          <ChipSelect options={LIVING_WITH_PARENTS_OPTIONS} value={form.living_with_parents} onChange={v=>set('living_with_parents',v)} includeEmpty />
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:12}}>
+        <SectionLabel style={{marginBottom:14}}>Assets</SectionLabel>
+        <div className="form-row">
+          <div className="form-group">
+            <FormLabel>Own Vehicle</FormLabel>
+            <ChipSelect options={VEHICLE_OWNERSHIP} value={form.vehicle_ownership} onChange={v=>set('vehicle_ownership',v)} includeEmpty />
+          </div>
+          <div className="form-group">
+            <FormLabel>Own House</FormLabel>
+            <ChipSelect options={OWN_HOUSE_OPTIONS} value={form.own_house} onChange={v=>set('own_house',v)} includeEmpty />
           </div>
         </div>
       </div>
@@ -1900,15 +1905,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           }} style={{marginBottom:8, maxWidth:140}}>
             {CURRENCIES.map(c=><option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
           </select>
-          <DualRangeSlider min={PARTNER_INCOME_BOUNDS[form.partner_income_currency].min}
-            max={PARTNER_INCOME_BOUNDS[form.partner_income_currency].max}
+          <DualRangeSlider values={PARTNER_INCOME_STEPS[form.partner_income_currency]}
             valueMin={form.partner_income_min} valueMax={form.partner_income_max}
             onChange={(lo,hi)=>setForm(p=>({...p, partner_income_min:lo, partner_income_max:hi}))}
-            formatLabel={v=>{
-              const symbol = form.partner_income_currency === 'INR' ? '₹' : '$'
-              const isMax = v === PARTNER_INCOME_BOUNDS[form.partner_income_currency].max
-              return symbol + v.toLocaleString(form.partner_income_currency === 'INR' ? 'en-IN' : 'en-US') + (isMax ? '+' : '')
-            }} />
+            formatLabel={v => formatIncomeShort(v, form.partner_income_currency)} />
         </div>
         <div className="form-group">
           <FormLabel>Religion Preference</FormLabel>

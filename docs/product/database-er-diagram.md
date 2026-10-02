@@ -88,8 +88,11 @@ brothers_count int             -- 0-10, clamped client-side
 brothers_married_count int     -- clamped to <= brothers_count
 sisters_count int              -- 0-10, clamped client-side
 sisters_married_count int      -- clamped to <= sisters_count
-vehicle_ownership text        -- structured, replaces old vehicle_details UI (column kept for backward compat)
-vehicle_model text            -- optional free-text model name (e.g. "Hyundai Creta")
+vehicle_ownership text        -- "Own Vehicle": 'Car' | 'Two-Wheeler' | 'Both' | 'No'
+vehicle_model text            -- legacy, no longer shown in UI (Vehicle Details removed)
+own_house text                -- "Own House": 'Yes' | 'No'
+house_type text               -- legacy, no longer shown in UI
+profile_for text              -- "Who is this profile for?": 'Myself' | 'My Son' | 'My Daughter' | 'My Brother' | 'My Sister' | 'My Relative' | 'My Friend'; exposed in profiles_public_view for the "Managed by ..." badge
 family_city text
 family_income_currency text    -- 'INR' | 'USD', default 'INR' -- swaps which range list Family Income Range shows
 languages_spoken text[]        -- multi-select, same list as mother_tongue (LANGUAGES_SPOKEN alias of MOTHER_TONGUES)

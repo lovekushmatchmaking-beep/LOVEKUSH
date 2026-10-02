@@ -1888,6 +1888,9 @@ export const MOTHER_TONGUES = [
 export const LANGUAGES_SPOKEN = MOTHER_TONGUES
 
 
+// Sirf 10th/12th tak padhe log ke liye Degree ka sawaal nahi dikhta.
+export const SCHOOL_ONLY_EDUCATIONS = ['Class 10th', 'Class 12th']
+
 export const EDUCATIONS = [
   'Class 10th',
   'Class 12th',
@@ -1963,27 +1966,11 @@ export const INCOME_RANGES = [
   'Prefer not to specify',
 ]
 
-// ===================== ASSETS — Property / Vehicle / Business =====================
-// Simplified structured fields replacing the old free-text "Property
-// Details"/"Vehicle Details" inputs. Old property_details/vehicle_details
-// columns are kept (backward compat) but no longer written to by the UI.
-
-export const PROPERTY_TYPES = [
-  'Independent House / Detached House', 'Villa', 'Bungalow', 'Duplex House',
-  'Triplex House', 'Townhouse / Row House', 'Semi-Detached House',
-  'Terraced House', 'Apartment / Flat', 'Condominium / Condo',
-  'Studio Apartment', 'Penthouse', 'Builder Floor / Independent Floor',
-  'Farmhouse', 'Cottage', 'Ancestral / Heritage House',
-  'Village / Rural House', 'Haveli / Mansion', 'Mobile / Manufactured Home',
-  'Other Residential Property', 'None', 'Prefer not to specify',
-]
-
-export const PROPERTY_OWNERSHIP = ['Self Owned', 'Family Owned', 'Jointly Owned', 'Rented', 'Other', 'Prefer not to specify']
-
-export const VEHICLE_OWNERSHIP = [
-  'No Vehicle', 'Two-Wheeler', 'Car', 'Car + Two-Wheeler',
-  'Multiple Vehicles', 'Commercial Vehicle', 'Prefer not to specify',
-]
+// ===================== ASSETS — Vehicle / House =====================
+// Assets section mein sirf do sawaal hain: Own Vehicle aur Own House.
+// Vehicle model/details, property aur business fields user ke kehne par
+// hata diye gaye hain.
+export const VEHICLE_OWNERSHIP = ['Car', 'Two-Wheeler', 'Both', 'No']
 
 // Partner Preference — Community multi-select. Appended to whichever
 // religion-specific community list applies (same source used for the
@@ -1995,10 +1982,6 @@ export const PARTNER_COMMUNITY_SPECIAL_OPTIONS = [
 ]
 export const PARTNER_COMMUNITY_NO_BAR = 'Any Community / No Bar'
 
-export const BUSINESS_ASSET_TYPES = [
-  'Own Business', 'Family Business', 'Shop', 'Commercial Property',
-  'Agricultural Land', 'Other', 'None', 'Prefer not to specify',
-]
 
 export const DIETS = ['Vegetarian', 'Non-Vegetarian', 'Occasionally Non-Vegetarian', 'Eggetarian', 'Jain', 'Vegan']
 
@@ -2129,9 +2112,7 @@ export const RELOCATION_PREFERENCES = ['Not willing to relocate', 'Open to reloc
 
 export const EMPLOYMENT_TYPES = ['Government', 'Private Sector', 'Business / Self-Employed', 'Not Working', 'Student', 'Retired']
 
-export const OWN_HOUSE_OPTIONS = ['Own House', 'Rented', 'Family House']
-
-export const HOUSE_TYPES = ['Independent House', 'Apartment/Flat', 'Farmhouse', 'Other']
+export const OWN_HOUSE_OPTIONS = ['Yes', 'No']
 
 export const FAMILY_INCOME_RANGES = [
   'Below ₹1L', '₹1–2L', '₹2–3L', '₹3–4L', '₹4–5L', '₹5–6L', '₹6–7L', '₹7–8L',
@@ -2170,6 +2151,29 @@ export const PARTNER_INCOME_BOUNDS = {
   USD: { min: 0, max: 150000, step: 2500 },
 }
 
+// Income Preference slider sirf in round values pe rukta hai (₹2L, ₹5L,
+// ₹10L...), ₹5,00,579 jaisi random values pe nahi. Pehla aur aakhri value
+// PARTNER_INCOME_BOUNDS ke min/max se match karte hain.
+export const PARTNER_INCOME_STEPS = {
+  INR: [0, 100000, 200000, 300000, 400000, 500000, 700000, 1000000, 1500000,
+    2000000, 2500000, 3000000, 5000000, 7500000, 10000000],
+  USD: [0, 10000, 20000, 30000, 40000, 50000, 75000, 100000, 150000],
+}
+
+// 500000 -> "₹5L", 10000000 -> "₹1Cr", 75000 -> "$75k". Max value pe "+".
+export function formatIncomeShort(v, currency) {
+  const n = Number(v) || 0
+  const isMax = PARTNER_INCOME_BOUNDS[currency === 'USD' ? 'USD' : 'INR'].max === n
+  const trim = x => String(Math.round(x * 10) / 10)
+  let out
+  if (currency === 'USD') {
+    out = n === 0 ? '$0' : n >= 1000 ? '$' + trim(n / 1000) + 'k' : '$' + n
+  } else {
+    out = n === 0 ? '₹0' : n >= 10000000 ? '₹' + trim(n / 10000000) + 'Cr' : n >= 100000 ? '₹' + trim(n / 100000) + 'L' : '₹' + n.toLocaleString('en-IN')
+  }
+  return out + (isMax ? '+' : '')
+}
+
 export const PHYSICAL_DISABILITY_OPTIONS = ['No', 'Yes']
 
 // ===================== PHASE 7 — Shaadi.com/Jeevansathi research se =====================
@@ -2193,6 +2197,23 @@ export const HEALTH_INFO_OPTIONS = ['No Health Problems', 'HIV Positive', 'Diabe
 export const BLOOD_GROUPS = ["Don't Know", 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
 export const PROFILE_MANAGED_BY = ['Self', 'Parent / Guardian', 'Sibling', 'Relative', 'Other']
+
+// "Who is this profile for?" — signup ka pehla sawaal (profiles.profile_for).
+// Isi se gender apne aap set hota hai (Son/Brother -> Male, Daughter/Sister
+// -> Female) aur profile card pe "Managed by ..." badge banta hai.
+export const PROFILE_FOR_OPTIONS = ['Myself', 'My Son', 'My Daughter', 'My Brother', 'My Sister', 'My Relative', 'My Friend']
+export const PROFILE_FOR_GENDER = { 'My Son': 'Male', 'My Brother': 'Male', 'My Daughter': 'Female', 'My Sister': 'Female' }
+const PROFILE_FOR_MANAGER = {
+  'My Son': 'Parent', 'My Daughter': 'Parent',
+  'My Brother': 'Sibling', 'My Sister': 'Sibling',
+  'My Relative': 'Relative', 'My Friend': 'Friend',
+}
+// Profile card / profile view badge text. null jab profile_for bhara hi nahi.
+export function profileManagedByLabel(profileFor) {
+  if (!profileFor) return null
+  if (profileFor === 'Myself') return 'Self-managed'
+  return 'Managed by ' + (PROFILE_FOR_MANAGER[profileFor] || 'Family')
+}
 
 export const FAMILY_STATUS_OPTIONS = ['Rich / Affluent', 'Upper Middle Class', 'Middle Class']
 

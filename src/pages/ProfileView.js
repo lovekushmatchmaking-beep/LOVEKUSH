@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { SectionLabel } from '../components/ui'
 import SignedImage from '../components/SignedImage'
 import { supabase } from '../supabase'
-import { formatHeightFromInches } from '../constants/profileOptions'
+import { formatHeightFromInches, formatIncomeShort, profileManagedByLabel } from '../constants/profileOptions'
 import {
   ChevronLeft, Lock, UserRound, Images, Heart, Star, X, CircleCheck, TriangleAlert, Crown,
   Phone, CalendarDays, Send, Briefcase, Users,
@@ -127,9 +127,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
   const incomeLabel = (min, max, currency) => {
     if (min == null && max == null) return null
-    const symbol = currency === 'USD' ? '$' : '₹'
-    const fmt = v => symbol + Number(v).toLocaleString(currency === 'USD' ? 'en-US' : 'en-IN')
-    return `${fmt(min || 0)} - ${fmt(max || 0)}`
+    return `${formatIncomeShort(min, currency)} - ${formatIncomeShort(max, currency)}`
   }
 
   return (
@@ -182,6 +180,11 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
             )}
           </div>
           <div style={{fontSize:13,opacity:0.9,marginTop:2}}>{m.city}{m.state ? ', ' + m.state : ''}</div>
+          {profileManagedByLabel(m.profile_for) && (
+            <div style={{display:'inline-flex',alignItems:'center',gap:4,marginTop:6,padding:'3px 10px',borderRadius:20,background:'rgba(0,0,0,0.35)',backdropFilter:'blur(6px)',fontSize:12}}>
+              <UserRound size={12} /> {profileManagedByLabel(m.profile_for)}
+            </div>
+          )}
         </div>
       </div>
 
