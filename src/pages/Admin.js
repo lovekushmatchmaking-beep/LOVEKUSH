@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, CheckCircle2, ShieldX } from 'lucide-react'
+import { Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote, ListChecks } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
 import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/profileOptions'
@@ -26,14 +26,22 @@ export default function Admin({ staffUser }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
-  const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, blocked: 0 })
+  const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0 })
   const [selected, setSelected] = useState(null)
   const [idMetadata, setIdMetadata] = useState({}) // profile_id -> {created_at, source, created_by} — admin-only, staff_users RLS gated
-  const [view, setView] = useState('list') // 'list' | 'createClient' | 'findMatches' | 'editProfile' | 'shareLinks'
+  const [notesByProfile, setNotesByProfile] = useState({}) // profile_id -> [{id, note, follow_up_at, created_at, staff_user_id}]
+  const [newNote, setNewNote] = useState('')
+  const [newNoteFollowUp, setNewNoteFollowUp] = useState('')
+  const [view, setView] = useState('list') // 'list' | 'createClient' | 'findMatches' | 'editProfile' | 'shareLinks' | 'verificationQueue' | 'reportsQueue' | 'myQueue'
   const [editingProfile, setEditingProfile] = useState(null)
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
   const [matchResults, setMatchResults] = useState([])
   const [matchesLoading, setMatchesLoading] = useState(false)
+
+  // Bulk selection — list mein checkbox se multiple profiles choose karke
+  // ek saath Approve/Block karne ke liye (ek-ek karke expand karne ke bajaye)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkWorking, setBulkWorking] = useState(false)
 
   // Search + Filters
   const [searchInput, setSearchInput] = useState('')
@@ -41,7 +49,7 @@ export default function Admin({ staffUser }) {
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState({
     religion: '', community: '', city: '', gender: '',
-    ageMin: '', ageMax: '', maritalStatus: '', education: '',
+    ageMin: '', ageMax: '', maritalStatus: '', education: '', assignedToMe: false,
   })
 
   // Debounce search input (400ms) — DB pe har keystroke pe query nahi maarte
@@ -67,18 +75,30 @@ export default function Admin({ staffUser }) {
       .then(({ data }) => { if (data) setIdMetadata(prev => ({ ...prev, [selected.id]: data })) })
   }, [selected, idMetadata])
 
+  // Notes bhi sirf tab load karte hain jab profile expand ho
+  useEffect(() => {
+    if (!selected || notesByProfile[selected.id]) return
+    loadNotesFor(selected.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected])
+
   const loadStats = async () => {
     const counts = await Promise.all([
       supabase.from('profiles').select('*', { count: 'exact', head: true }),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('profile_status', 'pending'),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('profile_status', 'active'),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('profile_status', 'blocked'),
+      // Needs Verification: ID document already uploaded by the client, par abhi tak verified nahi hua
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('id_document_uploaded', true).neq('verification_status', 'verified'),
+      supabase.from('profile_reports').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     ])
     setStats({
       total: counts[0].count || 0,
       pending: counts[1].count || 0,
       active: counts[2].count || 0,
       blocked: counts[3].count || 0,
+      needsVerification: counts[4].count || 0,
+      openReports: counts[5].count || 0,
     })
   }
 
@@ -106,6 +126,7 @@ export default function Admin({ staffUser }) {
     if (filters.education) q = q.eq('education', filters.education)
     if (filters.ageMin) q = q.gte('age', parseInt(filters.ageMin))
     if (filters.ageMax) q = q.lte('age', parseInt(filters.ageMax))
+    if (filters.assignedToMe) q = q.eq('managed_by_staff_id', staffUser.user_id)
 
     return q
   }
@@ -127,6 +148,7 @@ export default function Admin({ staffUser }) {
 
     if (fromIndex === 0) {
       setProfiles(newRows)
+      setSelectedIds(new Set())
     } else {
       setProfiles(prev => [...prev, ...newRows])
     }
@@ -155,7 +177,7 @@ export default function Admin({ staffUser }) {
   }
 
   const resetFilters = () => {
-    setFilters({ religion:'', community:'', city:'', gender:'', ageMin:'', ageMax:'', maritalStatus:'', education:'' })
+    setFilters({ religion:'', community:'', city:'', gender:'', ageMin:'', ageMax:'', maritalStatus:'', education:'', assignedToMe:false })
   }
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length
@@ -200,6 +222,91 @@ export default function Admin({ staffUser }) {
     await logAuditEntry('premium_toggle', id, { is_premium: !current })
     setProfiles(prev => prev.map(p => p.id === id ? { ...p, is_premium: !current } : p))
     if (selected && selected.id === id) setSelected(prev => ({ ...prev, is_premium: !current }))
+  }
+
+  // ===== RM ASSIGNMENT — profiles.managed_by_staff_id already existed in the
+  // DB (CreateProfile sets it when admin creates a profile) par admin list
+  // mein kahin dikhta/badalta nahi tha. "Assign to me" se RM apna naam claim
+  // kar sakta hai, taaki follow-up kiske zimme hai yeh clear rahe.
+  const assignToMe = async (id) => {
+    const { error } = await supabase.from('profiles').update({ managed_by_staff_id: staffUser.user_id }).eq('id', id)
+    if (error) { alert('Assign failed: ' + error.message); return }
+    await logAuditEntry('rm_assigned', id, { managed_by_staff_id: staffUser.user_id })
+    setProfiles(prev => prev.map(p => p.id === id ? { ...p, managed_by_staff_id: staffUser.user_id } : p))
+    if (selected?.id === id) setSelected(prev => ({ ...prev, managed_by_staff_id: staffUser.user_id }))
+  }
+
+  const unassign = async (id) => {
+    const { error } = await supabase.from('profiles').update({ managed_by_staff_id: null }).eq('id', id)
+    if (error) { alert('Unassign failed: ' + error.message); return }
+    await logAuditEntry('rm_unassigned', id, {})
+    setProfiles(prev => prev.map(p => p.id === id ? { ...p, managed_by_staff_id: null } : p))
+    if (selected?.id === id) setSelected(prev => ({ ...prev, managed_by_staff_id: null }))
+  }
+
+  // ===== VERIFICATION — profiles.verification_status already existed
+  // (completeness.js already reads it) par admin ke paas isko badalne ka
+  // koi button nahi tha. Yeh BharatMatrimony jaise trust-badge review jaisa
+  // hai, bina kisi naye column ke.
+  const setVerificationStatus = async (id, status) => {
+    const { error } = await supabase.from('profiles').update({ verification_status: status }).eq('id', id)
+    if (error) { alert('Update failed: ' + error.message); return }
+    await logAuditEntry('verification_status_change', id, { new_status: status })
+    setProfiles(prev => prev.map(p => p.id === id ? { ...p, verification_status: status } : p))
+    if (selected?.id === id) setSelected(prev => ({ ...prev, verification_status: status }))
+    loadStats()
+  }
+
+  // ===== NOTES / FOLLOW-UP — naya chhota profile_notes table, taaki RM
+  // conversations/decisions memory pe depend na karke likhe hue hon
+  // (CRM workflow doc: "Every conversation should become a note").
+  const loadNotesFor = async (profileId) => {
+    const { data } = await supabase.from('profile_notes').select('*').eq('profile_id', profileId).order('created_at', { ascending: false })
+    setNotesByProfile(prev => ({ ...prev, [profileId]: data || [] }))
+  }
+
+  const addNote = async (profileId) => {
+    if (!newNote.trim()) return
+    const { error } = await supabase.from('profile_notes').insert({
+      profile_id: profileId,
+      staff_user_id: staffUser.user_id,
+      note: newNote.trim(),
+      follow_up_at: newNoteFollowUp || null,
+    })
+    if (error) { alert('Could not save note: ' + error.message); return }
+    setNewNote('')
+    setNewNoteFollowUp('')
+    loadNotesFor(profileId)
+  }
+
+  // ===== BULK ACTIONS — pending queue bade hone par ek-ek profile expand
+  // karke action lena slow ho jaata hai; checkbox select + ek-saath apply.
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds(prev => prev.size === profiles.length ? new Set() : new Set(profiles.map(p => p.id)))
+  }
+
+  const bulkUpdateStatus = async (status) => {
+    if (selectedIds.size === 0) return
+    setBulkWorking(true)
+    const ids = [...selectedIds]
+    const { error } = await supabase.from('profiles').update({ profile_status: status }).in('id', ids)
+    if (error) {
+      alert('Bulk update failed: ' + error.message)
+    } else {
+      await Promise.all(ids.map(id => logAuditEntry('profile_status_change', id, { new_status: status, via: 'bulk' })))
+      setProfiles(prev => prev.map(p => ids.includes(p.id) ? { ...p, profile_status: status } : p))
+      setSelectedIds(new Set())
+      loadStats()
+    }
+    setBulkWorking(false)
   }
 
   // ===== FIND MATCHES (reuses existing matching.js — koi naya algorithm nahi) =====
@@ -288,6 +395,19 @@ export default function Admin({ staffUser }) {
         <CoordinationRequestsView onBack={()=>setView('list')} />
       )}
 
+      {view === 'verificationQueue' && (
+        <VerificationQueueView staffUser={staffUser} onBack={()=>{setView('list'); loadStats()}} />
+      )}
+
+      {view === 'reportsQueue' && (
+        <ReportsQueueView staffUser={staffUser} onBack={()=>{setView('list'); loadStats()}} />
+      )}
+
+      {view === 'myQueue' && (
+        <MyQueueView staffUser={staffUser} onBack={()=>setView('list')}
+          onOpenProfile={(p)=>{ setView('list'); setSelected(p) }} />
+      )}
+
       {view === 'findMatches' && matchesFor && (
         <FindMatchesView
           profile={matchesFor}
@@ -300,20 +420,26 @@ export default function Admin({ staffUser }) {
 
       {view === 'list' && (
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('myQueue')}>🗂 My Queue</button>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('verificationQueue')}>🛡 Verification{stats.needsVerification > 0 ? ` (${stats.needsVerification})` : ''}</button>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('reportsQueue')}>🚩 Reports{stats.openReports > 0 ? ` (${stats.openReports})` : ''}</button>
           <button className="btn btn-outline btn-sm" onClick={()=>setView('casteSuggestions')}>📋 Caste Suggestions</button>
           <button className="btn btn-outline btn-sm" onClick={()=>setView('coordinationRequests')}>🤝 Coordination Requests</button>
           <button className="btn btn-outline btn-sm" onClick={()=>setView('shareLinks')}>🔗 My Share Links</button>
           <button className="btn btn-black btn-sm" onClick={()=>setView('createClient')}>+ Create Client Profile</button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
           {[
             { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555', Icon: Users },
             { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309', Icon: Clock },
             { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a', Icon: CheckCircle2 },
             { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626', Icon: ShieldX },
+            { label: 'Needs Verification', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert, onClick: () => setView('verificationQueue') },
+            { label: 'Open Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag, onClick: () => setView('reportsQueue') },
           ].map(s => (
-            <div key={s.label} style={{ background: s.bg, borderRadius: 'var(--radius)', padding: '14px 16px', transition: 'transform 0.15s, box-shadow 0.15s' }}
+            <div key={s.label} style={{ background: s.bg, borderRadius: 'var(--radius)', padding: '14px 16px', transition: 'transform 0.15s, box-shadow 0.15s', cursor: s.onClick ? 'pointer' : 'default' }}
+              onClick={s.onClick}
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)' }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -386,6 +512,10 @@ export default function Admin({ staffUser }) {
                 {EDUCATIONS.map(e=><option key={e} value={e}>{e}</option>)}
               </select>
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 14, cursor: 'pointer' }}>
+              <input type="checkbox" checked={filters.assignedToMe} onChange={e=>setFilters(f=>({...f,assignedToMe:e.target.checked}))} />
+              Assigned to me only
+            </label>
             {activeFilterCount > 0 && (
               <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={resetFilters}>Reset Filters</button>
             )}
@@ -412,6 +542,22 @@ export default function Admin({ staffUser }) {
           </div>
         )}
 
+        {profiles.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, fontSize: 12, color: '#8e8e8e' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={selectedIds.size === profiles.length} onChange={toggleSelectAll} />
+              Select all
+            </label>
+            {selectedIds.size > 0 && (
+              <>
+                <span>{selectedIds.size} selected</span>
+                <button className="btn btn-black btn-sm" disabled={bulkWorking} onClick={() => bulkUpdateStatus('active')}>✓ Approve Selected</button>
+                <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }} disabled={bulkWorking} onClick={() => bulkUpdateStatus('blocked')}>✕ Block Selected</button>
+              </>
+            )}
+          </div>
+        )}
+
         {!loading && profiles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#8e8e8e', fontSize: 14 }}>
             {search || activeFilterCount > 0
@@ -424,6 +570,7 @@ export default function Admin({ staffUser }) {
               <div key={p.id} className="list-row clickable"
                 onClick={() => setSelected(selected?.id === p.id ? null : p)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <input type="checkbox" checked={selectedIds.has(p.id)} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(p.id)} />
                   <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#f0f0f0', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {photos[p.id]
                       ? <SignedImage path={photos[p.id]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -464,6 +611,70 @@ export default function Admin({ staffUser }) {
                       ))}
                     </div>
                     {p.about_me && <div style={{ fontSize: 13, color: '#555', background: '#f9f9f9', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>{p.about_me}</div>}
+
+                    {/* RM assignment — profiles.managed_by_staff_id, already in DB */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 12 }}>
+                      <UserCheck size={14} color="#8e8e8e" />
+                      {p.managed_by_staff_id ? (
+                        <>
+                          <span style={{ color: '#8e8e8e' }}>
+                            {p.managed_by_staff_id === staffUser.user_id ? 'Assigned to you' : 'Assigned to another staff member'}
+                          </span>
+                          <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11 }}
+                            onClick={e => { e.stopPropagation(); unassign(p.id) }}>Unassign</button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ color: '#8e8e8e' }}>Unassigned</span>
+                          <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11 }}
+                            onClick={e => { e.stopPropagation(); assignToMe(p.id) }}>Assign to me</button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Verification — profiles.verification_status + id_document_uploaded, already in DB */}
+                    {p.id_document_uploaded && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: 12 }}>
+                        {p.verification_status === 'verified'
+                          ? <ShieldCheck size={14} color="#16a34a" />
+                          : <ShieldAlert size={14} color="#2563eb" />}
+                        <span style={{ color: '#8e8e8e' }}>
+                          ID document {p.verification_status === 'verified' ? 'verified' : p.verification_status === 'rejected' ? 'rejected' : 'pending review'}
+                        </span>
+                        {p.verification_status !== 'verified' && (
+                          <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11, color: '#16a34a', borderColor: '#16a34a' }}
+                            onClick={e => { e.stopPropagation(); setVerificationStatus(p.id, 'verified') }}>✓ Verify</button>
+                        )}
+                        {p.verification_status !== 'rejected' && (
+                          <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11, color: '#dc2626', borderColor: '#dc2626' }}
+                            onClick={e => { e.stopPropagation(); setVerificationStatus(p.id, 'rejected') }}>✕ Reject</button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Notes / follow-up — naya chhota profile_notes table */}
+                    <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#8e8e8e', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <StickyNote size={13} /> Notes & Follow-ups
+                      </div>
+                      {(notesByProfile[p.id] || []).map(n => (
+                        <div key={n.id} style={{ fontSize: 12, background: '#f9f9f9', padding: '8px 10px', borderRadius: 8, marginBottom: 6 }}>
+                          <div>{n.note}</div>
+                          <div style={{ fontSize: 10, color: '#bbb', marginTop: 4 }}>
+                            {new Date(n.created_at).toLocaleString('en-IN')}
+                            {n.follow_up_at && <> · Follow up: {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</>}
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                        <input className="form-input" placeholder="Add a note (call log, decision, etc.)" value={selected?.id === p.id ? newNote : ''}
+                          onChange={e => setNewNote(e.target.value)} style={{ flex: '1 1 200px', fontSize: 12 }} />
+                        <input className="form-input" type="date" value={selected?.id === p.id ? newNoteFollowUp : ''}
+                          onChange={e => setNewNoteFollowUp(e.target.value)} style={{ fontSize: 12, width: 140 }} />
+                        <button className="btn btn-outline btn-sm" onClick={() => addNote(p.id)}>+ Add</button>
+                      </div>
+                    </div>
+
                     {idMetadata[p.id] && (
                       <div style={{ fontSize: 11, color: '#8e8e8e', background: '#f5f5f5', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
                         🔒 Admin only — Profile ID <strong style={{ fontFamily: 'monospace' }}>{p.profile_code}</strong> generated {new Date(idMetadata[p.id].created_at).toLocaleString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
@@ -819,6 +1030,28 @@ function CoordinationRequestsView({ onBack }) {
     }
   }
 
+  // "viewed" status — SmartMatchApp jaisa sent→viewed→accepted/declined lifecycle
+  const handleMarkViewed = async (id) => {
+    try {
+      const { error } = await supabase.from('introductions').update({ viewed_at: new Date().toISOString() }).eq('id', id)
+      if (error) throw error
+      load()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  // Post-introduction feedback — Shaadi VIP jaisa closed feedback loop
+  const handleSaveFeedback = async (id, fb) => {
+    try {
+      const { error } = await supabase.from('introductions').update(fb).eq('id', id)
+      if (error) throw error
+      load()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
@@ -853,7 +1086,10 @@ function CoordinationRequestsView({ onBack }) {
                     {r.status}
                   </div>
                 </div>
-                <div style={{display:'flex',gap:8,marginTop:10}}>
+                <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
+                  {!r.viewed_at && (
+                    <button className="btn btn-outline btn-sm" onClick={()=>handleMarkViewed(r.id)}>👁 Mark Viewed</button>
+                  )}
                   {r.status !== 'contacted' && (
                     <button className="btn btn-outline btn-sm" style={{color:'#16a34a',borderColor:'#16a34a'}}
                       onClick={()=>handleAction(r.id, 'contacted')}>✓ Mark Contacted</button>
@@ -862,10 +1098,260 @@ function CoordinationRequestsView({ onBack }) {
                     <button className="btn btn-outline btn-sm" onClick={()=>handleAction(r.id, 'closed')}>Close</button>
                   )}
                 </div>
+                {r.viewed_at && <div style={{fontSize:10,color:'#bbb',marginTop:6}}>Viewed {new Date(r.viewed_at).toLocaleString('en-IN')}</div>}
+
+                {/* Post-introduction feedback — closes the VIP-matchmaking style loop: feedback sharpens the next match */}
+                {r.status === 'closed' && (
+                  r.feedback ? (
+                    <div style={{fontSize:12,color:'#555',background:'#f9f9f9',padding:'8px 10px',borderRadius:8,marginTop:8}}>
+                      Feedback ({r.feedback_rating || 'n/a'}): {r.feedback}
+                    </div>
+                  ) : (
+                    <FeedbackForm requestId={r.id} onSave={(fb)=>handleSaveFeedback(r.id, fb)} />
+                  )
+                )}
               </div>
             )
           })}
         </div>
+      )}
+    </div>
+  )
+}
+
+function FeedbackForm({ requestId, onSave }) {
+  const [text, setText] = useState('')
+  const [rating, setRating] = useState('neutral')
+  return (
+    <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}}>
+      <select className="form-select" value={rating} onChange={e=>setRating(e.target.value)} style={{fontSize:12,width:110}}>
+        <option value="positive">👍 Positive</option>
+        <option value="neutral">〰 Neutral</option>
+        <option value="negative">👎 Negative</option>
+      </select>
+      <input className="form-input" placeholder="How did the meeting go?" value={text} onChange={e=>setText(e.target.value)} style={{flex:'1 1 180px',fontSize:12}} />
+      <button className="btn btn-outline btn-sm" onClick={()=>text.trim() && onSave({ feedback: text.trim(), feedback_rating: rating })}>Save Feedback</button>
+    </div>
+  )
+}
+
+// ===== VERIFICATION QUEUE — profiles.verification_status + id_document_uploaded
+// already existed in the DB; yeh view sirf unko surface karta hai, jaise
+// BharatMatrimony ka trust-badge review workflow.
+function VerificationQueueView({ staffUser, onBack }) {
+  const [profiles, setProfiles] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, profile_code, age, city, verification_status, id_document_uploaded, created_at')
+      .eq('id_document_uploaded', true)
+      .neq('verification_status', 'verified')
+      .order('created_at', { ascending: true })
+    if (error) console.error(error.message)
+    setProfiles(data || [])
+    setLoading(false)
+  }
+
+  const act = async (id, status) => {
+    const { error } = await supabase.from('profiles').update({ verification_status: status }).eq('id', id)
+    if (error) { alert(error.message); return }
+    await supabase.from('audit_logs').insert({
+      actor_user_id: staffUser.user_id, actor_role: staffUser.role,
+      action: 'verification_status_change', entity_type: 'profile', entity_id: id, metadata: { new_status: status },
+    }).then(()=>{}, ()=>{})
+    load()
+  }
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Verification Queue</h2>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles that uploaded an ID document and are waiting on review</div>
+
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : profiles.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Nothing waiting on verification right now.</div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {profiles.map(p => (
+            <div key={p.id} className="list-row">
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:600}}>{p.full_name}</div>
+                  <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+                </div>
+                <div className="badge" style={{fontSize:10, background:'#eff6ff', color:'#2563eb'}}>
+                  {p.verification_status === 'rejected' ? 'Previously rejected' : 'Pending review'}
+                </div>
+              </div>
+              <div style={{display:'flex',gap:8,marginTop:10}}>
+                <button className="btn btn-black btn-sm" onClick={()=>act(p.id,'verified')}>✓ Verify</button>
+                <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}} onClick={()=>act(p.id,'rejected')}>✕ Reject</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ===== REPORTS QUEUE — profile_reports table already existed in the DB
+// (client "Report" flow writes to it) par admin side koi review UI nahi tha.
+function ReportsQueueView({ staffUser, onBack }) {
+  const [reports, setReports] = useState([])
+  const [profilesById, setProfilesById] = useState({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('profile_reports')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+    if (error) { console.error(error.message); setLoading(false); return }
+    const rows = data || []
+    setReports(rows)
+    const ids = [...new Set(rows.flatMap(r => [r.reporter_profile_id, r.reported_profile_id]))]
+    if (ids.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, profile_status').in('id', ids)
+      const map = {}
+      ;(profs || []).forEach(p => { map[p.id] = p })
+      setProfilesById(map)
+    }
+    setLoading(false)
+  }
+
+  const resolve = async (id, status, reportedProfileId, alsoBlock) => {
+    const { error } = await supabase.from('profile_reports').update({
+      status, resolved_at: new Date().toISOString(), resolved_by: staffUser.user_id,
+    }).eq('id', id)
+    if (error) { alert(error.message); return }
+    if (alsoBlock && reportedProfileId) {
+      await supabase.from('profiles').update({ profile_status: 'blocked' }).eq('id', reportedProfileId)
+    }
+    load()
+  }
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Reports Queue</h2>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles reported by other members, awaiting review</div>
+
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : reports.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No pending reports.</div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {reports.map(r => {
+            const reporter = profilesById[r.reporter_profile_id]
+            const reported = profilesById[r.reported_profile_id]
+            return (
+              <div key={r.id} className="list-row">
+                <div style={{fontSize:14,fontWeight:600}}>
+                  {reported ? reported.full_name : 'Unknown'} <span style={{fontWeight:400,color:'#8e8e8e'}}>reported by {reporter ? reporter.full_name : 'Unknown'}</span>
+                </div>
+                <div style={{fontSize:12,color:'#555',marginTop:4}}>{r.reason}</div>
+                <div style={{fontSize:10,color:'#bbb',marginTop:4}}>{new Date(r.created_at).toLocaleDateString('en-IN')}</div>
+                <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
+                  <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
+                    onClick={()=>resolve(r.id, 'resolved', r.reported_profile_id, true)}>✕ Block Reported Profile</button>
+                  <button className="btn btn-outline btn-sm"
+                    onClick={()=>resolve(r.id, 'dismissed', r.reported_profile_id, false)}>Dismiss</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ===== MY QUEUE — "what needs me today" view (Shaadi/SmartMatchApp RM
+// dashboard pattern), existing tables se compute, koi naya data model nahi.
+function MyQueueView({ staffUser, onBack, onOpenProfile }) {
+  const [loading, setLoading] = useState(true)
+  const [overdueFollowUps, setOverdueFollowUps] = useState([])
+  const [assignedPending, setAssignedPending] = useState([])
+  const [newSubmissions, setNewSubmissions] = useState([])
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    const nowIso = new Date().toISOString()
+    const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
+    const [followUpsRes, assignedRes, newRes] = await Promise.all([
+      supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code)').lte('follow_up_at', nowIso).order('follow_up_at', { ascending: true }).limit(20),
+      supabase.from('profiles').select('id, full_name, profile_code, age, city, profile_status').eq('managed_by_staff_id', staffUser.user_id).eq('profile_status', 'pending').limit(20),
+      supabase.from('profiles').select('id, full_name, profile_code, age, city, created_at').eq('profile_status', 'pending').gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(20),
+    ])
+    setOverdueFollowUps(followUpsRes.data || [])
+    setAssignedPending(assignedRes.data || [])
+    setNewSubmissions(newRes.data || [])
+    setLoading(false)
+  }
+
+  const Section = ({ icon: Icon, title, items, renderItem, empty }) => (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+        <Icon size={14} /> {title} {items.length > 0 && `(${items.length})`}
+      </div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 12, color: '#bbb' }}>{empty}</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {items.map(renderItem)}
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>My Queue</h2>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Today's follow-ups, your assigned profiles, and new submissions</div>
+
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : (
+        <>
+          <Section icon={Clock} title="Follow-ups due" items={overdueFollowUps} empty="Nothing due."
+            renderItem={n => (
+              <div key={n.id} className="list-row clickable" onClick={()=>n.profiles && onOpenProfile(n.profiles)}>
+                <div style={{fontSize:13,fontWeight:600}}>{n.profiles?.full_name || 'Profile'}</div>
+                <div style={{fontSize:12,color:'#555',marginTop:2}}>{n.note}</div>
+                <div style={{fontSize:10,color:'#bbb',marginTop:4}}>Due {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</div>
+              </div>
+            )} />
+          <Section icon={ListChecks} title="Your pending profiles" items={assignedPending} empty="No pending profiles assigned to you."
+            renderItem={p => (
+              <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
+                <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
+                <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+              </div>
+            )} />
+          <Section icon={Users} title="New submissions this week" items={newSubmissions} empty="No new submissions this week."
+            renderItem={p => (
+              <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
+                <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
+                <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+              </div>
+            )} />
+        </>
       )}
     </div>
   )
