@@ -69,6 +69,7 @@ export default function Dashboard({ user }) {
   const [matches, setMatches] = useState([])
   const [myActions, setMyActions] = useState([]) // match_actions rows where actor = me
   const [myIntroductions, setMyIntroductions] = useState([]) // introductions (Talk/Meeting requests) involving me
+  const [myPhotoRequests, setMyPhotoRequests] = useState([]) // photo_requests (Request Photo) involving me — sent + received
   const [viewingMatchId, setViewingMatchId] = useState(null) // set when a match card is tapped, opens ProfileView
   const [receivedActions, setReceivedActions] = useState([]) // match_actions rows where target = me (others' interest in me)
   const [profileViewsCount, setProfileViewsCount] = useState(0)
@@ -107,6 +108,22 @@ export default function Dashboard({ user }) {
       setMyActions(myActionsList)
       const dislikedIds = new Set(myActionsList.filter(a => a.action === 'dislike').map(a => a.target_profile_id))
 
+      // Photo privacy — dusre member ki photo sirf tab dikhti hai jab usne
+      // meri "Request Photo" approve ki ho. Pehle requests load karte hain
+      // taaki neeche matches/activity ke photo paths isi se gate ho sakein.
+      // (Database RLS bhi yahi rule enforce karta hai; yeh client gate
+      // sirf UI ko consistent rakhta hai.)
+      const { data: photoReqs, error: photoReqErr } = await supabase
+        .from('photo_requests')
+        .select('*')
+        .or(`requester_profile_id.eq.${p.id},owner_profile_id.eq.${p.id}`)
+      if (photoReqErr) console.error('photo_requests load failed:', photoReqErr.message)
+      const photoReqList = photoReqs || []
+      setMyPhotoRequests(photoReqList)
+      const approvedOwnerIds = new Set(photoReqList
+        .filter(r => r.requester_profile_id === p.id && r.status === 'approved')
+        .map(r => r.owner_profile_id))
+
       // Load matches — "profiles_public_view" se (sensitive fields
       // pehle se hi exclude hain database-level pe) — opposite gender
       // pe query-level pe hi filter karte hain (efficient), phir baaki
@@ -136,7 +153,7 @@ export default function Dashboard({ user }) {
           matchScore: r.score,
           matchStrengths: r.strengths,
           matchNeedsDiscussion: r.needsDiscussion,
-          primaryPhotoPath: photoPathByProfile[r.profile.id] || null,
+          primaryPhotoPath: approvedOwnerIds.has(r.profile.id) ? (photoPathByProfile[r.profile.id] || null) : null,
         })))
       } else {
         setMatches([])
@@ -177,7 +194,7 @@ export default function Dashboard({ user }) {
         setReceivedActions(receivedList.map(r => ({
           ...r,
           actorProfile: actorById[r.actor_profile_id] || null,
-          actorPhotoPath: actorPhotoByProfile[r.actor_profile_id] || null,
+          actorPhotoPath: approvedOwnerIds.has(r.actor_profile_id) ? (actorPhotoByProfile[r.actor_profile_id] || null) : null,
         })))
       } else {
         setReceivedActions([])
@@ -238,6 +255,33 @@ export default function Dashboard({ user }) {
     const { error } = await supabase.from('introductions').update({ status: newStatus }).eq('id', introId)
     if (error) { alert('Could not update: ' + error.message); return }
     setMyIntroductions(prev => prev.map(i => i.id === introId ? { ...i, status: newStatus } : i))
+  }
+
+  // ===== PHOTO PRIVACY — Request Photo / Approve / Hide again =====
+  // Mere bheje hue request ka status us profile ke liye: null | 'pending' | 'approved' | 'declined'
+  const photoAccessFor = (targetProfileId) =>
+    myPhotoRequests.find(r => r.requester_profile_id === profile?.id && r.owner_profile_id === targetProfileId)?.status || null
+
+  const sendPhotoRequest = async (targetProfileId) => {
+    const { data, error } = await supabase.from('photo_requests')
+      .insert({ requester_profile_id: profile.id, owner_profile_id: targetProfileId, status: 'pending' })
+      .select().single()
+    if (error) {
+      if (error.code === '23505') { showToast('Photo request already sent') }
+      else { alert('Could not send photo request: ' + error.message) }
+      return
+    }
+    setMyPhotoRequests(prev => [...prev, data])
+    showToast('Photo request sent')
+  }
+
+  // Owner Approve kare to sirf us requester ko photo dikhegi; "Hide again"
+  // (declined) se access wapas chala jaata hai.
+  const respondToPhotoRequest = async (requestId, newStatus) => {
+    const responded_at = new Date().toISOString()
+    const { error } = await supabase.from('photo_requests').update({ status: newStatus, responded_at }).eq('id', requestId)
+    if (error) { alert('Could not update: ' + error.message); return }
+    setMyPhotoRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: newStatus, responded_at } : r))
   }
 
   const logout = async () => {
@@ -518,6 +562,7 @@ export default function Dashboard({ user }) {
                 introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
                 onSetAction={(action)=>setMatchAction(m.id, action)}
                 onSendIntro={(type)=>sendIntroductionRequest(m.id, type)}
+                photoAccess={photoAccessFor(m.id)} onRequestPhoto={()=>sendPhotoRequest(m.id)}
                 onToast={showToast} onBack={()=>setViewingMatchId(null)} />
             )
           })() : (
@@ -539,6 +584,7 @@ export default function Dashboard({ user }) {
                     introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
                     onSetAction={(action)=>setMatchAction(m.id, action)}
                     onSendIntro={(type)=>sendIntroductionRequest(m.id, type)}
+                    photoAccess={photoAccessFor(m.id)} onRequestPhoto={()=>sendPhotoRequest(m.id)}
                     onToast={showToast}
                     onView={()=>setViewingMatchId(m.id)} />
                 ))}
@@ -563,6 +609,7 @@ export default function Dashboard({ user }) {
               introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === activityViewProfile.id)}
               onSetAction={(action)=>setMatchAction(activityViewProfile.id, action)}
               onSendIntro={(type)=>sendIntroductionRequest(activityViewProfile.id, type)}
+              photoAccess={photoAccessFor(activityViewProfile.id)} onRequestPhoto={()=>sendPhotoRequest(activityViewProfile.id)}
               onToast={showToast} onBack={()=>setActivityViewProfile(null)} />
           ) : (
             <ActivityTab
@@ -577,7 +624,8 @@ export default function Dashboard({ user }) {
 
         {/* REQUESTS TAB */}
         {activeTab === 'requests' && (
-          <RequestsTab myProfile={profile} introductions={myIntroductions} onRespond={respondToIntroduction} />
+          <RequestsTab myProfile={profile} introductions={myIntroductions} onRespond={respondToIntroduction}
+            photoRequests={myPhotoRequests} onRespondPhoto={respondToPhotoRequest} />
         )}
 
         {/* PROFILE TAB — Instagram-style header + icon list */}
@@ -644,6 +692,7 @@ export default function Dashboard({ user }) {
               introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === searchViewProfile.id)}
               onSetAction={(action)=>setMatchAction(searchViewProfile.id, action)}
               onSendIntro={(type)=>sendIntroductionRequest(searchViewProfile.id, type)}
+              photoAccess={photoAccessFor(searchViewProfile.id)} onRequestPhoto={()=>sendPhotoRequest(searchViewProfile.id)}
               onToast={showToast} onBack={()=>setSearchViewProfile(null)} />
           ) : (
             <SearchByProfileId onView={(p)=>setSearchViewProfile(p)} onBack={()=>setActiveTab('profile')} />
@@ -715,7 +764,8 @@ export default function Dashboard({ user }) {
 
       {/* Bottom Nav — icons only, label on active tab */}
       <BottomNav active={activeTab} onChange={setActiveTab} avatarPath={primaryPhoto?.storage_path}
-        dots={{ requests: myIntroductions.some(i => i.to_profile === profile?.id && (!i.status || i.status === 'pending')) }} />
+        dots={{ requests: myIntroductions.some(i => i.to_profile === profile?.id && (!i.status || i.status === 'pending'))
+          || myPhotoRequests.some(r => r.owner_profile_id === profile?.id && r.status === 'pending') }} />
     </div>
   )
 }
@@ -735,7 +785,7 @@ function FactRow({ k, v }) {
 // Match card — score ke saath "Why this match?" expand karke poora
 // breakdown dikhata hai (Strong Matches ✓ / Needs Discussion △) — fake
 // percentage nahi, actual matching.js se aaya hua real explanation.
-function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, onView, onToast }) {
+function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, photoAccess, onRequestPhoto, onView, onToast }) {
   // "You match X/Y preferences" — existing matching.js strengths/needsDiscussion
   // se hi nikala, koi naya scoring logic nahi. Strength = matched, needsDiscussion
   // = evaluated but not matched; total = dono ka sum.
@@ -746,15 +796,12 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
     <div className="match-card">
       <div style={{display:'flex',gap:14,alignItems:'center',padding:'14px 8px 10px 14px',cursor:'pointer'}} onClick={onView}>
         <div className="avatar" style={{position:'relative',width:64,height:64}}>
-          {m.primaryPhotoPath
-            ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(6px)'}} />
-            : <UserRound size={26} />
+          {/* Photo privacy — owner ke approve karne par hi photo; approve ho
+              gayi to premium blur nahi (owner ne khud consent diya hai). */}
+          {photoAccess === 'approved' && m.primaryPhotoPath
+            ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+            : photoAccess === 'approved' ? <UserRound size={26} /> : <LockIcon size={22} />
           }
-          {!viewerIsPremium && m.primaryPhotoPath && (
-            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(36,26,30,0.15)',color:'#fff'}}>
-              <LockIcon size={16} />
-            </div>
-          )}
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:600,fontSize:16,marginBottom:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{m.full_name}</div>
@@ -773,6 +820,7 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
             {profileManagedByLabel(m.profile_for) && (
               <span className="chip chip-muted" title={'Profile created for: ' + m.profile_for}><UserRound size={11} /> {profileManagedByLabel(m.profile_for)}</span>
             )}
+            <PhotoRequestChip status={photoAccess} onRequest={onRequestPhoto} />
           </div>
         </div>
         <ProfileActionsMenu profile={m} onBlock={()=>onSetAction('dislike')} onToast={onToast} />
@@ -786,6 +834,20 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
           aria-pressed={myAction==='super_like'} onClick={()=>onSetAction('super_like')}><Star size={20} /></button>
       </div>
     </div>
+  )
+}
+
+// Match card / list pe chhota "Request photo" chip — status ke hisaab se
+// label badalta hai. Approved hone par kuch nahi dikhata (photo hi dikh rahi hai).
+function PhotoRequestChip({ status, onRequest }) {
+  if (status === 'approved') return null
+  if (status === 'pending') return <span className="chip chip-warning"><Clock size={11} /> Photo requested</span>
+  if (status === 'declined') return <span className="chip chip-muted"><LockIcon size={11} /> Photo private</span>
+  return (
+    <button type="button" className="chip chip-primary" style={{border:'none',cursor:'pointer'}}
+      onClick={(e)=>{ e.stopPropagation(); onRequest && onRequest() }}>
+      <Camera size={11} /> Request photo
+    </button>
   )
 }
 
@@ -871,18 +933,20 @@ function HelpView({ profileCode, onBack, onToast }) {
   )
 }
 
-function RequestsTab({ myProfile, introductions, onRespond }) {
+function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], onRespondPhoto }) {
   const [subTab, setSubTab] = useState('received') // 'received' | 'sent'
   const [profilesById, setProfilesById] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadProfileNames()
-  }, [introductions])
+  }, [introductions, photoRequests])
 
   const loadProfileNames = async () => {
-    const ids = [...new Set(introductions.flatMap(i => [i.from_profile, i.to_profile]))]
-      .filter(id => id !== myProfile.id)
+    const ids = [...new Set([
+      ...introductions.flatMap(i => [i.from_profile, i.to_profile]),
+      ...photoRequests.flatMap(r => [r.requester_profile_id, r.owner_profile_id]),
+    ])].filter(id => id !== myProfile.id)
     if (ids.length === 0) { setLoading(false); return }
     const { data } = await supabase.from('profiles_public_view').select('id, full_name').in('id', ids)
     const map = {}
@@ -893,6 +957,10 @@ function RequestsTab({ myProfile, introductions, onRespond }) {
 
   const received = introductions.filter(i => i.to_profile === myProfile.id)
   const sent = introductions.filter(i => i.from_profile === myProfile.id)
+  const photoReceived = photoRequests.filter(r => r.owner_profile_id === myProfile.id)
+  const photoSent = photoRequests.filter(r => r.requester_profile_id === myProfile.id)
+  const pendingReceivedCount = received.filter(i => !i.status || i.status === 'pending').length
+    + photoReceived.filter(r => r.status === 'pending').length
 
   return (
     <div>
@@ -902,7 +970,7 @@ function RequestsTab({ myProfile, introductions, onRespond }) {
         {[['received', Inbox], ['sent', Send]].map(([t, Icon])=>(
           <button key={t} className={'pill-tab '+(subTab===t?'active':'')} onClick={()=>setSubTab(t)}
             style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-            <Icon size={15} /> {t}{t === 'received' && received.length>0 ? ` · ${received.length}` : ''}
+            <Icon size={15} /> {t}{t === 'received' && pendingReceivedCount>0 ? ` · ${pendingReceivedCount}` : ''}
           </button>
         ))}
       </div>
@@ -910,7 +978,43 @@ function RequestsTab({ myProfile, introductions, onRespond }) {
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'var(--gray3)',fontSize:13}}>Loading...</div>
       ) : subTab === 'received' ? (
-        received.length === 0 ? (
+        <>
+        {photoReceived.length > 0 && (
+          <div style={{marginBottom:18}}>
+            <SectionLabel icon={Camera}>Photo requests</SectionLabel>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {photoReceived.map(r => (
+                <div key={r.id} className="list-row">
+                  <div style={{display:'flex',alignItems:'center',gap:12,marginBottom: r.status === 'pending' ? 12 : 6}}>
+                    <div className="avatar" style={{width:42,height:42}}><Camera size={18} /></div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:15,fontWeight:600}}>{profilesById[r.requester_profile_id] || 'A member'}</div>
+                      <div style={{fontSize:12,color:'var(--gray3)'}}>Wants to see your photos</div>
+                    </div>
+                  </div>
+                  {r.status === 'pending' ? (
+                    <div style={{display:'flex',gap:8}}>
+                      <button className="btn btn-primary btn-sm" style={{flex:1}} onClick={()=>onRespondPhoto(r.id,'approved')}><Eye size={15} /> Show photo</button>
+                      <button className="btn btn-outline btn-sm" style={{flex:1}} onClick={()=>onRespondPhoto(r.id,'declined')}><X size={15} /> Decline</button>
+                    </div>
+                  ) : r.status === 'approved' ? (
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <span style={{flex:1,fontSize:12,color:'var(--success)',display:'flex',gap:6,alignItems:'center'}}><Eye size={14} /> Can see your photos</span>
+                      <button className="btn btn-outline btn-sm" onClick={()=>onRespondPhoto(r.id,'declined')}><EyeOff size={14} /> Hide again</button>
+                    </div>
+                  ) : (
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <span style={{flex:1,fontSize:12,color:'var(--gray3)',display:'flex',gap:6,alignItems:'center'}}><EyeOff size={14} /> Photos hidden</span>
+                      <button className="btn btn-soft btn-sm" onClick={()=>onRespondPhoto(r.id,'approved')}><Eye size={14} /> Show photo</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {received.length === 0 ? (
+          photoReceived.length === 0 &&
           <EmptyState icon={Inbox} title="No requests yet" text="Talk & meet requests show up here" />
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
@@ -944,9 +1048,28 @@ function RequestsTab({ myProfile, introductions, onRespond }) {
               </div>
             ))}
           </div>
-        )
+        )}
+        </>
       ) : (
-        sent.length === 0 ? (
+        <>
+        {photoSent.length > 0 && (
+          <div style={{marginBottom:18}}>
+            <SectionLabel icon={Camera}>Photo requests</SectionLabel>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {photoSent.map(r => (
+                <div key={r.id} className="list-row" style={{display:'flex',alignItems:'center',gap:12}}>
+                  <div className="avatar" style={{width:42,height:42}}><Camera size={18} /></div>
+                  <div style={{flex:1,fontSize:15,fontWeight:600}}>{profilesById[r.owner_profile_id] || 'Profile'}</div>
+                  <span className={'chip ' + (r.status==='approved' ? 'chip-success' : r.status==='declined' ? 'chip-muted' : 'chip-warning')}>
+                    {r.status==='approved' ? 'Photo shared' : r.status==='declined' ? 'Photo private' : 'Pending'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {sent.length === 0 ? (
+          photoSent.length === 0 &&
           <EmptyState icon={Send} title="No requests sent" text="Open a profile and tap Talk / Meet" />
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
@@ -964,7 +1087,8 @@ function RequestsTab({ myProfile, introductions, onRespond }) {
               </div>
             ))}
           </div>
-        )
+        )}
+        </>
       )}
     </div>
   )

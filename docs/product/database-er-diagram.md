@@ -256,6 +256,25 @@ accept/decline flow; they just see "our relationship manager will
 contact you to coordinate." Staff work these from the Admin panel's
 "Coordination Requests" section (mark Contacted / Closed).
 
+### photo_requests
+
+```text
+id uuid pk
+requester_profile_id uuid fk profiles.id   -- who wants to see the photo
+owner_profile_id uuid fk profiles.id       -- whose photo it is
+status text               -- 'pending' -> 'approved' / 'declined' (owner can flip either way: "Hide again")
+created_at timestamptz
+responded_at timestamptz
+unique(requester_profile_id, owner_profile_id)
+```
+Photo privacy: every member's photos are hidden by default. A viewer
+taps "Request photo" on a match card / profile; the owner sees it under
+Requests and can Show photo / Decline, and later Hide again. Enforced in
+the database, not just the UI: `can_view_profile_photos(owner)` (owner,
+staff, or approved requester) gates both the `photos` table SELECT policy
+and the `lovekush-photos` storage SELECT policy. SQL:
+`supabase/migrations/20261002_photo_requests_and_private_photos.sql`.
+
 ## Future ERD
 
 ```text
