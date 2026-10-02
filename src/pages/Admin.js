@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Users, Clock, CheckCircle2, ShieldX } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
 import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/profileOptions'
@@ -307,13 +308,18 @@ export default function Admin({ staffUser }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
           {[
-            { label: 'Total', val: stats.total, bg: '#f5f5f5' },
-            { label: 'Pending', val: stats.pending, bg: '#fff8e1' },
-            { label: 'Active', val: stats.active, bg: '#f0fdf4' },
-            { label: 'Blocked', val: stats.blocked, bg: '#fef2f2' },
+            { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555', Icon: Users },
+            { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309', Icon: Clock },
+            { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a', Icon: CheckCircle2 },
+            { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626', Icon: ShieldX },
           ].map(s => (
-            <div key={s.label} style={{ background: s.bg, borderRadius: 'var(--radius)', padding: '14px 16px' }}>
-              <div style={{ fontFamily:'var(--font-display)', fontSize: 28, fontWeight:500 }}>{s.val}</div>
+            <div key={s.label} style={{ background: s.bg, borderRadius: 'var(--radius)', padding: '14px 16px', transition: 'transform 0.15s, box-shadow 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                <div style={{ fontFamily:'var(--font-display)', fontSize: 28, fontWeight:500 }}>{s.val}</div>
+                <s.Icon size={16} color={s.fg} style={{ opacity: 0.7 }} />
+              </div>
               <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{s.label}</div>
             </div>
           ))}
@@ -343,7 +349,8 @@ export default function Admin({ staffUser }) {
         {/* ADVANCED FILTERS PANEL */}
         {showFilters && (
           <div className="list-row" style={{ marginBottom: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Religion & Community</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               <select className="form-select" value={filters.religion} onChange={e=>setFilters(f=>({...f,religion:e.target.value}))}>
                 <option value="">Any Religion</option>
                 {RELIGIONS.map(r=><option key={r} value={r}>{r}</option>)}
@@ -352,12 +359,24 @@ export default function Admin({ staffUser }) {
                 <option value="">Any Community</option>
                 {CASTES.map(c=><option key={c} value={c}>{c}</option>)}
               </select>
+            </div>
+
+            <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Location & Demographics</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               <input className="form-input" placeholder="City" value={filters.city}
                 onChange={e=>setFilters(f=>({...f,city:e.target.value}))} />
               <select className="form-select" value={filters.gender} onChange={e=>setFilters(f=>({...f,gender:e.target.value}))}>
                 <option value="">Any Gender</option>
                 <option>Male</option><option>Female</option>
               </select>
+              <input className="form-input" type="number" placeholder="Age Min" value={filters.ageMin}
+                onChange={e=>setFilters(f=>({...f,ageMin:e.target.value}))} />
+              <input className="form-input" type="number" placeholder="Age Max" value={filters.ageMax}
+                onChange={e=>setFilters(f=>({...f,ageMax:e.target.value}))} />
+            </div>
+
+            <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Marital Status & Education</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <select className="form-select" value={filters.maritalStatus} onChange={e=>setFilters(f=>({...f,maritalStatus:e.target.value}))}>
                 <option value="">Any Marital Status</option>
                 {MARITAL_STATUSES.map(m=><option key={m} value={m}>{m}</option>)}
@@ -366,10 +385,6 @@ export default function Admin({ staffUser }) {
                 <option value="">Any Education</option>
                 {EDUCATIONS.map(e=><option key={e} value={e}>{e}</option>)}
               </select>
-              <input className="form-input" type="number" placeholder="Age Min" value={filters.ageMin}
-                onChange={e=>setFilters(f=>({...f,ageMin:e.target.value}))} />
-              <input className="form-input" type="number" placeholder="Age Max" value={filters.ageMax}
-                onChange={e=>setFilters(f=>({...f,ageMax:e.target.value}))} />
             </div>
             {activeFilterCount > 0 && (
               <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={resetFilters}>Reset Filters</button>
