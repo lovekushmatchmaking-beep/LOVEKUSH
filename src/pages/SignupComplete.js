@@ -48,7 +48,7 @@ export default function SignupComplete({ profile, photoPreview, onContinue }) {
         </h1>
         <div className="profile-code" style={{display:'inline-block',marginBottom:16}}>{profile?.profile_code}</div>
         <p style={{fontSize:14,color:'var(--gray3)',lineHeight:1.7,maxWidth:320,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-          <ShieldCheck size={16} style={{color:'var(--primary)'}} /> Review in 24-48 hrs, then matches begin
+          <ShieldCheck size={16} style={{color:'var(--primary)'}} /> We'll review your profile and ask for a quick selfie to verify you. Matches begin once you're verified
         </p>
       </div>
 
