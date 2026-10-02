@@ -33,6 +33,7 @@ import SignedImage from '../components/SignedImage'
 import MultiSelectChips from '../components/MultiSelectChips'
 import DualRangeSlider from '../components/DualRangeSlider'
 import CheckboxDropdown from '../components/CheckboxDropdown'
+import { TrinityLogo } from '../components/BrandLogo'
 
 const DASHBOARD_TABS = ['home', 'matches', 'matchsearch', 'activity', 'requests', 'profile', 'searchid',
   'editphotos', 'editprofile', 'accountsettings', 'privacy', 'help', 'biodata', 'disliked']
@@ -263,8 +264,7 @@ export default function Dashboard({ user }) {
   if(loading) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)'}}>
       <div style={{textAlign:'center'}}>
-        <Heart size={28} style={{color:'var(--primary)',fill:'var(--primary-soft)',marginBottom:10,animation:'pop 1.2s ease infinite'}} />
-        <div style={{fontFamily:'var(--font-display)',fontSize:18,fontWeight:500,letterSpacing:'0.35em'}}>LOVEKUSH</div>
+        <TrinityLogo size={64} className="logo-breathe" />
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Heart, Lock } from 'lucide-react'
+import { Lock } from 'lucide-react'
+import { SplashScreen } from './components/BrandLogo'
 import { supabase } from './supabase'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
@@ -24,6 +25,23 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [staffUser, setStaffUser] = useState(null) // null = not staff, undefined = still checking
   const [loading, setLoading] = useState(true)
+  // Splash — har app-open par ek baar (session mein), kam se kam itni der
+  // dikhta hai taaki logo flash na ho; phir smooth fade-out.
+  const [splash, setSplash] = useState(() => {
+    try { return sessionStorage.getItem('lk_splash') ? 'off' : 'on' } catch { return 'on' }
+  })
+  useEffect(() => {
+    if (splash !== 'on') return
+    const t = setTimeout(() => setSplash('min-done'), 1600)
+    return () => clearTimeout(t)
+  }, [splash])
+  useEffect(() => {
+    if (splash !== 'min-done' || loading) return
+    setSplash('leaving')
+    try { sessionStorage.setItem('lk_splash', '1') } catch {}
+    const t = setTimeout(() => setSplash('off'), 450)
+    return () => clearTimeout(t)
+  }, [splash, loading])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -59,16 +77,11 @@ export default function App() {
     setLoading(false)
   }
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
-      <div style={{ textAlign: 'center' }}>
-        <Heart size={28} style={{ color: 'var(--primary)', fill: 'var(--primary-soft)', marginBottom: 10, animation: 'pop 1.2s ease infinite' }} />
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, letterSpacing: '0.4em' }}>LOVEKUSH</div>
-      </div>
-    </div>
-  )
+  if (loading || splash === 'on' || splash === 'min-done') return <SplashScreen />
 
   return (
+    <>
+    {splash === 'leaving' && <SplashScreen leaving />}
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing user={user} />} />
@@ -100,5 +113,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
+    </>
   )
 }

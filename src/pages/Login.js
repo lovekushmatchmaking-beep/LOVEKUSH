@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { FormLabel } from '../components/ui'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
+import { BrandLockup } from '../components/BrandLogo'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -26,7 +27,7 @@ export default function Login() {
   return (
     <div style={{minHeight:'100vh',background:'#fff'}}>
       <nav className="navbar">
-        <Link to="/" className="nav-brand">LOVEKUSH</Link>
+        <Link to="/" style={{ textDecoration: 'none' }}><BrandLockup size={28} /></Link>
         <Link to="/register" className="btn btn-black" style={{fontSize:12,padding:'8px 16px'}}>Register</Link>
       </nav>
 

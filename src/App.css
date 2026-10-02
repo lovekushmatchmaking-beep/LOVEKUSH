@@ -1,44 +1,52 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,400&family=Inter:wght@300;400;500;600;700&family=Poppins:wght@200;300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,400&family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@200;300;400;500;600&display=swap');
 
 :root {
-  /* ---- Brand palette — soft maroon/rose + muted gold (shaadi feel) ----
-     Poore app mein accent sirf --primary se aata hai; naya color likhne
-     ke bajaye inhi tokens ko reuse karo. */
-  --primary: #9e3b5a;
-  --primary-600: #86304b;
-  --primary-soft: #fbeef2;
-  --primary-tint: #f4dbe3;
-  --gold: #b8913f;
-  --gold-soft: #fbf5e6;
-  --ink: #241a1e;
+  /* ---- Brand palette — LOVEKUSH trinity formula ----
+     Purple #6A1B9A → Pink #D81B60 → Magenta #E1306C → Orange #F56040 →
+     Gold #F6C177, ivory background. Single UI accent = brand pink;
+     gradient sirf hero CTA, avatar ring, progress, splash ke liye. */
+  --brand-purple: #6A1B9A;
+  --brand-pink: #D81B60;
+  --brand-magenta: #E1306C;
+  --brand-orange: #F56040;
+  --brand-peach: #F6C177;
+  --brand-gradient: linear-gradient(135deg, #6A1B9A 0%, #D81B60 42%, #E1306C 58%, #F56040 82%, #F6C177 100%);
+  --primary: #D81B60;
+  --primary-600: #B8144F;
+  --primary-soft: #FDEEF3;
+  --primary-tint: #F8D2E0;
+  --gold: #D4AF37;
+  --gold-soft: #FBF5E3;
+  --ivory: #F7F3EA;
+  --ink: #1F1720;
   --black: var(--ink);
   --white: #fff;
-  --bg: #fcfafa;
-  --gray1: #f6f2f3;
-  --gray2: #ece5e7;
-  --gray3: #8c7f84;
-  --border: rgba(60,20,35,0.09);
+  --bg: #FBF9F5;
+  --gray1: #F5F1EE;
+  --gray2: #EAE4E0;
+  --gray3: #877C83;
+  --border: rgba(45,20,35,0.08);
   --success: #2f855a;
   --success-soft: #eef8f1;
   --warning: #b7791f;
   --warning-soft: #fdf6e7;
-  --danger: #c53030;
-  --danger-soft: #fdf0f0;
+  --danger: #d33a2c;
+  --danger-soft: #fdf0ee;
 
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Poppins', 'Inter', system-ui, sans-serif;
+  --font-display: 'Montserrat', 'Poppins', 'Inter', system-ui, sans-serif;
 
   --radius: 14px;
   --radius-lg: 16px;
   --radius-sm: 10px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   /* Elevation scale — har jagah inhi ko reuse karo, naye rgba shadows mat likho */
-  --shadow-xs: 0 1px 3px rgba(60,20,35,0.05);
-  --shadow-sm: 0 2px 14px rgba(60,20,35,0.05);
-  --shadow-md: 0 8px 24px rgba(60,20,35,0.08);
-  --shadow-lg: 0 16px 40px rgba(60,20,35,0.12);
-  --shadow-up: 0 -4px 20px rgba(60,20,35,0.06);
-  --ring: 0 0 0 4px rgba(158,59,90,0.12);
+  --shadow-xs: 0 1px 3px rgba(45,20,35,0.05);
+  --shadow-sm: 0 2px 14px rgba(45,20,35,0.05);
+  --shadow-md: 0 8px 24px rgba(45,20,35,0.08);
+  --shadow-lg: 0 16px 40px rgba(45,20,35,0.12);
+  --shadow-up: 0 -4px 20px rgba(45,20,35,0.06);
+  --ring: 0 0 0 4px rgba(216,27,96,0.12);
 }
 
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -102,14 +110,14 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.25s var(--ease);
+  transition: all 0.3s var(--ease);
   border: none;
   text-decoration: none;
   letter-spacing: 0.03em;
 }
 
-.btn-black, .btn-primary { background: var(--primary); color: var(--white); box-shadow: 0 4px 14px rgba(158,59,90,0.22); }
-.btn-black:hover, .btn-primary:hover { background: var(--primary-600); transform: translateY(-1px); }
+.btn-black, .btn-primary { background: var(--brand-gradient); background-size: 140% 140%; background-position: 0% 50%; color: var(--white); font-weight: 600; box-shadow: 0 6px 18px rgba(216,27,96,0.25); }
+.btn-black:hover, .btn-primary:hover { background-position: 100% 50%; transform: translateY(-1px); box-shadow: 0 8px 22px rgba(216,27,96,0.32); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 .btn-black:active { transform: scale(0.97); }
 .btn-outline { background: var(--white); color: var(--ink); border: 1px solid var(--gray2); }
@@ -222,7 +230,7 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 }
 
 .progress-fill {
-  background: linear-gradient(90deg, var(--primary), #c45c7c);
+  background: var(--brand-gradient);
   height: 100%;
   border-radius: 50px;
   transition: width 0.4s ease;
@@ -380,8 +388,9 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   transition: background 0.3s var(--ease), transform 0.3s var(--ease);
 }
 
-.bottom-nav-item.active { color: var(--primary); }
-.bottom-nav-item.active .nav-icon { background: var(--primary-soft); }
+.bottom-nav-item.active { color: var(--ink); }
+.bottom-nav-item.active .nav-label { color: var(--primary); }
+.bottom-nav-item.active .nav-icon { transform: scale(1.06); }
 .bottom-nav-item .nav-label {
   font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
   max-height: 0; opacity: 0; overflow: hidden;
@@ -607,7 +616,8 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 /* ================= Icon-first shared components ================= */
 
 /* Lucide icons — poore app mein ek hi stroke width */
-.lucide { stroke-width: 1.8; flex-shrink: 0; }
+.lucide { stroke-width: 2; flex-shrink: 0; }
+.bottom-nav-item.active .lucide { stroke-width: 2.4; }
 
 .icon-btn {
   width: 40px; height: 40px;
@@ -747,7 +757,7 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   background: var(--primary-soft); color: var(--primary);
   display: flex; align-items: center; justify-content: center;
 }
-.avatar-ring { padding: 3px; border-radius: 50%; background: linear-gradient(135deg, var(--gold), var(--primary)); }
+.avatar-ring { padding: 3px; border-radius: 50%; background: var(--brand-gradient); }
 .avatar-ring > .avatar { border: 3px solid var(--white); }
 
 /* Match card */
@@ -844,3 +854,58 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   flex-shrink: 0; transition: all 0.2s var(--ease);
 }
 .radio-option.selected .radio-dot { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+/* ================= Brand: splash + wordmark ================= */
+.splash {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--ivory);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: opacity 0.45s var(--ease);
+}
+.splash.leaving { opacity: 0; pointer-events: none; }
+@keyframes logoIn { from { opacity: 0; transform: scale(0.86); } to { opacity: 1; transform: none; } }
+@keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+.splash-logo { animation: logoIn 0.8s var(--ease) both, breathe 2.4s ease-in-out 0.8s infinite; filter: drop-shadow(0 10px 24px rgba(216,27,96,0.18)); }
+.splash-foot {
+  position: absolute; left: 0; right: 0; bottom: calc(40px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  animation: fadeUp 0.8s var(--ease) 0.25s both;
+}
+.splash-tag { font-family: var(--font-display); font-size: 10px; font-weight: 500; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold); }
+
+.brand-lockup { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.gradient-text { background: var(--brand-gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand-lockup svg { display: block; }
+.logo-breathe { animation: breathe 2.4s ease-in-out infinite; }
+
+/* Landing hero — static, brand-gradient glow */
+.landing-hero {
+  position: relative; overflow: hidden;
+  min-height: calc(100vh - 60px); min-height: calc(100svh - 60px);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ivory); padding: 40px 20px 56px; text-align: center;
+}
+.landing-hero-glow {
+  position: absolute; width: 560px; height: 560px; max-width: 140vw; max-height: 140vw;
+  border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -62%);
+  background: radial-gradient(circle, rgba(225,48,108,0.16) 0%, rgba(106,27,154,0.08) 40%, rgba(246,193,119,0) 70%);
+  pointer-events: none;
+}
+.landing-hero-inner { position: relative; display: flex; flex-direction: column; align-items: center; animation: fadeUp 0.8s var(--ease) both; }
+.landing-logo { animation: logoIn 0.8s var(--ease) both; filter: drop-shadow(0 12px 28px rgba(216,27,96,0.2)); }
+.landing-quote {
+  font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 400;
+  font-size: clamp(19px, 3.4vw, 26px); color: var(--ink); opacity: 0.85; margin: 22px 0 30px;
+}
+.feature-list { display: flex; flex-direction: column; gap: 10px; }
+.feature-item {
+  display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px;
+  background: var(--white, #fff); border: 1px solid var(--border); border-radius: 20px;
+  box-shadow: var(--shadow-sm); transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+}
+.feature-item:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.feature-icon {
+  flex: 0 0 auto; width: 42px; height: 42px; border-radius: 14px; color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--brand-gradient); box-shadow: 0 6px 14px rgba(216,27,96,0.22);
+}

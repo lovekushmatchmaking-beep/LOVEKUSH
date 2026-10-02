@@ -50,6 +50,7 @@ import { compressImage } from '../utils/compressImage'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import SignupComplete from './SignupComplete'
+import { BrandLockup } from '../components/BrandLogo'
 
 // Single-choice fields render as a native <select> dropdown — keeps the
 // screen compact instead of spreading every option out as chips. Long
@@ -893,7 +894,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
 
       <div style={{position:'sticky',top:0,zIndex:90,background:'rgba(255,255,255,0.92)',backdropFilter:'blur(16px)',WebkitBackdropFilter:'blur(16px)',borderBottom:'1px solid var(--border)',padding:'12px 20px 4px'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,maxWidth:480,marginLeft:'auto',marginRight:'auto'}}>
-          <div className="nav-brand" style={{fontSize:14}}>LOVEKUSH</div>
+          <BrandLockup size={26} />
           <div style={{fontSize:12,color:'var(--gray3)'}}>{step+1}/{STEPS.length}</div>
         </div>
         <div className="progress-wrap"><div className="progress-fill" style={{width:pct+'%'}}></div></div>
