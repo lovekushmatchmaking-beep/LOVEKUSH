@@ -8,7 +8,7 @@ import {
   RELIGIONS, CASTES, ISLAMIC_COMMUNITIES, CHRISTIAN_COMMUNITIES, RELIGION_HIERARCHY,
   PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, EDUCATIONS, LOCATION_PREFERENCES,
   COUNTRIES, CURRENCIES, PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, formatHeightFromInches,
-  PARTNER_INCOME_BOUNDS,
+  PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS, formatIncomeShort,
 } from '../constants/profileOptions'
 
 // Single-choice fields render as a native <select> dropdown (duplicated
@@ -156,15 +156,10 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
           }} style={{ marginBottom: 8, maxWidth: 140 }}>
             {CURRENCIES.map(c => <option key={c} value={c}>{c === 'INR' ? '₹ INR' : '$ USD'}</option>)}
           </select>
-          <DualRangeSlider min={PARTNER_INCOME_BOUNDS[form.partner_income_currency].min}
-            max={PARTNER_INCOME_BOUNDS[form.partner_income_currency].max}
+          <DualRangeSlider values={PARTNER_INCOME_STEPS[form.partner_income_currency]}
             valueMin={form.partner_income_min} valueMax={form.partner_income_max}
             onChange={(lo, hi) => setForm(p => ({ ...p, partner_income_min: lo, partner_income_max: hi }))}
-            formatLabel={v => {
-              const symbol = form.partner_income_currency === 'INR' ? '₹' : '$'
-              const isMax = v === PARTNER_INCOME_BOUNDS[form.partner_income_currency].max
-              return symbol + v.toLocaleString(form.partner_income_currency === 'INR' ? 'en-IN' : 'en-US') + (isMax ? '+' : '')
-            }} />
+            formatLabel={v => formatIncomeShort(v, form.partner_income_currency)} />
         </div>
       </AccordionSection>
 
