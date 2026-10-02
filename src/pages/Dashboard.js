@@ -1835,7 +1835,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
                   {isSelected && (
                     <div style={{padding:'10px 16px 14px', fontSize:12, color:'#555', lineHeight:1.6}}>
                       <div>{f.desc}</div>
-                      <div style={{marginTop:4, fontWeight:500}}>Annual family income: {f.range}</div>
+                      <div style={{marginTop:4, fontWeight:500}}>Annual family income: {form.nationality && form.nationality !== 'India' ? f.rangeUsd : f.range}</div>
                     </div>
                   )}
                 </div>

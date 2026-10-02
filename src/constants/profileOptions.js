@@ -2638,11 +2638,12 @@ export const RELIGION_HIERARCHY = {
 
 // Family Financial Status — jaisa research mein exact categories mile
 // (income-range ke saath), FAMILY_INCOME_RANGES se zyada precise hai
+// rangeUsd: non-Indian nationality wale users ko USD mein dikhta hai.
 export const FAMILY_FINANCIAL_STATUS = [
-  { label: 'Elite', desc: 'Large business or exceptional professional background', range: 'Above ₹70 Lakhs' },
-  { label: 'High', desc: 'Mid-sized business or leadership positions', range: '₹30–70 Lakhs' },
-  { label: 'Middle', desc: 'Small business or office jobs', range: '₹10–30 Lakhs' },
-  { label: 'Aspiring', desc: 'Limited means, striving for better lifestyle', range: 'Up to ₹10 Lakhs' },
+  { label: 'Elite', desc: 'Large business or exceptional professional background', range: 'Above ₹70 Lakhs', rangeUsd: 'Above $85,000' },
+  { label: 'High', desc: 'Mid-sized business or leadership positions', range: '₹30–70 Lakhs', rangeUsd: '$36,000–85,000' },
+  { label: 'Middle', desc: 'Small business or office jobs', range: '₹10–30 Lakhs', rangeUsd: '$12,000–36,000' },
+  { label: 'Aspiring', desc: 'Limited means, striving for better lifestyle', range: 'Up to ₹10 Lakhs', rangeUsd: 'Up to $12,000' },
 ]
 
 export const WORKING_AS_OPTIONS = [
