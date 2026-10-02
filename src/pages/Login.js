@@ -1,9 +1,7 @@
 import React, { useState } from 'react'
-import { ArrowRight } from 'lucide-react'
-import { FormLabel } from '../components/ui'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { BrandLockup } from '../components/BrandLogo'
+import { AuthBrand } from '../components/BrandLogo'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -25,54 +23,31 @@ export default function Login() {
   }
 
   return (
-    <div style={{minHeight:'100vh',background:'#fff'}}>
-      <nav className="navbar">
-        <Link to="/" style={{ textDecoration: 'none' }}><BrandLockup size={28} /></Link>
-        <Link to="/register" className="btn btn-black" style={{fontSize:12,padding:'8px 16px'}}>Register</Link>
-      </nav>
-
-      <div className="page-container">
-        <div style={{textAlign:'center',marginBottom:32}}>
-          <svg width="40" height="40" viewBox="0 0 60 60" fill="none" style={{margin:'0 auto 12px',display:'block'}}>
-            <g stroke="black" strokeWidth="2.2" strokeLinecap="round" fill="none">
-              <path d="M30 6C36 6,44 14,44 22C44 29,38 34,33 37C40 39,51 46,51 55C51 59,44 62,37 58C33 55,31 51,30 47C29 51,27 55,23 58C16 62,9 59,9 55C9 46,20 39,27 37C22 34,16 29,16 22C16 14,24 6,30 6Z"/>
-              <circle cx="30" cy="37" r="2.5" fill="black"/>
-            </g>
-          </svg>
-          <h1 className="page-title">Welcome Back</h1>
-          <p className="page-subtitle">Login to your Lovekush account</p>
-        </div>
+    <div className="auth-screen">
+      <div className="page-container auth-page">
+        <AuthBrand />
 
         <form onSubmit={handleLogin}>
-          <div className="form-group">
-            <FormLabel>Email Address</FormLabel>
-            <input className="form-input" type="email" placeholder="your@email.com"
-              value={form.email} onChange={e=>set('email',e.target.value)} required autoFocus />
-          </div>
-
-          <div className="form-group">
-            <FormLabel>Password</FormLabel>
-            <input className="form-input" type="password" placeholder="Your password"
-              value={form.password} onChange={e=>set('password',e.target.value)} required />
-          </div>
-
-          <div style={{textAlign:'right',marginBottom:16,marginTop:-8}}>
-            <Link to="/forgot-password" style={{fontSize:13,color:'#8e8e8e',textDecoration:'none'}}>Forgot password?</Link>
-          </div>
+          <input className="form-input" type="email" placeholder="Email address" aria-label="Email address" autoComplete="email"
+            value={form.email} onChange={e=>set('email',e.target.value)} required style={{marginBottom:10}} />
+          <input className="form-input" type="password" placeholder="Password" aria-label="Password" autoComplete="current-password"
+            value={form.password} onChange={e=>set('password',e.target.value)} required style={{marginBottom:14}} />
 
           {error && <div className="form-error" style={{marginBottom:12}}>{error}</div>}
 
-          <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading} style={{marginBottom:12}}>
-            {loading ? 'Logging in...' : 'Login'} <ArrowRight size={18} />
+          <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading}>
+            {loading ? 'Logging in...' : 'Log in'}
           </button>
         </form>
 
-        <div className="divider">or</div>
-
-        <div style={{textAlign:'center',fontSize:14,color:'#8e8e8e'}}>
-          New to Lovekush?{' '}
-          <Link to="/register" style={{color:'var(--primary)',fontWeight:500,textDecoration:'none'}}>Create free account</Link>
+        <div style={{textAlign:'center',marginTop:18}}>
+          <Link to="/forgot-password" style={{fontSize:13,color:'var(--ink)',fontWeight:500,textDecoration:'none'}}>Forgot password?</Link>
         </div>
+      </div>
+
+      <div className="auth-foot">
+        Don't have an account?{' '}
+        <Link to="/register" style={{color:'var(--primary)',fontWeight:600,textDecoration:'none'}}>Sign up</Link>
       </div>
     </div>
   )

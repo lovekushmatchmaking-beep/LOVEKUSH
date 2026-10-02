@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { FormLabel } from '../components/ui'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { BrandLockup } from '../components/BrandLogo'
+import { AuthBrand } from '../components/BrandLogo'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
@@ -53,19 +53,11 @@ export default function ResetPassword() {
   }
 
   return (
-    <div style={{minHeight:'100vh',background:'#fff'}}>
-      <nav className="navbar">
-        <Link to="/" style={{ textDecoration: 'none' }}><BrandLockup size={28} /></Link>
-      </nav>
+    <div className="auth-screen">
 
-      <div className="page-container">
+      <div className="page-container auth-page">
         <div style={{textAlign:'center',marginBottom:32}}>
-          <svg width="40" height="40" viewBox="0 0 60 60" fill="none" style={{margin:'0 auto 12px',display:'block'}}>
-            <g stroke="black" strokeWidth="2.2" strokeLinecap="round" fill="none">
-              <path d="M30 6C36 6,44 14,44 22C44 29,38 34,33 37C40 39,51 46,51 55C51 59,44 62,37 58C33 55,31 51,30 47C29 51,27 55,23 58C16 62,9 59,9 55C9 46,20 39,27 37C22 34,16 29,16 22C16 14,24 6,30 6Z"/>
-              <circle cx="30" cy="37" r="2.5" fill="black"/>
-            </g>
-          </svg>
+          <AuthBrand />
           <h1 className="page-title">Reset Password</h1>
           <p className="page-subtitle">Apna naya password set karein</p>
         </div>

@@ -65,7 +65,6 @@ export default function SharedProfile() {
       <div style={{maxWidth:480,margin:'0 auto',padding:'40px 20px'}}>
         <div style={{textAlign:'center',marginBottom:30}}>
           <BrandLockup size={30} />
-          <div style={{fontSize:10,opacity:0.5,letterSpacing:'0.15em',marginTop:4}}>GLOBAL MATCHMAKING SERVICES</div>
         </div>
 
         <div style={{background:'#f9f9f9',borderRadius:16,padding:24}}>
