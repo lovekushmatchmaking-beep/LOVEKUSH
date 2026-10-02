@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react'
 import { SectionLabel } from '../components/ui'
 import SignedImage from '../components/SignedImage'
 import { supabase } from '../supabase'
+import { maskName } from '../utils/maskName'
 import { formatHeightFromInches, formatIncomeShort, profileManagedByLabel } from '../constants/profileOptions'
 import {
   ChevronLeft, Lock, UserRound, Images, Heart, Star, X, CircleCheck, TriangleAlert, Crown,
-  Phone, CalendarDays, Send, Briefcase, Users, ShieldCheck,
+  Phone, CalendarDays, Send, Briefcase, Users, Camera, Clock, ShieldCheck,
 } from 'lucide-react'
 import { ProfileActionsMenu } from '../components/ui'
 import { iconForLabel } from '../components/fieldIcons'
@@ -17,7 +18,11 @@ const TABS = ['About', 'Photos', 'Career', 'Education', 'Family', 'Horoscope', '
 // kisi section pe scroll/click ho, woh sticky bar ke peeche chhupe nahi.
 const TAB_BAR_OFFSET = 112 // sticky navbar (56) + pill tab bar
 
-export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId, myAction, introSent, onSetAction, onSendIntro, onBack, onToast }) {
+export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId, myAction, introSent, onSetAction, onSendIntro, photoAccess, onRequestPhoto, onBack, onToast }) {
+  // Photo privacy — har member ki photo by default hidden; sirf owner ke
+  // "Request Photo" approve karne par dikhti hai (photo_requests table,
+  // RLS bhi yahi enforce karta hai). Approve ho gayi to premium blur nahi.
+  const canSeePhotos = photoAccess === 'approved'
   const [tab, setTab] = useState('About')
   const [showIntroChoice, setShowIntroChoice] = useState(false)
   const [introJustSent, setIntroJustSent] = useState(false)
@@ -45,9 +50,10 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
   // load ko bulk photo-join se bhari nahi karna.
   useEffect(() => {
     if (!m.id) return
+    if (!canSeePhotos) { setPhotos([]); return }
     supabase.from('photos').select('*').eq('profile_id', m.id)
       .then(({ data, error }) => { if (!error) setPhotos(data || []) })
-  }, [m.id])
+  }, [m.id, canSeePhotos])
 
   // Jab profile change ho (ek match se doosre match pe jaate waqt), hero
   // photo index reset karte hain taaki pichhle profile ki 2nd photo pe
@@ -57,7 +63,8 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
   // Hero mein dikhane wale photos — "photos" table se load hone ke baad
   // primary photo pehle, phir baaki (secondary). Load hone se pehle sirf
   // match list se mila primaryPhotoPath dikhate hain.
-  const heroPhotos = (photos && photos.length > 0)
+  const heroPhotos = !canSeePhotos ? []
+    : (photos && photos.length > 0)
     ? [...photos].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0)).map(p => p.storage_path)
     : (m.primaryPhotoPath ? [m.primaryPhotoPath] : [])
   const clampedHeroIndex = Math.min(heroIndex, Math.max(heroPhotos.length - 1, 0))
@@ -123,7 +130,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
   }
 
   const requestSent = introSent || introJustSent
-  const firstName = m.full_name?.split(' ')[0] || 'them'
+  const firstName = maskName(m.full_name) || 'them'
 
   const incomeLabel = (min, max, currency) => {
     if (min == null && max == null) return null
@@ -135,15 +142,23 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
       <div style={{position:'relative',width:'100%',aspectRatio:'4/5',maxHeight:'70vh',background:'var(--gray2)',borderRadius:'var(--radius-lg)',overflow:'hidden',boxShadow:'var(--shadow-md)'}}
         onTouchStart={handleHeroTouchStart} onTouchEnd={handleHeroTouchEnd}>
         {heroPhotos.length > 0
-          ? <SignedImage path={heroPhotos[clampedHeroIndex]} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(10px)'}} />
-          : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--primary-soft)',color:'var(--primary)'}}><UserRound size={56} /></div>
+          ? <SignedImage path={heroPhotos[clampedHeroIndex]} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+          : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--primary-soft)',color:'var(--primary)'}}>
+              {canSeePhotos ? <UserRound size={56} /> : <Lock size={48} style={{marginBottom:60}} />}
+            </div>
         }
-        {!viewerIsPremium && heroPhotos.length > 0 && (
-          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)',color:'#fff'}}>
-            <Lock size={32} />
+        <div style={{position:'absolute',inset:0,background:'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 40%)'}} />
+        {!canSeePhotos && (
+          <div style={{position:'absolute',top:'58%',left:0,right:0,display:'flex',justifyContent:'center'}}>
+            {photoAccess === 'pending' ? (
+              <span className="chip chip-warning"><Clock size={12} /> Photo request sent</span>
+            ) : photoAccess === 'declined' ? (
+              <span className="chip chip-muted"><Lock size={12} /> Photos private</span>
+            ) : (
+              <button className="btn btn-primary btn-sm" onClick={onRequestPhoto}><Camera size={15} /> Request photo</button>
+            )}
           </div>
         )}
-        <div style={{position:'absolute',inset:0,background:'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 40%)'}} />
 
         {heroPhotos.length > 1 && (
           <>
@@ -172,7 +187,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
         </div>
         <div style={{position:'absolute',bottom:44,left:20,right:20,color:'#fff'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <span style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500}}>{m.full_name}, {m.age}</span>
+            <span style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500}}>{maskName(m.full_name)}, {m.age}</span>
             {typeof m.matchScore === 'number' && (
               <span className={'chip ' + (m.matchScore>=70 ? 'chip-success' : m.matchScore>=40 ? 'chip-warning' : 'chip-muted')}>
                 {m.matchScore}%
@@ -279,7 +294,9 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
         </div>
 
         <div ref={setSectionRef('Photos')} data-tab="Photos" style={{scrollMarginTop:TAB_BAR_OFFSET,minHeight:40}}>
-          {photos === null ? (
+          {!canSeePhotos ? (
+            <PhotoRequestPanel status={photoAccess} firstName={firstName} onRequest={onRequestPhoto} />
+          ) : photos === null ? (
             <div style={{textAlign:'center',padding:'40px 0',color:'var(--gray3)',fontSize:13}}>Loading...</div>
           ) : photos.length === 0 ? (
             <div style={{textAlign:'center',padding:'32px 0',color:'var(--gray3)',fontSize:13,display:'flex',flexDirection:'column',alignItems:'center',gap:8}}><Images size={24} /> No photos</div>
@@ -287,12 +304,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
             <div style={{display:'grid',gridTemplateColumns:'repeat(2, 1fr)',gap:10,marginBottom:12}}>
               {photos.map(p => (
                 <div key={p.id} style={{position:'relative',aspectRatio:'3/4',borderRadius:'var(--radius)',overflow:'hidden',background:'var(--gray2)'}}>
-                  <SignedImage path={p.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(10px)'}} />
-                  {!viewerIsPremium && (
-                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)',color:'#fff'}}>
-                      <Lock size={24} />
-                    </div>
-                  )}
+                  <SignedImage path={p.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
                 </div>
               ))}
             </div>
@@ -419,6 +431,23 @@ function FactCard({ title, fields }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// Photo hidden hone par — "Request photo" button / pending / declined state.
+function PhotoRequestPanel({ status, firstName, onRequest }) {
+  return (
+    <div style={{textAlign:'center',padding:'28px 16px',color:'var(--gray3)',fontSize:13,display:'flex',flexDirection:'column',alignItems:'center',gap:10}}>
+      <Lock size={24} style={{color:'var(--primary)'}} />
+      <div>Photos are private. {firstName} decides who can see them.</div>
+      {status === 'pending' ? (
+        <span className="chip chip-warning"><Clock size={12} /> Photo request sent</span>
+      ) : status === 'declined' ? (
+        <span className="chip chip-muted"><Lock size={12} /> {firstName} keeps photos private</span>
+      ) : (
+        <button className="btn btn-primary btn-sm" onClick={onRequest}><Camera size={15} /> Request photo</button>
+      )}
     </div>
   )
 }

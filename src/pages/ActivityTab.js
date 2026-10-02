@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { PageHeader, EmptyState } from '../components/ui'
 import SignedImage from '../components/SignedImage'
+import { maskName } from '../utils/maskName'
 import { Eye, Heart, Star, Inbox, Send, HeartHandshake, UserRound } from 'lucide-react'
 
 // Jeevansathi ke "Activity" tab jaisa — Profile Visits / Shortlisted /
@@ -68,7 +69,7 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {receivedActions.map(r => (
               <ActivityRow key={r.actor_profile_id}
-                name={r.actorProfile?.full_name || 'Profile'}
+                name={maskName(r.actorProfile?.full_name) || 'Profile'}
                 sub={r.actorProfile ? `${r.actorProfile.age || ''} yrs · ${r.actorProfile.city || ''}` : ''}
                 photoPath={r.actorPhotoPath}
                 badge={r.action === 'super_like' ? <Star size={18} style={{color:'var(--gold)',fill:'var(--gold)'}} aria-label="Super like" /> : <Heart size={18} style={{color:'var(--primary)',fill:'var(--primary)'}} aria-label="Like" />}
@@ -85,7 +86,7 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {acceptedRows.map(r => (
               <ActivityRow key={r.id}
-                name={r.profile?.full_name || 'Profile'}
+                name={maskName(r.profile?.full_name) || 'Profile'}
                 sub={r.profile ? `${r.profile.age || ''} yrs · ${r.profile.city || ''}` : ''}
                 photoPath={r.profile?.primaryPhotoPath}
                 badge={<HeartHandshake size={18} style={{color:'var(--primary)'}} aria-label="Mutual" />}
@@ -102,7 +103,7 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {sentRows.map(r => (
               <ActivityRow key={r.id}
-                name={r.profile?.full_name || 'Profile'}
+                name={maskName(r.profile?.full_name) || 'Profile'}
                 sub={r.profile ? `${r.profile.age || ''} yrs · ${r.profile.city || ''}` : ''}
                 photoPath={r.profile?.primaryPhotoPath}
                 badge={r.action === 'super_like' ? <Star size={18} style={{color:'var(--gold)',fill:'var(--gold)'}} aria-label="Super like" /> : <Heart size={18} style={{color:'var(--primary)',fill:'var(--primary)'}} aria-label="Like" />}
