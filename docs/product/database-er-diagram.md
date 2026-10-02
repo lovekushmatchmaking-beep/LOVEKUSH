@@ -275,6 +275,11 @@ staff, or approved requester) gates both the `photos` table SELECT policy
 and the `lovekush-photos` storage SELECT policy. SQL:
 `supabase/migrations/20261002_photo_requests_and_private_photos.sql`.
 
+Name privacy: other members never see a full name. `mask_full_name()`
+("Aryan Kushwaha" → "A. Kushwaha") is applied in `profiles_public_view`
+and `get_shared_profile`, and `src/utils/maskName.js` applies the same
+format in the UI. SQL: `supabase/migrations/20261002_mask_full_names.sql`.
+
 ## Future ERD
 
 ```text

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { SectionLabel } from '../components/ui'
 import SignedImage from '../components/SignedImage'
 import { supabase } from '../supabase'
+import { maskName } from '../utils/maskName'
 import { formatHeightFromInches, formatIncomeShort, profileManagedByLabel } from '../constants/profileOptions'
 import {
   ChevronLeft, Lock, UserRound, Images, Heart, Star, X, CircleCheck, TriangleAlert, Crown,
@@ -129,7 +130,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
   }
 
   const requestSent = introSent || introJustSent
-  const firstName = m.full_name?.split(' ')[0] || 'them'
+  const firstName = maskName(m.full_name) || 'them'
 
   const incomeLabel = (min, max, currency) => {
     if (min == null && max == null) return null
@@ -186,7 +187,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
         </div>
         <div style={{position:'absolute',bottom:44,left:20,right:20,color:'#fff'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <span style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500}}>{m.full_name}, {m.age}</span>
+            <span style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500}}>{maskName(m.full_name)}, {m.age}</span>
             {typeof m.matchScore === 'number' && (
               <span className={'chip ' + (m.matchScore>=70 ? 'chip-success' : m.matchScore>=40 ? 'chip-warning' : 'chip-muted')}>
                 {m.matchScore}%

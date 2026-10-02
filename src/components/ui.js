@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, Ellipsis, Share2, Flag, Ban } from 'lucide-react'
 import { iconForLabel, textOf } from './fieldIcons'
+import { maskName } from '../utils/maskName'
 
 // Shared, icon-first building blocks. Inline-styled pages purane hi rehte
 // hain — yeh sirf woh chhote pieces hain jo har page pe repeat hote the
@@ -128,7 +129,7 @@ export function ProfileActionsMenu({ profile, onBlock, onToast, light }) {
     onToast && onToast('Profile ID copied — please send it to our team')
   }
   const block = () => {
-    if (window.confirm(`Block ${profile.full_name?.split(' ')[0] || 'this profile'}? They won't appear in your matches.`)) onBlock()
+    if (window.confirm(`Block ${maskName(profile.full_name) || 'this profile'}? They won't appear in your matches.`)) onBlock()
   }
   return (
     <PopoverMenu light={light} items={[

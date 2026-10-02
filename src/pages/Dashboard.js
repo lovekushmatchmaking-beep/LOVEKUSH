@@ -29,6 +29,7 @@ import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CA
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
+import { maskName } from '../utils/maskName'
 import SignedImage from '../components/SignedImage'
 import MultiSelectChips from '../components/MultiSelectChips'
 import DualRangeSlider from '../components/DualRangeSlider'
@@ -804,7 +805,7 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
           }
         </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontWeight:600,fontSize:16,marginBottom:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{m.full_name}</div>
+          <div style={{fontWeight:600,fontSize:16,marginBottom:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{maskName(m.full_name)}</div>
           <div style={{fontSize:13,color:'var(--gray3)',display:'flex',alignItems:'center',gap:4}}>
             {m.age} yrs{m.city ? <> · <MapPinIcon size={12} /> {m.city}</> : null}
           </div>
@@ -883,7 +884,7 @@ function DislikedProfilesView({ myProfile, dislikedActions, onUndo, onBack }) {
             return (
               <div key={a.target_profile_id} className="list-row" style={{display:'flex',gap:12,alignItems:'center'}}>
                 <div className="avatar" style={{width:40,height:40}}><UserRound size={18} /></div>
-                <span style={{flex:1,fontSize:14,fontWeight:500}}>{p ? p.full_name + (p.city ? ' · ' + p.city : '') : 'Profile'}</span>
+                <span style={{flex:1,fontSize:14,fontWeight:500}}>{p ? maskName(p.full_name) + (p.city ? ' · ' + p.city : '') : 'Profile'}</span>
                 <button className="btn btn-soft btn-sm" onClick={()=>onUndo(a.target_profile_id)}><Undo2 size={14} /> Unblock</button>
               </div>
             )
@@ -950,7 +951,7 @@ function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], 
     if (ids.length === 0) { setLoading(false); return }
     const { data } = await supabase.from('profiles_public_view').select('id, full_name').in('id', ids)
     const map = {}
-    ;(data || []).forEach(p => { map[p.id] = p.full_name })
+    ;(data || []).forEach(p => { map[p.id] = maskName(p.full_name) })
     setProfilesById(map)
     setLoading(false)
   }

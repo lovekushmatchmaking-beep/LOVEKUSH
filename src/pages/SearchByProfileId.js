@@ -3,6 +3,7 @@ import { FormLabel, PageHeader, EmptyState } from '../components/ui'
 import { Search, SearchX, UserRound, ChevronRight } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
+import { maskName } from '../utils/maskName'
 
 export default function SearchByProfileId({ onView, onBack }) {
   const [query, setQuery] = useState('')
@@ -69,7 +70,7 @@ export default function SearchByProfileId({ onView, onBack }) {
             }
           </div>
           <div style={{flex:1}}>
-            <div style={{fontWeight:600,fontSize:15}}>{result.full_name}</div>
+            <div style={{fontWeight:600,fontSize:15}}>{maskName(result.full_name)}</div>
             <div style={{fontSize:12,color:'var(--gray3)'}}>{result.age} yrs · {result.city}</div>
             <div className="profile-code" style={{marginTop:4}}>{result.profile_code}</div>
           </div>
