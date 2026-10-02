@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react'
+import { ChevronLeft, Share2, Download } from 'lucide-react'
 import SignedImage from '../components/SignedImage'
 import { generateBiodataPdf } from '../utils/generateBiodataPdf'
 
@@ -81,12 +82,12 @@ export default function BiodataView({ profile: p, photo, onBack }) {
   return (
     <div>
       <div className="no-print" style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-        <button className="btn btn-outline" style={{ flex: 1 }} onClick={onBack}>← Back</button>
+        <button className="btn btn-outline" style={{ flex: '0 0 auto', padding: '11px 14px' }} onClick={onBack} aria-label="Back"><ChevronLeft size={18} /></button>
         <button className="btn btn-outline" style={{ flex: 1 }} onClick={handleShare} disabled={!!busy}>
-          {busy === 'share' ? 'Generating...' : '📤 Share'}
+          <Share2 size={16} /> {busy === 'share' ? 'Generating...' : 'Share'}
         </button>
         <button className="btn btn-black" style={{ flex: 1 }} onClick={handleDownload} disabled={!!busy}>
-          {busy === 'download' ? 'Generating...' : '⬇️ Download PDF'}
+          <Download size={16} /> {busy === 'download' ? 'Generating...' : 'PDF'}
         </button>
       </div>
 

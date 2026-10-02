@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { SectionLabel, PageHeader } from '../components/ui'
+import { Camera, ImagePlus, RefreshCw, Trash2, Info } from 'lucide-react'
 import { supabase } from '../supabase'
 import { compressImage } from '../utils/compressImage'
 import SignedImage from '../components/SignedImage'
@@ -193,18 +195,16 @@ export default function EditPhotos({ user, profileId, onBack }) {
   )
 
   return (
-    <div style={{minHeight:'100vh',background:'#fff',paddingBottom:40}}>
+    <div style={{paddingBottom:40}}>
       <div className={'toast ' + (toast?'show':'')}>{toast}</div>
 
-      <div style={{position:'sticky',top:0,zIndex:90,background:'rgba(255,255,255,0.97)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(0,0,0,0.06)',padding:'14px 20px',display:'flex',alignItems:'center',gap:12}}>
-        <button onClick={onBack} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',lineHeight:1}}>←</button>
-        <span style={{fontFamily:'DM Sans',fontSize:15,fontWeight:500}}>Manage Photos</span>
-      </div>
+      <PageHeader title="Photos" onBack={onBack} />
 
-      <div style={{maxWidth:480,margin:'0 auto',padding:'20px'}}>
+      <div>
 
-        <div className="notice" style={{marginBottom:20}}>
-          <strong>Photo Guidelines:</strong> Photo <strong>full standing</strong> honi chahiye (sirf face/headshot nahi) — bina kisi filter ke, natural lighting mein, bina sunglasses/edited-image ke. Yeh isliye zaroori hai taaki family/partner ko aapki real, honest tasveer dikhe.
+        <div className="notice" style={{marginBottom:20,display:'flex',gap:10}}>
+          <Info size={18} style={{color:'var(--primary)',flexShrink:0,marginTop:2}} />
+          <span><strong>Full standing</strong> photo · no filters · natural light · no sunglasses</span>
         </div>
 
         <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -239,44 +239,34 @@ export default function EditPhotos({ user, profileId, onBack }) {
 function PhotoSlot({ label, required, photo, uploading, onPick, onReplace, onDelete, fileRef, onFileSelected }) {
   return (
     <div>
-      <div className="section-label" style={{marginBottom:10}}>{label}</div>
+      <SectionLabel style={{marginBottom:10}}>{label}</SectionLabel>
 
       {photo ? (
-        <div style={{display:'flex',gap:12,alignItems:'center',padding:'12px',background:'#f9f9f9',borderRadius:14}}>
-          <div style={{width:80,height:80,borderRadius:10,overflow:'hidden',flexShrink:0,background:'#e0e0e0',opacity:uploading?0.5:1}}>
+        <div className="card" style={{display:'flex',gap:14,alignItems:'center',padding:12,marginBottom:0}}>
+          <div style={{width:88,height:88,borderRadius:'var(--radius)',overflow:'hidden',flexShrink:0,background:'var(--gray1)',opacity:uploading?0.5:1}}>
             <SignedImage path={photo.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
           </div>
           <div style={{flex:1,display:'flex',gap:8,flexWrap:'wrap'}}>
-            <button
-              disabled={uploading}
-              style={{background:'none',border:'1px solid #ddd',borderRadius:8,padding:'8px 14px',cursor:uploading?'not-allowed':'pointer',fontSize:13}}
-              onClick={onReplace || onPick}
-            >
-              {uploading ? 'Uploading...' : '🔄 Replace'}
+            <button className="btn btn-outline btn-sm" disabled={uploading} onClick={onReplace || onPick}>
+              <RefreshCw size={14} /> {uploading ? 'Uploading...' : 'Replace'}
             </button>
             {onDelete && (
-              <button
-                disabled={uploading}
-                style={{background:'none',border:'1px solid #ddd',borderRadius:8,padding:'8px 14px',cursor:uploading?'not-allowed':'pointer',fontSize:13,color:'#e53e3e'}}
-                onClick={onDelete}
-              >
-                🗑 Delete
+              <button className="btn btn-danger-outline btn-sm" disabled={uploading} onClick={onDelete}>
+                <Trash2 size={14} /> Delete
               </button>
             )}
           </div>
         </div>
       ) : (
-        <div
-          style={{border:'2px dashed #ddd',borderRadius:16,padding:'28px',textAlign:'center',cursor:uploading?'not-allowed':'pointer',opacity:uploading?0.6:1}}
+        <div className="photo-slot"
+          style={{aspectRatio:'auto',padding:'28px 16px',cursor:uploading?'not-allowed':'pointer',opacity:uploading?0.6:1}}
           onClick={()=>!uploading&&onPick()}
         >
-          <div style={{fontSize:32,marginBottom:6}}>📷</div>
-          <div style={{fontSize:14,fontWeight:500,marginBottom:4}}>
-            {uploading ? 'Uploading...' : (required ? 'Add Profile Photo' : 'Add Secondary Photo')}
+          <span className="avatar" style={{width:52,height:52,marginBottom:6}}>{required ? <Camera size={22} /> : <ImagePlus size={22} />}</span>
+          <div style={{fontSize:14,fontWeight:500}}>
+            {uploading ? 'Uploading...' : 'Add photo'}
           </div>
-          <div style={{fontSize:12,color:'#8e8e8e'}}>
-            JPG/PNG, up to 15MB — auto compressed, full standing, no filters
-          </div>
+          <div style={{fontSize:12,color:'var(--gray3)'}}>JPG / PNG · up to 15MB</div>
         </div>
       )}
 

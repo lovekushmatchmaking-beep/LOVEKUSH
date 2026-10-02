@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import { ArrowRight } from 'lucide-react'
+import { FormLabel } from '../components/ui'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 
@@ -51,7 +53,7 @@ export default function ForgotPassword() {
         ) : (
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label className="form-label">Email Address</label>
+              <FormLabel>Email Address</FormLabel>
               <input className="form-input" type="email" placeholder="your@email.com"
                 value={email} onChange={e=>setEmail(e.target.value)} required autoFocus />
             </div>
@@ -59,7 +61,7 @@ export default function ForgotPassword() {
             {error && <div className="form-error" style={{marginBottom:12}}>{error}</div>}
 
             <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading} style={{marginBottom:12}}>
-              {loading ? 'Sending...' : 'Send Reset Link →'}
+              {loading ? 'Sending...' : 'Send Reset Link'} <ArrowRight size={18} />
             </button>
           </form>
         )}
@@ -68,7 +70,7 @@ export default function ForgotPassword() {
 
         <div style={{textAlign:'center',fontSize:14,color:'#8e8e8e'}}>
           Remembered your password?{' '}
-          <Link to="/login" style={{color:'#000',fontWeight:500,textDecoration:'none'}}>Login</Link>
+          <Link to="/login" style={{color:'var(--primary)',fontWeight:500,textDecoration:'none'}}>Login</Link>
         </div>
       </div>
     </div>

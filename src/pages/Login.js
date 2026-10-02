@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import { ArrowRight } from 'lucide-react'
+import { FormLabel } from '../components/ui'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 
@@ -42,13 +44,13 @@ export default function Login() {
 
         <form onSubmit={handleLogin}>
           <div className="form-group">
-            <label className="form-label">Email Address</label>
+            <FormLabel>Email Address</FormLabel>
             <input className="form-input" type="email" placeholder="your@email.com"
               value={form.email} onChange={e=>set('email',e.target.value)} required autoFocus />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Password</label>
+            <FormLabel>Password</FormLabel>
             <input className="form-input" type="password" placeholder="Your password"
               value={form.password} onChange={e=>set('password',e.target.value)} required />
           </div>
@@ -60,7 +62,7 @@ export default function Login() {
           {error && <div className="form-error" style={{marginBottom:12}}>{error}</div>}
 
           <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading} style={{marginBottom:12}}>
-            {loading ? 'Logging in...' : 'Login →'}
+            {loading ? 'Logging in...' : 'Login'} <ArrowRight size={18} />
           </button>
         </form>
 
@@ -68,7 +70,7 @@ export default function Login() {
 
         <div style={{textAlign:'center',fontSize:14,color:'#8e8e8e'}}>
           New to Lovekush?{' '}
-          <Link to="/register" style={{color:'#000',fontWeight:500,textDecoration:'none'}}>Create free account</Link>
+          <Link to="/register" style={{color:'var(--primary)',fontWeight:500,textDecoration:'none'}}>Create free account</Link>
         </div>
       </div>
     </div>

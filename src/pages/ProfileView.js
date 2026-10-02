@@ -1,16 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { SectionLabel } from '../components/ui'
 import SignedImage from '../components/SignedImage'
 import { supabase } from '../supabase'
 import { formatHeightFromInches } from '../constants/profileOptions'
+import {
+  ChevronLeft, Lock, UserRound, Images, Heart, Star, X, CircleCheck, TriangleAlert, Crown,
+  Phone, CalendarDays, Send, Briefcase, Users,
+} from 'lucide-react'
+import { ProfileActionsMenu } from '../components/ui'
+import { iconForLabel } from '../components/fieldIcons'
 
 const TABS = ['About', 'Photos', 'Career', 'Education', 'Family', 'Horoscope', 'Looking For']
 
 // Sticky tab-bar ki height (px) — scrollspy rootMargin aur section
 // scroll-margin-top dono isi value se calculate hote hain, taaki jab
 // kisi section pe scroll/click ho, woh sticky bar ke peeche chhupe nahi.
-const TAB_BAR_OFFSET = 52
+const TAB_BAR_OFFSET = 112 // sticky navbar (56) + pill tab bar
 
-export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId, myAction, introSent, onSetAction, onSendIntro, onBack }) {
+export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId, myAction, introSent, onSetAction, onSendIntro, onBack, onToast }) {
   const [tab, setTab] = useState('About')
   const [showIntroChoice, setShowIntroChoice] = useState(false)
   const [introJustSent, setIntroJustSent] = useState(false)
@@ -126,16 +133,16 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
   }
 
   return (
-    <div style={{minHeight:'100vh',background:'#fff',paddingBottom:40}}>
-      <div style={{position:'relative',width:'100%',aspectRatio:'4/5',background:'#e0e0e0'}}
+    <div style={{minHeight:'100vh',paddingBottom:40}}>
+      <div style={{position:'relative',width:'100%',aspectRatio:'4/5',maxHeight:'70vh',background:'var(--gray2)',borderRadius:'var(--radius-lg)',overflow:'hidden',boxShadow:'var(--shadow-md)'}}
         onTouchStart={handleHeroTouchStart} onTouchEnd={handleHeroTouchEnd}>
         {heroPhotos.length > 0
           ? <SignedImage path={heroPhotos[clampedHeroIndex]} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(10px)'}} />
-          : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:48}}>👤</div>
+          : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--primary-soft)',color:'var(--primary)'}}><UserRound size={56} /></div>
         }
         {!viewerIsPremium && heroPhotos.length > 0 && (
-          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)'}}>
-            <span style={{fontSize:32}}>🔒</span>
+          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)',color:'#fff'}}>
+            <Lock size={32} />
           </div>
         )}
         <div style={{position:'absolute',inset:0,background:'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 40%)'}} />
@@ -154,18 +161,23 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
           </>
         )}
 
-        <button onClick={onBack} style={{position:'absolute',top:16,left:16,width:36,height:36,borderRadius:'50%',background:'rgba(0,0,0,0.4)',border:'none',color:'#fff',fontSize:18,cursor:'pointer'}}>←</button>
-        {heroPhotos.length > 0 && (
-          <div style={{position:'absolute',top:16,right:16,padding:'6px 12px',borderRadius:20,background:'rgba(0,0,0,0.4)',color:'#fff',fontSize:12,display:'flex',alignItems:'center',gap:4}}>
-            🖼️ {clampedHeroIndex+1}/{heroPhotos.length}
-          </div>
-        )}
-        <div style={{position:'absolute',bottom:16,left:20,right:20,color:'#fff'}}>
+        <button className="icon-btn icon-btn-glass" onClick={onBack} aria-label="Back" style={{position:'absolute',top:18,left:14}}>
+          <ChevronLeft size={22} />
+        </button>
+        <div style={{position:'absolute',top:18,right:14,display:'flex',gap:8,alignItems:'center'}}>
+          {heroPhotos.length > 1 && (
+            <div style={{padding:'6px 10px',borderRadius:20,background:'rgba(0,0,0,0.32)',backdropFilter:'blur(8px)',color:'#fff',fontSize:12,display:'flex',alignItems:'center',gap:4}}>
+              <Images size={14} /> {clampedHeroIndex+1}/{heroPhotos.length}
+            </div>
+          )}
+          <ProfileActionsMenu light profile={m} onBlock={()=>{ onSetAction('dislike'); onBack() }} onToast={onToast} />
+        </div>
+        <div style={{position:'absolute',bottom:44,left:20,right:20,color:'#fff'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <span style={{fontSize:24,fontWeight:600}}>{m.full_name}, {m.age}</span>
+            <span style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500}}>{m.full_name}, {m.age}</span>
             {typeof m.matchScore === 'number' && (
-              <span style={{fontSize:11,fontWeight:600,padding:'3px 10px',borderRadius:20,background:'rgba(255,255,255,0.9)', color: m.matchScore>=70?'#16a34a':m.matchScore>=40?'#b45309':'#555'}}>
-                {m.matchScore}% match
+              <span className={'chip ' + (m.matchScore>=70 ? 'chip-success' : m.matchScore>=40 ? 'chip-warning' : 'chip-muted')}>
+                {m.matchScore}%
               </span>
             )}
           </div>
@@ -175,18 +187,18 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
       <div style={{maxWidth:480,margin:'0 auto',padding:'0 20px'}}>
 
-        <div style={{display:'flex',gap:6,margin:'16px 0'}}>
-          <button className={myAction==='like' ? 'btn btn-black btn-sm' : 'btn btn-outline btn-sm'} style={{flex:1}}
-            onClick={()=>onSetAction('like')}>👍 Like</button>
-          <button className={myAction==='super_like' ? 'btn btn-black btn-sm' : 'btn btn-outline btn-sm'} style={{flex:1}}
-            onClick={()=>onSetAction('super_like')}>⭐ Super Like</button>
-          <button className="btn btn-outline btn-sm" style={{flex:1,color:'#dc2626',borderColor:'#dc2626'}}
-            onClick={()=>onSetAction('dislike')}>👎 Dislike</button>
+        {/* Floating round actions — overlap the hero bottom edge */}
+        <div className="action-row" style={{margin:'-26px 0 16px',position:'relative',zIndex:2}}>
+          <button className="action-btn pass" aria-label="Pass" title="Pass" onClick={()=>onSetAction('dislike')}><X size={22} /></button>
+          <button className={'action-btn like' + (myAction==='like' ? ' on' : '')} aria-label="Like" title="Like"
+            aria-pressed={myAction==='like'} style={{width:60,height:60}} onClick={()=>onSetAction('like')}><Heart size={26} /></button>
+          <button className={'action-btn super' + (myAction==='super_like' ? ' on' : '')} aria-label="Super like" title="Super like"
+            aria-pressed={myAction==='super_like'} onClick={()=>onSetAction('super_like')}><Star size={22} /></button>
         </div>
 
         {totalCount > 0 && (
-          <div className="notice" style={{marginBottom:16}}>
-            You match {matchedCount}/{totalCount} preferences
+          <div className="notice" style={{marginBottom:16,display:'flex',alignItems:'center',gap:8}}>
+            <CircleCheck size={16} style={{color:'var(--primary)'}} /> {matchedCount}/{totalCount} preferences match
           </div>
         )}
 
@@ -194,40 +206,38 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
             jaise jaise neeche section scroll hote hain, upar wala
             IntersectionObserver effect isi ke "active" tab ko update
             karta rehta hai. */}
-        <div style={{position:'sticky',top:0,zIndex:20,background:'#fff',display:'flex',gap:4,borderBottom:'1px solid rgba(0,0,0,0.08)',marginBottom:16,overflowX:'auto'}}>
+        <div className="pill-tabs" style={{position:'sticky',top:60,zIndex:20,marginBottom:16,boxShadow:'var(--shadow-xs)'}}>
           {TABS.map(t=>(
-            <div key={t} onClick={()=>goToTab(t)}
-              style={{padding:'14px 4px 10px',marginRight:18,fontSize:13,fontWeight:600,whiteSpace:'nowrap',cursor:'pointer',
-                color: tab===t ? '#000' : '#8e8e8e', borderBottom: tab===t ? '2px solid #000' : '2px solid transparent'}}>
+            <button key={t} className={'pill-tab ' + (tab===t ? 'active' : '')} onClick={()=>goToTab(t)} style={{textTransform:'none'}}>
               {t}
-            </div>
+            </button>
           ))}
         </div>
 
         <div ref={setSectionRef('About')} data-tab="About" style={{scrollMarginTop:TAB_BAR_OFFSET}}>
           {!viewerIsPremium && (
-            <div style={{background:'#fff8e1',border:'1px solid #fde68a',borderRadius:10,padding:'10px 12px',marginBottom:14}}>
-              <div style={{fontSize:12,fontWeight:600,color:'#b45309',marginBottom:6}}>🔒 Premium members can see:</div>
+            <div style={{background:'var(--gold-soft)',border:'1px solid #f0e2bd',borderRadius:'var(--radius)',padding:'12px 14px',marginBottom:14}}>
+              <div style={{fontSize:12,fontWeight:600,color:'var(--gold)',marginBottom:6,display:'flex',alignItems:'center',gap:6}}><Crown size={14} /> Premium unlocks</div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
-                <span style={{color:'#8e8e8e'}}>Photo (unblurred)</span>
+                <span style={{color:'var(--gray3)'}}>Photo (unblurred)</span>
                 <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
               </div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
-                <span style={{color:'#8e8e8e'}}>Company Name</span>
+                <span style={{color:'var(--gray3)'}}>Company Name</span>
                 <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
               </div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
-                <span style={{color:'#8e8e8e'}}>College Name</span>
+                <span style={{color:'var(--gray3)'}}>College Name</span>
                 <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
               </div>
-              <button className="btn btn-black btn-sm" style={{marginTop:8,width:'100%'}}>👑 Go Premium Now</button>
+              <button className="btn btn-sm" style={{marginTop:8,width:'100%',background:'var(--gold)',color:'#fff'}}><Crown size={14} /> Go Premium</button>
             </div>
           )}
 
           {m.about_me && (
             <div className="card" style={{marginBottom:12}}>
-              <div className="section-label" style={{marginBottom:8}}>About {firstName}</div>
-              <p style={{fontSize:13,lineHeight:1.7,color:'#333'}}>{m.about_me}</p>
+              <SectionLabel style={{marginBottom:8}}>About {firstName}</SectionLabel>
+              <p style={{fontSize:14,lineHeight:1.7,color:'var(--ink)'}}>{m.about_me}</p>
             </div>
           )}
 
@@ -244,17 +254,17 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
           {m.matchStrengths && m.matchStrengths.length > 0 && (
             <div className="card" style={{marginBottom:12}}>
-              <div className="section-label" style={{marginBottom:8,color:'#16a34a'}}>Strong Matches</div>
+              <SectionLabel icon={CircleCheck} style={{marginBottom:8}}>Strong Matches</SectionLabel>
               {m.matchStrengths.map((s,i)=>(
-                <div key={i} style={{fontSize:13,color:'#333',marginBottom:4}}>✓ {s}</div>
+                <div key={i} style={{fontSize:13,marginBottom:6,display:'flex',gap:8,alignItems:'center'}}><CircleCheck size={14} style={{color:'var(--success)'}} /> {s}</div>
               ))}
             </div>
           )}
           {m.matchNeedsDiscussion && m.matchNeedsDiscussion.length > 0 && (
             <div className="card" style={{marginBottom:12}}>
-              <div className="section-label" style={{marginBottom:8,color:'#b45309'}}>Needs Discussion</div>
+              <SectionLabel style={{marginBottom:8}}>Needs Discussion</SectionLabel>
               {m.matchNeedsDiscussion.map((s,i)=>(
-                <div key={i} style={{fontSize:13,color:'#333',marginBottom:4}}>△ {s}</div>
+                <div key={i} style={{fontSize:13,marginBottom:6,display:'flex',gap:8,alignItems:'center'}}><TriangleAlert size={14} style={{color:'var(--warning)'}} /> {s}</div>
               ))}
             </div>
           )}
@@ -262,17 +272,17 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
         <div ref={setSectionRef('Photos')} data-tab="Photos" style={{scrollMarginTop:TAB_BAR_OFFSET,minHeight:40}}>
           {photos === null ? (
-            <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+            <div style={{textAlign:'center',padding:'40px 0',color:'var(--gray3)',fontSize:13}}>Loading...</div>
           ) : photos.length === 0 ? (
-            <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No photos yet</div>
+            <div style={{textAlign:'center',padding:'32px 0',color:'var(--gray3)',fontSize:13,display:'flex',flexDirection:'column',alignItems:'center',gap:8}}><Images size={24} /> No photos</div>
           ) : (
             <div style={{display:'grid',gridTemplateColumns:'repeat(2, 1fr)',gap:10,marginBottom:12}}>
               {photos.map(p => (
-                <div key={p.id} style={{position:'relative',aspectRatio:'3/4',borderRadius:12,overflow:'hidden',background:'#e0e0e0'}}>
+                <div key={p.id} style={{position:'relative',aspectRatio:'3/4',borderRadius:'var(--radius)',overflow:'hidden',background:'var(--gray2)'}}>
                   <SignedImage path={p.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(10px)'}} />
                   {!viewerIsPremium && (
-                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)'}}>
-                      <span style={{fontSize:24}}>🔒</span>
+                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)',color:'#fff'}}>
+                      <Lock size={24} />
                     </div>
                   )}
                 </div>
@@ -283,7 +293,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
         <div ref={setSectionRef('Career')} data-tab="Career" style={{scrollMarginTop:TAB_BAR_OFFSET}}>
           <FactCard title="Career" fields={[
-            ['Company', viewerIsPremium ? m.employer : (m.employer ? '🔒 Premium only' : null)],
+            ['Company', viewerIsPremium ? m.employer : (m.employer ? 'Premium only' : null)],
             ['Annual Income', m.annual_income],
           ]} />
         </div>
@@ -291,37 +301,37 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
         <div ref={setSectionRef('Education')} data-tab="Education" style={{scrollMarginTop:TAB_BAR_OFFSET}}>
           <FactCard title="Education" fields={[
             ['Highest Education', m.education],
-            ['College', viewerIsPremium ? m.college_name : (m.college_name ? '🔒 Premium only' : null)],
+            ['College', viewerIsPremium ? m.college_name : (m.college_name ? 'Premium only' : null)],
           ]} />
         </div>
 
         <div ref={setSectionRef('Family')} data-tab="Family" style={{scrollMarginTop:TAB_BAR_OFFSET}}>
           <div className="card" style={{marginBottom:12}}>
-            <div className="section-label" style={{marginBottom:12}}>Family</div>
+            <SectionLabel style={{marginBottom:12}}>Family</SectionLabel>
             <div style={{display:'flex',flexDirection:'column',gap:14}}>
               {m.father_profession && (
                 <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-                  <span style={{fontSize:18}}>👨</span>
+                  <span className="avatar" style={{width:34,height:34}}><Briefcase size={16} /></span>
                   <div>
-                    <div style={{fontSize:11,color:'#8e8e8e'}}>Father</div>
+                    <div style={{fontSize:11,color:'var(--gray3)'}}>Father</div>
                     <div style={{fontSize:13,fontWeight:500}}>{m.father_profession}</div>
                   </div>
                 </div>
               )}
               {m.mother_profession && (
                 <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-                  <span style={{fontSize:18}}>👩</span>
+                  <span className="avatar" style={{width:34,height:34}}><Briefcase size={16} /></span>
                   <div>
-                    <div style={{fontSize:11,color:'#8e8e8e'}}>Mother</div>
+                    <div style={{fontSize:11,color:'var(--gray3)'}}>Mother</div>
                     <div style={{fontSize:13,fontWeight:500}}>{m.mother_profession}</div>
                   </div>
                 </div>
               )}
               {(m.brothers_count || m.sisters_count) && (
                 <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-                  <span style={{fontSize:18}}>👨‍👩‍👧‍👦</span>
+                  <span className="avatar" style={{width:34,height:34}}><Users size={16} /></span>
                   <div>
-                    <div style={{fontSize:11,color:'#8e8e8e'}}>Siblings</div>
+                    <div style={{fontSize:11,color:'var(--gray3)'}}>Siblings</div>
                     {m.brothers_count ? <div style={{fontSize:13,fontWeight:500}}>{m.brothers_count} Brother(s) ({m.brothers_married_count || 0} Married)</div> : null}
                     {m.sisters_count ? <div style={{fontSize:13,fontWeight:500}}>{m.sisters_count} Sister(s) ({m.sisters_married_count || 0} Married)</div> : null}
                   </div>
@@ -345,7 +355,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
         <div ref={setSectionRef('Looking For')} data-tab="Looking For" style={{scrollMarginTop:TAB_BAR_OFFSET}}>
           <div style={{textAlign:'center',padding:'10px 0 18px'}}>
             <div style={{fontSize:16,fontWeight:600}}>Who is {firstName} looking for...</div>
-            <div style={{fontSize:12,color:'#8e8e8e',marginTop:4}}>These are their desired partner preferences</div>
+            <div style={{fontSize:12,color:'var(--gray3)',marginTop:4}}>Partner preferences</div>
           </div>
           <FactCard title="Basic Details" fields={[
             ['Age', (m.partner_age_min || m.partner_age_max) ? `${m.partner_age_min || '18'} - ${m.partner_age_max || '70'} yrs` : null],
@@ -370,14 +380,14 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
         <div style={{marginTop:20,paddingBottom:20}}>
           {requestSent ? (
-            <div className="notice" style={{color:'#16a34a'}}>✓ Request sent — our relationship manager will contact you to coordinate.</div>
+            <div className="notice" style={{display:'flex',gap:8,alignItems:'center'}}><CircleCheck size={16} style={{color:'var(--success)'}} /> Sent · our manager will call you</div>
           ) : showIntroChoice ? (
-            <div style={{display:'flex',gap:8}}>
-              <button className="btn btn-black" style={{flex:1}} onClick={()=>handleIntro('talk')}>Request to Talk</button>
-              <button className="btn btn-black" style={{flex:1}} onClick={()=>handleIntro('meeting')}>Request a Meeting</button>
+            <div style={{display:'flex',gap:8}} className="page-enter">
+              <button className="btn btn-primary" style={{flex:1}} onClick={()=>handleIntro('talk')}><Phone size={16} /> Talk</button>
+              <button className="btn btn-primary" style={{flex:1}} onClick={()=>handleIntro('meeting')}><CalendarDays size={16} /> Meet</button>
             </div>
           ) : (
-            <button className="btn btn-outline btn-full" onClick={()=>setShowIntroChoice(true)}>Request to Talk / Meet</button>
+            <button className="btn btn-primary btn-full btn-lg" onClick={()=>setShowIntroChoice(true)}><Send size={17} /> Talk / Meet</button>
           )}
         </div>
       </div>
@@ -390,13 +400,17 @@ function FactCard({ title, fields }) {
   if (visible.length === 0) return null
   return (
     <div className="card" style={{marginBottom:12}}>
-      {title && <div className="section-label" style={{marginBottom:8}}>{title}</div>}
-      {visible.map(([k,v]) => (
-        <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:13}}>
-          <span style={{color:'#8e8e8e'}}>{k}</span>
-          <span style={{fontWeight:500,textAlign:'right'}}>{v}</span>
-        </div>
-      ))}
+      {title && <SectionLabel style={{marginBottom:8}}>{title}</SectionLabel>}
+      {visible.map(([k,v]) => {
+        const Icon = iconForLabel(k)
+        return (
+          <div key={k} className="fact-row">
+            {Icon && <Icon size={16} className="fact-icon" />}
+            <span className="fact-key">{k}</span>
+            <span className="fact-val">{v}</span>
+          </div>
+        )
+      })}
     </div>
   )
 }

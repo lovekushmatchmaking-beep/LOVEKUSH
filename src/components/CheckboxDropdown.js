@@ -33,13 +33,13 @@ export default function CheckboxDropdown({ options, selected, onChange, placehol
 
   return (
     <div ref={ref} style={{position:'relative'}}>
-      <button type="button" className="form-select" style={{textAlign:'left', cursor:'pointer', color: selected.length ? '#000' : '#8e8e8e'}}
+      <button type="button" className="form-select" style={{textAlign:'left', cursor:'pointer', color: selected.length ? 'var(--ink)' : 'var(--gray3)'}}
         onClick={()=>setOpen(o=>!o)}>
         {summary}
       </button>
       {open && (
         <div style={{position:'absolute', zIndex:20, top:'calc(100% + 4px)', left:0, right:0,
-          background:'#fff', border:'1px solid rgba(0,0,0,0.15)', borderRadius:10,
+          background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', overflow:'hidden',
           boxShadow:'var(--shadow-lg)', maxHeight:280, display:'flex', flexDirection:'column'}}>
           <input className="form-input" placeholder="Search..." autoFocus
             style={{margin:8, width:'calc(100% - 16px)'}}
@@ -50,7 +50,7 @@ export default function CheckboxDropdown({ options, selected, onChange, placehol
             )}
             {filtered.map(opt => (
               <label key={opt} style={{display:'flex', alignItems:'center', gap:8, padding:'6px 4px', fontSize:13, cursor:'pointer'}}>
-                <input type="checkbox" checked={selected.includes(opt)} onChange={()=>toggle(opt)} />
+                <input type="checkbox" checked={selected.includes(opt)} onChange={()=>toggle(opt)} style={{accentColor:'var(--primary)',width:16,height:16}} />
                 {opt}
               </label>
             ))}

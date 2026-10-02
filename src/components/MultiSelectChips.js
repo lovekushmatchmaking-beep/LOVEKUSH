@@ -1,4 +1,5 @@
 import React from 'react'
+import { Check } from 'lucide-react'
 
 // Chhota reusable component — checkboxes ki list, optional max-limit ke
 // saath (jaise Hobbies mein max 5). Grouped bhi ho sakta hai (jaise
@@ -25,14 +26,17 @@ export default function MultiSelectChips({ options, selected, onChange, maxSelec
         onClick={() => toggle(opt)}
         disabled={disabled}
         style={{
-          padding: '6px 12px', borderRadius: 20, fontSize: 12, cursor: disabled ? 'not-allowed' : 'pointer',
-          border: isSelected ? '1px solid #000' : '1px solid rgba(0,0,0,0.15)',
-          background: isSelected ? '#000' : '#fff',
-          color: isSelected ? '#fff' : disabled ? '#ccc' : '#333',
+          padding: '7px 14px', borderRadius: 50, fontSize: 12, cursor: disabled ? 'not-allowed' : 'pointer',
+          border: isSelected ? '1px solid var(--primary)' : '1px solid var(--gray2)',
+          background: isSelected ? 'var(--primary-soft)' : '#fff',
+          color: isSelected ? 'var(--primary)' : disabled ? '#ccc' : 'var(--ink)',
+          fontWeight: isSelected ? 600 : 400,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          transition: 'all 0.2s var(--ease)',
           margin: '3px 4px 3px 0',
         }}
       >
-        {isSelected ? '✓ ' : ''}{opt}
+        {isSelected && <Check size={12} />}{opt}
       </button>
     )
   }

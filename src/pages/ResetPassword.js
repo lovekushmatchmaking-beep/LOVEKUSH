@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react'
+import { ArrowRight } from 'lucide-react'
+import { FormLabel } from '../components/ui'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 
@@ -83,13 +85,13 @@ export default function ResetPassword() {
         ) : ready ? (
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label className="form-label">New Password</label>
+              <FormLabel>New Password</FormLabel>
               <input className="form-input" type="password" placeholder="Naya password"
                 value={password} onChange={e=>setPassword(e.target.value)} required autoFocus />
             </div>
 
             <div className="form-group">
-              <label className="form-label">Confirm Password</label>
+              <FormLabel>Confirm Password</FormLabel>
               <input className="form-input" type="password" placeholder="Password dobara likhein"
                 value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} required />
             </div>
@@ -97,7 +99,7 @@ export default function ResetPassword() {
             {error && <div className="form-error" style={{marginBottom:12}}>{error}</div>}
 
             <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading} style={{marginBottom:12}}>
-              {loading ? 'Updating...' : 'Update Password →'}
+              {loading ? 'Updating...' : 'Update Password'} <ArrowRight size={18} />
             </button>
           </form>
         ) : (
