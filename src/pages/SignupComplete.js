@@ -34,7 +34,7 @@ export default function SignupComplete({ profile, photoPreview, onContinue }) {
       ))}
 
       <div style={{marginTop:'12vh',textAlign:'center',position:'relative',zIndex:1}}>
-        <div style={{width:140,height:180,borderRadius:20,background:'#e0e0e0',overflow:'hidden',margin:'0 auto 20px',boxShadow:'0 12px 30px rgba(0,0,0,0.12)',position:'relative'}}>
+        <div style={{width:140,height:180,borderRadius:20,background:'#e0e0e0',overflow:'hidden',margin:'0 auto 20px',boxShadow:'var(--shadow-lg)',position:'relative'}}>
           {photoPreview
             ? <img src={photoPreview} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
             : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:48}}>👤</div>

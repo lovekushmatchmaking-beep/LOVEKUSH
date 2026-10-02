@@ -40,7 +40,7 @@ export default function CheckboxDropdown({ options, selected, onChange, placehol
       {open && (
         <div style={{position:'absolute', zIndex:20, top:'calc(100% + 4px)', left:0, right:0,
           background:'#fff', border:'1px solid rgba(0,0,0,0.15)', borderRadius:10,
-          boxShadow:'0 8px 24px rgba(0,0,0,0.12)', maxHeight:280, display:'flex', flexDirection:'column'}}>
+          boxShadow:'var(--shadow-lg)', maxHeight:280, display:'flex', flexDirection:'column'}}>
           <input className="form-input" placeholder="Search..." autoFocus
             style={{margin:8, width:'calc(100% - 16px)'}}
             value={filter} onChange={e=>setFilter(e.target.value)} />

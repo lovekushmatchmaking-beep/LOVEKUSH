@@ -817,13 +817,9 @@ function RequestsTab({ myProfile, introductions, onRespond }) {
     <div>
       <h2 style={{fontFamily:'Cormorant Garamond',fontSize:26,fontWeight:300,marginBottom:16}}>Requests</h2>
 
-      <div style={{display:'flex',gap:4,marginBottom:18,borderBottom:'1px solid rgba(0,0,0,0.08)'}}>
+      <div className="pill-tabs" style={{marginBottom:18}}>
         {['received','sent'].map(t=>(
-          <button key={t} onClick={()=>setSubTab(t)}
-            style={{padding:'8px 14px',border:'none',background:'transparent',fontSize:13,
-              fontWeight:subTab===t?600:400, color:subTab===t?'#000':'#8e8e8e',
-              borderBottom:subTab===t?'2px solid #000':'2px solid transparent',
-              cursor:'pointer',textTransform:'capitalize'}}>
+          <button key={t} className={'pill-tab '+(subTab===t?'active':'')} onClick={()=>setSubTab(t)} style={{flex:1}}>
             {t === 'received' && received.length>0 ? `Received (${received.length})` : t}
           </button>
         ))}
