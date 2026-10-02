@@ -8,6 +8,14 @@ import ActivityTab from './ActivityTab'
 import SearchByProfileId from './SearchByProfileId'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabase'
+import {
+  Pencil, Download, Camera, Images, Eye, EyeOff, CircleCheck, Clock, Sparkles, Heart, Star, X,
+  SlidersHorizontal, Search, Settings, ScanSearch, Ban, LogOut, ChevronRight, UserRound,
+  Undo2, Send, Inbox, ArrowRight, Check as CheckIcon, Lock as LockIcon, MapPin as MapPinIcon, Phone as PhoneIcon, CalendarDays as CalendarIcon, CircleHelp, ShieldCheck, Mail, Copy, Plus,
+} from 'lucide-react'
+import { TopBar, BottomNav, SideDrawer } from '../components/AppChrome'
+import { FormLabel, SectionLabel, PageHeader, EmptyState, ProfileActionsMenu, SUPPORT_EMAIL } from '../components/ui'
+import { iconForLabel } from '../components/fieldIcons'
 import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
   ISLAMIC_DENOMINATIONS, SUNNI_SCHOOLS_OF_THOUGHT, SHIA_BRANCHES, ISLAMIC_COMMUNITIES,
   ISLAMIC_SUB_CASTE_DIVISIONS, SENSITIVE_COMMUNITIES, SENSITIVE_COMMUNITY_NOTE,
@@ -27,7 +35,7 @@ import DualRangeSlider from '../components/DualRangeSlider'
 import CheckboxDropdown from '../components/CheckboxDropdown'
 
 const DASHBOARD_TABS = ['home', 'matches', 'matchsearch', 'activity', 'requests', 'profile', 'searchid',
-  'editphotos', 'editprofile', 'accountsettings', 'biodata', 'disliked']
+  'editphotos', 'editprofile', 'accountsettings', 'privacy', 'help', 'biodata', 'disliked']
 
 const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
@@ -65,6 +73,9 @@ export default function Dashboard({ user }) {
   const [profileViewsCount, setProfileViewsCount] = useState(0)
   const [activityViewProfile, setActivityViewProfile] = useState(null) // set when a row in Activity tab is tapped, opens ProfileView
   const [searchViewProfile, setSearchViewProfile] = useState(null) // set when a Search-by-Profile-ID result is opened
+  const [drawerOpen, setDrawerOpen] = useState(false) // top-right hamburger → slide-in settings drawer
+  const [toast, setToast] = useState('')
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
   useEffect(() => {
     loadProfile()
@@ -250,110 +261,115 @@ export default function Dashboard({ user }) {
   }
 
   if(loading) return (
-    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh'}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)'}}>
       <div style={{textAlign:'center'}}>
-        <div style={{fontFamily:'serif',fontSize:24,letterSpacing:'0.4em',marginBottom:8}}>LOVEKUSH</div>
-        <div style={{fontSize:12,opacity:0.4}}>Loading...</div>
+        <Heart size={28} style={{color:'var(--primary)',fill:'var(--primary-soft)',marginBottom:10,animation:'pop 1.2s ease infinite'}} />
+        <div style={{fontFamily:'var(--font-display)',fontSize:18,fontWeight:500,letterSpacing:'0.35em'}}>LOVEKUSH</div>
       </div>
     </div>
   )
 
-  return (
-    <div style={{minHeight:'100vh',background:'#fff',paddingBottom:80}}>
-      {/* Navbar */}
-      <nav className="navbar">
-        <span style={{fontFamily:'DM Sans',fontSize:16,fontWeight:200,letterSpacing:'0.4em'}}>LOVEKUSH</span>
-        <button className="btn btn-outline" style={{fontSize:11,padding:'6px 14px'}} onClick={logout}>Logout</button>
-      </nav>
+  const primaryPhoto = photos.find(p=>p.is_primary) || photos[0]
+  const isHidden = profile?.hidden_until && new Date(profile.hidden_until) > new Date()
 
-      <div style={{maxWidth:480,margin:'0 auto',padding:'20px 20px 20px'}}>
+  return (
+    <div style={{minHeight:'100vh',background:'var(--bg)',paddingBottom:96}}>
+      <TopBar onBell={()=>setActiveTab('activity')} bellDot={receivedActions.length>0 && activeTab!=='activity'}
+        onMenu={()=>setDrawerOpen(true)} />
+      <SideDrawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} profile={profile}
+        avatarPath={primaryPhoto?.storage_path} onNavigate={setActiveTab} onLogout={logout} />
+      <div className={'toast ' + (toast?'show':'')}>{toast}</div>
+
+      <div key={activeTab} className="page-enter" style={{maxWidth:520,margin:'0 auto',padding:'20px 16px'}}>
 
         {/* HOME TAB */}
         {activeTab === 'home' && (
           <>
             {!profile ? (
-              <div style={{textAlign:'center',padding:'60px 0'}}>
-                <h2 style={{fontFamily:'Cormorant Garamond',fontSize:28,fontWeight:300,marginBottom:8}}>Complete Your Profile</h2>
-                <p style={{fontSize:14,color:'#8e8e8e',marginBottom:28,lineHeight:1.6}}>Create your profile to start your matchmaking journey</p>
-                <button className="btn btn-black btn-lg" onClick={()=>navigate('/create-profile')}>Create Profile →</button>
-              </div>
+              <EmptyState icon={UserRound} title="Complete your profile"
+                text="Start your matchmaking journey"
+                action={<button className="btn btn-primary btn-lg" onClick={()=>navigate('/create-profile')}>Create Profile <ArrowRight size={18} /></button>} />
             ) : (
               <>
-                {/* Profile Header */}
-                <div style={{display:'flex',gap:14,alignItems:'flex-start',marginBottom:20,padding:'16px',background:'#f5f5f5',borderRadius:16}}>
-                  <div style={{width:64,height:64,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                    {photos.find(p=>p.is_primary)
-                      ? <SignedImage path={photos.find(p=>p.is_primary).storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
-                      : <span style={{fontSize:24}}>👤</span>
-                    }
+                {/* Profile Header — Instagram-style ring avatar */}
+                <div className="card" style={{display:'flex',gap:14,alignItems:'center',marginBottom:14}}>
+                  <div className="avatar-ring" onClick={()=>setActiveTab('editphotos')} style={{cursor:'pointer'}}>
+                    <div className="avatar" style={{width:68,height:68}}>
+                      {primaryPhoto
+                        ? <SignedImage path={primaryPhoto.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+                        : <UserRound size={28} />}
+                    </div>
                   </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:600,fontSize:16,marginBottom:2}}>{profile.full_name}</div>
-                    <div style={{fontSize:13,color:'#8e8e8e',marginBottom:6}}>{profile.city}{profile.state ? ', ' + profile.state : ''}</div>
-                    <div className="profile-code">{profile.profile_code}</div>
-                  </div>
-                  <div style={{
-                    background: profile.profile_status==='active'?'#f0fdf4':'#fff8e1',
-                    color: profile.profile_status==='active'?'#16a34a':'#f59e0b',
-                    fontSize:10, fontWeight:600, padding:'4px 10px', borderRadius:50,
-                    letterSpacing:'0.1em', textTransform:'uppercase'
-                  }}>
-                    {profile.profile_status==='active'?'Active':'Under Review'}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:'var(--font-display)',fontWeight:500,fontSize:18,marginBottom:2}}>{profile.full_name}</div>
+                    {profile.city && (
+                      <div style={{fontSize:13,color:'var(--gray3)',marginBottom:6}}>{profile.city}{profile.state ? ', ' + profile.state : ''}</div>
+                    )}
+                    <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+                      <span className="profile-code">{profile.profile_code}</span>
+                      <span className={'chip ' + (profile.profile_status==='active' ? 'chip-success' : 'chip-warning')}
+                        title={profile.profile_status==='active' ? 'Active' : 'Under review'}>
+                        {profile.profile_status==='active' ? <CircleCheck size={12} /> : <Clock size={12} />}
+                        {profile.profile_status==='active' ? 'Active' : 'In review'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {profile.hidden_until && new Date(profile.hidden_until) > new Date() ? (
-                  <div className="notice" style={{marginBottom:20, display:'flex', justifyContent:'space-between', alignItems:'center', gap:10}}>
-                    <span>Your profile is hidden until {new Date(profile.hidden_until).toLocaleDateString('en-IN')}.</span>
-                    <button className="btn btn-outline btn-sm" style={{flexShrink:0}} onClick={unhideProfile}>Unhide Now</button>
-                  </div>
-                ) : (
-                  <div style={{display:'flex', gap:10, marginBottom:20}}>
-                    <button className="btn btn-outline" style={{fontSize:12,padding:'8px 14px'}} onClick={()=>setActiveTab('biodata')}>Download Biodata</button>
+                {/* Quick actions — icon tiles */}
+                <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:14}}>
+                  {[
+                    {icon:Pencil, label:'Edit', onClick:()=>setActiveTab('editprofile')},
+                    {icon:Camera, label:'Photos', onClick:()=>setActiveTab('editphotos')},
+                    {icon:Download, label:'Biodata', onClick:()=>setActiveTab('biodata')},
+                    isHidden
+                      ? {icon:Eye, label:'Unhide', onClick:unhideProfile}
+                      : {icon:Settings, label:'Settings', onClick:()=>setActiveTab('accountsettings')},
+                  ].map(({icon:Icon,label,onClick})=>(
+                    <button key={label} className="stat-card" onClick={onClick}
+                      style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6,padding:'14px 4px',cursor:'pointer',font:'inherit'}}>
+                      <Icon size={20} style={{color:'var(--primary)'}} />
+                      <span style={{fontSize:11,color:'var(--gray3)'}}>{label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {isHidden && (
+                  <div className="notice" style={{display:'flex',alignItems:'center',gap:8}}>
+                    <EyeOff size={16} style={{color:'var(--primary)'}} /> Hidden until {new Date(profile.hidden_until).toLocaleDateString('en-IN')}
                   </div>
                 )}
 
                 {/* Completeness */}
-                <div style={{marginBottom:20}}>
-                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-                    <span style={{fontSize:13,fontWeight:500}}>Profile Completeness</span>
-                    <span style={{fontSize:13,fontWeight:600}}>{profile.profile_completeness}%</span>
+                <div className="card" style={{marginBottom:14}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                    <SectionLabel icon={Sparkles} style={{marginBottom:0}}>Profile strength</SectionLabel>
+                    <span style={{fontSize:14,fontWeight:600,color:'var(--primary)'}}>{profile.profile_completeness}%</span>
                   </div>
-                  <div className="progress-wrap">
+                  <div className="progress-wrap" style={{marginBottom:0}}>
                     <div className="progress-fill" style={{width:profile.profile_completeness+'%'}}></div>
                   </div>
                   {profile.profile_completeness < 100 && (() => {
                     const { suggestions } = calculateSectionCompleteness(profile, photos.length)
                     return suggestions.length > 0 ? (
-                      <div style={{marginTop:10,fontSize:12,color:'#8e8e8e'}}>
-                        <strong style={{color:'#333'}}>Improve your profile:</strong>
-                        <ul style={{margin:'4px 0 0 18px',padding:0}}>
-                          {suggestions.map((s,i)=><li key={i} style={{marginBottom:2}}>{s}</li>)}
-                        </ul>
+                      <div style={{marginTop:12,display:'flex',flexDirection:'column',gap:6}}>
+                        {suggestions.map((sg,i)=>(
+                          <button key={i} onClick={()=>setActiveTab(/photo/i.test(sg) ? 'editphotos' : 'editprofile')}
+                            style={{display:'flex',alignItems:'center',gap:8,background:'none',border:'none',padding:0,font:'inherit',fontSize:12,color:'var(--gray3)',cursor:'pointer',textAlign:'left'}}>
+                            <Plus size={14} style={{color:'var(--primary)'}} /> {sg}
+                          </button>
+                        ))}
                       </div>
                     ) : null
                   })()}
                 </div>
 
-                {/* Stats */}
-                <div className="stats-row">
-                  <div className="stat-card">
-                    <span className="stat-num">{photos.length}</span>
-                    <span className="stat-label">Photos</span>
-                  </div>
-                  <div className="stat-card">
-                    <span className="stat-num">{profile.profile_completeness}%</span>
-                    <span className="stat-label">Complete</span>
-                  </div>
-                </div>
-
                 {/* Profile Details */}
-                <div className="card" style={{marginBottom:12}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-                    <div className="section-label">Profile Details</div>
-                    <button className="btn btn-outline" style={{fontSize:11,padding:'5px 14px'}}
-                      onClick={()=>setActiveTab('editprofile')}>
-                      Edit Profile
+                <div className="card" style={{marginBottom:14}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                    <SectionLabel style={{marginBottom:0}}>Profile Details</SectionLabel>
+                    <button className="icon-btn" aria-label="Edit profile" onClick={()=>setActiveTab('editprofile')}>
+                      <Pencil size={18} />
                     </button>
                   </div>
                   {[
@@ -423,21 +439,16 @@ export default function Dashboard({ user }) {
                       ['Vehicle Details', profile.vehicle_model],
                     ]},
                   ].map(({group, rows}) => ({group, rows: rows.filter(([,v])=>v)})).filter(({rows})=>rows.length).map(({group, rows}, gi)=>(
-                    <div key={group} style={{marginTop: gi>0 ? 18 : 0}}>
-                      <div style={{fontSize:11,fontWeight:600,letterSpacing:'0.08em',textTransform:'uppercase',color:'#8e8e8e',marginBottom:4}}>{group}</div>
-                      {rows.map(([k,v])=>(
-                        <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
-                          <span style={{color:'#8e8e8e'}}>{k}</span>
-                          <span style={{fontWeight:500}}>{v}</span>
-                        </div>
-                      ))}
+                    <div key={group} style={{marginTop: gi>0 ? 16 : 4}}>
+                      <div style={{fontSize:11,fontWeight:600,letterSpacing:'0.06em',textTransform:'uppercase',color:'var(--gray3)',marginBottom:2}}>{group}</div>
+                      {rows.map(([k,v])=><FactRow key={k} k={k} v={v} />)}
                     </div>
                   ))}
                 </div>
 
                 {/* Partner Preferences */}
-                <div className="card" style={{marginBottom:12}}>
-                  <div className="section-label" style={{marginBottom:14}}>Partner Preferences</div>
+                <div className="card" style={{marginBottom:14}}>
+                  <SectionLabel style={{marginBottom:6}}>Partner Preferences</SectionLabel>
                   {[
                     ['Age Range', profile.partner_age_min && profile.partner_age_max ? profile.partner_age_min + ' - ' + profile.partner_age_max + ' years' : null],
                     ['Height Range', profile.partner_height_min && profile.partner_height_max ? formatHeightFromInches(profile.partner_height_min) + ' - ' + formatHeightFromInches(profile.partner_height_max) : null],
@@ -450,47 +461,47 @@ export default function Dashboard({ user }) {
                     ['Preferred State', profile.partner_state_preference],
                     ['Preferred Country', profile.partner_country_preference && profile.partner_country_preference !== 'Open to All' ? profile.partner_country_preference : null],
                     ['Notes', profile.partner_notes],
-                  ].filter(([,v])=>v).map(([k,v])=>(
-                    <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',fontSize:14}}>
-                      <span style={{color:'#8e8e8e'}}>{k}</span>
-                      <span style={{fontWeight:500}}>{v}</span>
-                    </div>
-                  ))}
+                  ].filter(([,v])=>v).map(([k,v])=><FactRow key={k} k={k} v={v} />)}
                 </div>
 
                 {/* About */}
                 {profile.about_me && (
-                  <div className="card" style={{marginBottom:12}}>
-                    <div className="section-label" style={{marginBottom:10}}>About</div>
-                    <p style={{fontSize:14,lineHeight:1.7,color:'#333'}}>{profile.about_me}</p>
+                  <div className="card" style={{marginBottom:14}}>
+                    <SectionLabel style={{marginBottom:8}}>About</SectionLabel>
+                    <p style={{fontSize:14,lineHeight:1.7,color:'var(--ink)'}}>{profile.about_me}</p>
                   </div>
                 )}
 
                 {/* Photos */}
-                <div className="card" style={{marginBottom:12}}>
+                <div className="card" style={{marginBottom:14}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:photos.length>0?12:0}}>
-                    <div className="section-label">Photos {photos.length>0 ? '(' + photos.length + ')' : ''}</div>
-                    <button className="btn btn-outline" style={{fontSize:11,padding:'5px 14px'}}
-                      onClick={()=>setActiveTab('editphotos')}>
-                      {photos.length>0 ? 'Manage Photos' : 'Add Photos'}
+                    <SectionLabel icon={Images} style={{marginBottom:0}}>Photos {photos.length>0 ? '· ' + photos.length : ''}</SectionLabel>
+                    <button className="icon-btn" aria-label="Manage photos" onClick={()=>setActiveTab('editphotos')}>
+                      {photos.length>0 ? <Pencil size={18} /> : <Plus size={20} />}
                     </button>
                   </div>
                   {photos.length > 0 ? (
-                    <div className="photo-grid">
+                    <div className="photo-grid" style={{marginBottom:0}}>
                       {photos.map((p,i)=>(
-                        <div key={i} style={{aspectRatio:1,borderRadius:10,overflow:'hidden',background:'#f5f5f5'}}>
+                        <div key={i} style={{aspectRatio:1,borderRadius:12,overflow:'hidden',background:'var(--gray1)'}}>
                           <SignedImage path={p.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div style={{fontSize:13,color:'#8e8e8e'}}>Koi photo nahi hai abhi — apni Profile Photo add karein.</div>
+                    <button className="photo-slot" style={{width:'100%',aspectRatio:'auto',padding:'22px 0',marginTop:12,font:'inherit'}} onClick={()=>setActiveTab('editphotos')}>
+                      <Camera size={24} style={{color:'var(--primary)'}} />
+                      <span style={{fontSize:12,color:'var(--gray3)'}}>Add photo</span>
+                    </button>
                   )}
                 </div>
 
-                <div className="notice" style={{marginTop:20}}>
-                  <strong>Our team is reviewing your profile.</strong> You'll be notified once it's active and we start finding suitable matches.
-                </div>
+                {profile.profile_status !== 'active' && (
+                  <div className="notice" style={{display:'flex',gap:10,alignItems:'center'}}>
+                    <ShieldCheck size={18} style={{color:'var(--primary)',flexShrink:0}} />
+                    <span><strong>Under review</strong> · we'll notify you once it's live</span>
+                  </div>
+                )}
               </>
             )}
           </>
@@ -508,29 +519,28 @@ export default function Dashboard({ user }) {
                 introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
                 onSetAction={(action)=>setMatchAction(m.id, action)}
                 onSendIntro={(type)=>sendIntroductionRequest(m.id, type)}
-                onBack={()=>setViewingMatchId(null)} />
+                onToast={showToast} onBack={()=>setViewingMatchId(null)} />
             )
           })() : (
           <div>
-            <h2 style={{fontFamily:'Cormorant Garamond',fontSize:26,fontWeight:300,marginBottom:14}}>Your Matches</h2>
-            <div onClick={()=>setActiveTab('matchsearch')}
-              style={{display:'flex',alignItems:'center',gap:10,padding:'12px 18px',borderRadius:30,background:'#f5f5f5',color:'#8e8e8e',fontSize:13,marginBottom:20,cursor:'pointer'}}>
-              <span>🔍</span> Tell us what you're looking for
+            <PageHeader title="Matches" right={matches.length > 0 && <span className="chip chip-primary">{matches.length}</span>} />
+            <div className="search-pill" onClick={()=>setActiveTab('matchsearch')} style={{marginBottom:18}}>
+              <Search size={18} style={{color:'var(--primary)'}} />
+              <span style={{flex:1}}>What are you looking for?</span>
+              <SlidersHorizontal size={18} />
             </div>
             {matches.length === 0 ? (
-              <div style={{textAlign:'center',padding:'60px 0',color:'#8e8e8e'}}>
-                <div style={{fontSize:48,marginBottom:16}}>💝</div>
-                <div style={{fontSize:16,marginBottom:8}}>No matches yet</div>
-                <div style={{fontSize:13}}>Complete your profile to get better matches</div>
-              </div>
+              <EmptyState icon={Heart} title="No matches yet" text="A complete profile gets better matches"
+                action={<button className="btn btn-soft btn-sm" onClick={()=>setActiveTab('editprofile')}><Pencil size={14} /> Complete profile</button>} />
             ) : (
-              <div style={{display:'flex',flexDirection:'column',gap:12}}>
+              <div style={{display:'flex',flexDirection:'column',gap:14}}>
                 {matches.map((m)=>(
                   <MatchCard key={m.id} match={m} viewerIsPremium={!!profile.is_premium}
                     myAction={myActions.find(a => a.target_profile_id === m.id)?.action || null}
                     introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
                     onSetAction={(action)=>setMatchAction(m.id, action)}
                     onSendIntro={(type)=>sendIntroductionRequest(m.id, type)}
+                    onToast={showToast}
                     onView={()=>setViewingMatchId(m.id)} />
                 ))}
               </div>
@@ -554,7 +564,7 @@ export default function Dashboard({ user }) {
               introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === activityViewProfile.id)}
               onSetAction={(action)=>setMatchAction(activityViewProfile.id, action)}
               onSendIntro={(type)=>sendIntroductionRequest(activityViewProfile.id, type)}
-              onBack={()=>setActivityViewProfile(null)} />
+              onToast={showToast} onBack={()=>setActivityViewProfile(null)} />
           ) : (
             <ActivityTab
               myActions={myActions}
@@ -571,44 +581,59 @@ export default function Dashboard({ user }) {
           <RequestsTab myProfile={profile} introductions={myIntroductions} onRespond={respondToIntroduction} />
         )}
 
-        {/* PROFILE TAB */}
-        {activeTab === 'profile' && (
+        {/* PROFILE TAB — Instagram-style header + icon list */}
+        {activeTab === 'profile' && profile && (
           <div>
-            <h2 style={{fontFamily:'Cormorant Garamond',fontSize:26,fontWeight:300,marginBottom:20}}>My Profile</h2>
-            {profile && (
-              <div style={{textAlign:'center',padding:'20px 0'}}>
-                <div style={{width:90,height:90,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',margin:'0 auto 16px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  {photos.find(p=>p.is_primary)
-                    ? <SignedImage path={photos.find(p=>p.is_primary).storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
-                    : <span style={{fontSize:36}}>👤</span>
-                  }
-                </div>
-                <div style={{fontWeight:600,fontSize:20,marginBottom:4}}>{profile.full_name}</div>
-                <div style={{fontSize:14,color:'#8e8e8e',marginBottom:8}}>{profile.city}{profile.state ? ', ' + profile.state : ''}</div>
-                <div className="profile-code" style={{display:'inline-block',marginBottom:20}}>{profile.profile_code}</div>
-
-                <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                  <button className="btn btn-black" style={{width:'100%'}} onClick={()=>setActiveTab('editprofile')}>
-                    Edit Profile
-                  </button>
-                  <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('editphotos')}>
-                    Manage Photos
-                  </button>
-                  <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('disliked')}>
-                    Disliked Profiles
-                  </button>
-                  <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('accountsettings')}>
-                    Account & Settings
-                  </button>
-                  <button className="btn btn-outline" style={{width:'100%'}} onClick={()=>setActiveTab('searchid')}>
-                    Search by Profile ID
-                  </button>
-                  <button className="btn btn-outline" style={{width:'100%',color:'#e53e3e',borderColor:'#e53e3e'}} onClick={logout}>
-                    Logout
-                  </button>
+            <div style={{textAlign:'center',padding:'8px 0 20px'}}>
+              <div className="avatar-ring" style={{display:'inline-block',marginBottom:12,cursor:'pointer'}} onClick={()=>setActiveTab('editphotos')}>
+                <div className="avatar" style={{width:96,height:96}}>
+                  {primaryPhoto
+                    ? <SignedImage path={primaryPhoto.storage_path} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+                    : <UserRound size={38} />}
                 </div>
               </div>
-            )}
+              <div style={{fontFamily:'var(--font-display)',fontWeight:500,fontSize:20,marginBottom:2}}>{profile.full_name}</div>
+              {profile.city && <div style={{fontSize:13,color:'var(--gray3)',marginBottom:8}}>{profile.city}{profile.state ? ', ' + profile.state : ''}</div>}
+              <span className="profile-code">{profile.profile_code}</span>
+            </div>
+
+            <div className="stats-row" style={{gridTemplateColumns:'repeat(3,1fr)'}}>
+              {[
+                {icon:Images, n:photos.length, l:'Photos', tab:'editphotos'},
+                {icon:Heart, n:myActions.filter(a=>a.action!=='dislike').length, l:'Liked', tab:'activity'},
+                {icon:Eye, n:profileViewsCount, l:'Visits', tab:'activity'},
+              ].map(({icon:Icon,n,l,tab})=>(
+                <button key={l} className="stat-card" onClick={()=>setActiveTab(tab)} style={{textAlign:'center',cursor:'pointer',font:'inherit',padding:'14px 6px'}}>
+                  <Icon size={18} className="stat-icon" />
+                  <span className="stat-num" style={{fontSize:20}}>{n}</span>
+                  <span className="stat-label">{l}</span>
+                </button>
+              ))}
+            </div>
+
+            <div style={{display:'flex',gap:10,marginBottom:16}}>
+              <button className="btn btn-primary" style={{flex:1}} onClick={()=>setActiveTab('editprofile')}><Pencil size={16} /> Edit profile</button>
+              <button className="btn btn-outline" style={{flex:1}} onClick={()=>setActiveTab('biodata')}><Download size={16} /> Biodata</button>
+            </div>
+
+            <div className="menu-list">
+              {[
+                {icon:Images, label:'Manage Photos', tab:'editphotos'},
+                {icon:ScanSearch, label:'Search by Profile ID', tab:'searchid'},
+                {icon:Ban, label:'Blocked Profiles', tab:'disliked'},
+                {icon:Settings, label:'Account & Settings', tab:'accountsettings'},
+              ].map(({icon:Icon,label,tab})=>(
+                <button key={label} className="menu-row" onClick={()=>setActiveTab(tab)}>
+                  <Icon size={20} className="menu-row-icon" />
+                  <span>{label}</span>
+                  <ChevronRight size={18} className="chev" />
+                </button>
+              ))}
+              <button className="menu-row" style={{color:'var(--danger)'}} onClick={logout}>
+                <LogOut size={20} />
+                <span>Logout</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -620,7 +645,7 @@ export default function Dashboard({ user }) {
               introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === searchViewProfile.id)}
               onSetAction={(action)=>setMatchAction(searchViewProfile.id, action)}
               onSendIntro={(type)=>sendIntroductionRequest(searchViewProfile.id, type)}
-              onBack={()=>setSearchViewProfile(null)} />
+              onToast={showToast} onBack={()=>setSearchViewProfile(null)} />
           ) : (
             <SearchByProfileId onView={(p)=>setSearchViewProfile(p)} onBack={()=>setActiveTab('profile')} />
           )
@@ -660,6 +685,23 @@ export default function Dashboard({ user }) {
           />
         )}
 
+        {/* PRIVACY — drawer shortcut, seedha Privacy Settings khulta hai */}
+        {activeTab === 'privacy' && profile && (
+          <AccountSettings
+            profile={profile}
+            user={user}
+            initialView="privacy"
+            onProfileUpdate={(updated) => setProfile(updated)}
+            onBack={() => window.history.back()}
+            onDeleted={logout}
+          />
+        )}
+
+        {/* HELP */}
+        {activeTab === 'help' && (
+          <HelpView profileCode={profile?.profile_code} onBack={() => window.history.back()} onToast={showToast} />
+        )}
+
         {/* BIODATA TAB */}
         {activeTab === 'biodata' && profile && (
           <BiodataView profile={profile} photo={photos.find(p=>p.is_primary) || photos[0]} onBack={()=>setActiveTab('home')} />
@@ -672,22 +714,21 @@ export default function Dashboard({ user }) {
         )}
       </div>
 
-      {/* Bottom Nav */}
-      <div className="bottom-nav">
-        {[
-          {id:'home',icon:'🏠',label:'Home'},
-          {id:'matches',icon:'💝',label:'Matches'},
-          {id:'activity',icon:'🕐',label:'Activity'},
-          {id:'requests',icon:'🤝',label:'Requests'},
-          {id:'profile',icon:'👤',label:'Profile'},
-        ].map(item=>(
-          <button key={item.id} className={"bottom-nav-item " + (activeTab===item.id?'active':'')}
-            onClick={()=>setActiveTab(item.id)}>
-            <span className="nav-icon">{item.icon}</span>
-            <span className="nav-label">{item.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* Bottom Nav — icons only, label on active tab */}
+      <BottomNav active={activeTab} onChange={setActiveTab} avatarPath={primaryPhoto?.storage_path}
+        dots={{ requests: myIntroductions.some(i => i.to_profile === profile?.id && (!i.status || i.status === 'pending')) }} />
+    </div>
+  )
+}
+
+// Label/value row with the field's icon (same icon map as the forms).
+function FactRow({ k, v }) {
+  const Icon = iconForLabel(k)
+  return (
+    <div className="fact-row">
+      {Icon && <Icon size={16} className="fact-icon" />}
+      <span className="fact-key">{k}</span>
+      <span className="fact-val">{v}</span>
     </div>
   )
 }
@@ -695,7 +736,7 @@ export default function Dashboard({ user }) {
 // Match card — score ke saath "Why this match?" expand karke poora
 // breakdown dikhata hai (Strong Matches ✓ / Needs Discussion △) — fake
 // percentage nahi, actual matching.js se aaya hua real explanation.
-function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, onView }) {
+function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, onView, onToast }) {
   // "You match X/Y preferences" — existing matching.js strengths/needsDiscussion
   // se hi nikala, koi naya scoring logic nahi. Strength = matched, needsDiscussion
   // = evaluated but not matched; total = dono ka sum.
@@ -703,43 +744,44 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
   const totalCount = matchedCount + (m.matchNeedsDiscussion || []).length
 
   return (
-    <div style={{background:'#f5f5f5',borderRadius:14,overflow:'hidden'}}>
-      <div style={{display:'flex',gap:14,alignItems:'center',padding:'14px',cursor:'pointer'}} onClick={onView}>
-        <div style={{position:'relative',width:56,height:56,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0}}>
+    <div className="match-card">
+      <div style={{display:'flex',gap:14,alignItems:'center',padding:'14px 8px 10px 14px',cursor:'pointer'}} onClick={onView}>
+        <div className="avatar" style={{position:'relative',width:64,height:64}}>
           {m.primaryPhotoPath
             ? <SignedImage path={m.primaryPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover', filter: viewerIsPremium ? 'none' : 'blur(6px)'}} />
-            : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>👤</div>
+            : <UserRound size={26} />
           }
           {!viewerIsPremium && m.primaryPhotoPath && (
-            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)'}}>
-              <span style={{fontSize:16}}>🔒</span>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(36,26,30,0.15)',color:'#fff'}}>
+              <LockIcon size={16} />
             </div>
           )}
         </div>
-        <div style={{flex:1}}>
-          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
-            <div style={{fontWeight:600,fontSize:15}}>{m.full_name}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:600,fontSize:16,marginBottom:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{m.full_name}</div>
+          <div style={{fontSize:13,color:'var(--gray3)',display:'flex',alignItems:'center',gap:4}}>
+            {m.age} yrs{m.city ? <> · <MapPinIcon size={12} /> {m.city}</> : null}
+          </div>
+          <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
             {typeof m.matchScore === 'number' && (
-              <span style={{fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:20,background: m.matchScore>=70?'#f0fdf4':m.matchScore>=40?'#fff8e1':'#f5f5f5', color: m.matchScore>=70?'#16a34a':m.matchScore>=40?'#b45309':'#8e8e8e'}}>
-                {m.matchScore}% match
+              <span className={'chip ' + (m.matchScore>=70 ? 'chip-success' : m.matchScore>=40 ? 'chip-warning' : 'chip-muted')}>
+                <Sparkles size={11} /> {m.matchScore}%
               </span>
             )}
+            {totalCount > 0 && (
+              <span className="chip chip-primary" title="Preferences matched"><CircleCheck size={11} /> {matchedCount}/{totalCount}</span>
+            )}
           </div>
-          <div style={{fontSize:12,color:'#8e8e8e'}}>{m.age} years • {m.city}</div>
-          {totalCount > 0 && (
-            <div style={{fontSize:11,color:'#4a5568',marginTop:2}}>You match {matchedCount}/{totalCount} preferences</div>
-          )}
-          <div style={{fontSize:10,color:'#4a5568',marginTop:3,textDecoration:'underline'}}>View profile →</div>
         </div>
+        <ProfileActionsMenu profile={m} onBlock={()=>onSetAction('dislike')} onToast={onToast} />
       </div>
 
-      <div style={{display:'flex',gap:6,padding:'0 14px 14px'}}>
-        <button className={myAction==='like' ? 'btn btn-black btn-sm' : 'btn btn-outline btn-sm'} style={{flex:1}}
-          onClick={()=>onSetAction('like')}>👍 Like</button>
-        <button className={myAction==='super_like' ? 'btn btn-black btn-sm' : 'btn btn-outline btn-sm'} style={{flex:1}}
-          onClick={()=>onSetAction('super_like')}>⭐ Super Like</button>
-        <button className="btn btn-outline btn-sm" style={{flex:1,color:'#dc2626',borderColor:'#dc2626'}}
-          onClick={()=>onSetAction('dislike')}>👎 Dislike</button>
+      <div className="action-row" style={{padding:'4px 14px 16px'}}>
+        <button className="action-btn sm pass" aria-label="Pass" title="Pass" onClick={()=>onSetAction('dislike')}><X size={20} /></button>
+        <button className={'action-btn like' + (myAction==='like' ? ' on' : '')} aria-label="Like" title="Like"
+          aria-pressed={myAction==='like'} onClick={()=>onSetAction('like')}><Heart size={22} /></button>
+        <button className={'action-btn sm super' + (myAction==='super_like' ? ' on' : '')} aria-label="Super like" title="Super like"
+          aria-pressed={myAction==='super_like'} onClick={()=>onSetAction('super_like')}><Star size={20} /></button>
       </div>
     </div>
   )
@@ -765,27 +807,64 @@ function DislikedProfilesView({ myProfile, dislikedActions, onUndo, onBack }) {
 
   return (
     <div>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
-        <button onClick={onBack} style={{background:'none',border:'none',fontSize:20,cursor:'pointer'}}>←</button>
-        <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,margin:0}}>Disliked Profiles</h2>
-      </div>
+      <PageHeader title="Blocked Profiles" onBack={onBack} />
       {loading ? (
-        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+        <div style={{textAlign:'center',padding:'40px 0',color:'var(--gray3)',fontSize:13}}>Loading...</div>
       ) : dislikedActions.length === 0 ? (
-        <div style={{textAlign:'center',padding:'60px 0',color:'#8e8e8e',fontSize:13}}>No disliked profiles</div>
+        <EmptyState icon={Ban} title="Nothing here" text="Profiles you block or pass on show up here" />
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
           {dislikedActions.map(a => {
             const p = profilesById[a.target_profile_id]
             return (
-              <div key={a.target_profile_id} style={{padding:'14px',background:'#f5f5f5',borderRadius:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <span style={{fontSize:14,fontWeight:500}}>{p ? p.full_name + (p.city ? ' • ' + p.city : '') : 'Profile'}</span>
-                <button className="btn btn-outline btn-sm" onClick={()=>onUndo(a.target_profile_id)}>Undo</button>
+              <div key={a.target_profile_id} className="list-row" style={{display:'flex',gap:12,alignItems:'center'}}>
+                <div className="avatar" style={{width:40,height:40}}><UserRound size={18} /></div>
+                <span style={{flex:1,fontSize:14,fontWeight:500}}>{p ? p.full_name + (p.city ? ' · ' + p.city : '') : 'Profile'}</span>
+                <button className="btn btn-soft btn-sm" onClick={()=>onUndo(a.target_profile_id)}><Undo2 size={14} /> Unblock</button>
               </div>
             )
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// ===== HELP — short, icon-led answers + contact =====
+function HelpView({ profileCode, onBack, onToast }) {
+  const faqs = [
+    { icon: ShieldCheck, q: 'Profile review', a: 'Every profile is checked by our team within 24-48 hours.' },
+    { icon: Heart, q: 'Like & Super Like', a: 'Show interest. Mutual likes appear under Notifications.' },
+    { icon: Send, q: 'Talk / Meet', a: 'Your relationship manager calls both families to set it up.' },
+    { icon: LockIcon, q: 'Privacy', a: 'Phone & email are never shown. Control the rest in Privacy.' },
+  ]
+  const copyId = async () => {
+    try { await navigator.clipboard.writeText(profileCode || ''); onToast('Profile ID copied') } catch { onToast(profileCode || '') }
+  }
+  return (
+    <div>
+      <PageHeader title="Help" onBack={onBack} />
+      <div className="menu-list" style={{marginBottom:16}}>
+        {faqs.map(({icon:Icon,q,a})=>(
+          <div key={q} className="menu-row" style={{cursor:'default',alignItems:'flex-start'}}>
+            <Icon size={20} className="menu-row-icon" style={{marginTop:2}} />
+            <div>
+              <div style={{fontWeight:500}}>{q}</div>
+              <div className="menu-row-sub">{a}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {SUPPORT_EMAIL ? (
+        <a className="btn btn-primary btn-full" href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Help — ' + (profileCode || ''))}`}>
+          <Mail size={16} /> Contact us
+        </a>
+      ) : profileCode && (
+        <button className="btn btn-outline btn-full" onClick={copyId}><Copy size={16} /> Copy my Profile ID</button>
+      )}
+      <div style={{textAlign:'center',marginTop:14,color:'var(--gray3)',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+        <CircleHelp size={14} /> Share your Profile ID when you contact us
+      </div>
     </div>
   )
 }
@@ -815,49 +894,49 @@ function RequestsTab({ myProfile, introductions, onRespond }) {
 
   return (
     <div>
-      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:26,fontWeight:300,marginBottom:16}}>Requests</h2>
+      <PageHeader title="Requests" />
 
       <div className="pill-tabs" style={{marginBottom:18}}>
-        {['received','sent'].map(t=>(
-          <button key={t} className={'pill-tab '+(subTab===t?'active':'')} onClick={()=>setSubTab(t)} style={{flex:1}}>
-            {t === 'received' && received.length>0 ? `Received (${received.length})` : t}
+        {[['received', Inbox], ['sent', Send]].map(([t, Icon])=>(
+          <button key={t} className={'pill-tab '+(subTab===t?'active':'')} onClick={()=>setSubTab(t)}
+            style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+            <Icon size={15} /> {t}{t === 'received' && received.length>0 ? ` · ${received.length}` : ''}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+        <div style={{textAlign:'center',padding:'40px 0',color:'var(--gray3)',fontSize:13}}>Loading...</div>
       ) : subTab === 'received' ? (
         received.length === 0 ? (
-          <div style={{textAlign:'center',padding:'60px 0',color:'#8e8e8e'}}>
-            <div style={{fontSize:48,marginBottom:16}}>🤝</div>
-            <div style={{fontSize:16,marginBottom:8}}>No requests yet</div>
-            <div style={{fontSize:13}}>When someone wants to talk or meet, it'll show here</div>
-          </div>
+          <EmptyState icon={Inbox} title="No requests yet" text="Talk & meet requests show up here" />
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {received.map(i => (
-              <div key={i.id} style={{padding:'14px',background:'#f5f5f5',borderRadius:12}}>
-                <div style={{fontSize:14,fontWeight:500,marginBottom:6}}>{profilesById[i.from_profile] || 'A member'}</div>
+              <div key={i.id} className="list-row">
+                <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:(!i.status || i.status === 'pending') ? 12 : 6}}>
+                  <div className="avatar" style={{width:42,height:42}}>
+                    {i.request_type === 'meeting' ? <CalendarIcon size={18} /> : <PhoneIcon size={18} />}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:15,fontWeight:600}}>{profilesById[i.from_profile] || 'A member'}</div>
+                    <div style={{fontSize:12,color:'var(--gray3)'}}>Wants to {i.request_type === 'meeting' ? 'meet' : 'talk'}</div>
+                  </div>
+                </div>
                 {(!i.status || i.status === 'pending') ? (
-                  <>
-                    <div style={{fontSize:12,color:'#555',lineHeight:1.6,marginBottom:10}}>
-                      Wants to {i.request_type === 'meeting' ? 'meet' : 'talk to'} you.
-                    </div>
-                    <div style={{display:'flex',gap:8}}>
-                      <button className="btn btn-black btn-sm" style={{flex:1}} onClick={()=>onRespond(i.id,'accepted')}>Accept</button>
-                      <button className="btn btn-outline btn-sm" style={{flex:1}} onClick={()=>onRespond(i.id,'declined')}>Decline</button>
-                    </div>
-                  </>
+                  <div style={{display:'flex',gap:8}}>
+                    <button className="btn btn-primary btn-sm" style={{flex:1}} onClick={()=>onRespond(i.id,'accepted')}><CircleCheck size={15} /> Accept</button>
+                    <button className="btn btn-outline btn-sm" style={{flex:1}} onClick={()=>onRespond(i.id,'declined')}><X size={15} /> Decline</button>
+                  </div>
                 ) : i.status === 'accepted' ? (
-                  <div style={{fontSize:12,color:'#16a34a',lineHeight:1.6}}>
-                    You accepted — our relationship manager will contact you shortly to coordinate.
+                  <div style={{fontSize:12,color:'var(--success)',display:'flex',gap:6,alignItems:'center'}}>
+                    <CircleCheck size={14} /> Accepted · our manager will call you
                   </div>
                 ) : i.status === 'declined' ? (
-                  <div style={{fontSize:12,color:'#8e8e8e',lineHeight:1.6}}>You declined this request.</div>
+                  <div style={{fontSize:12,color:'var(--gray3)',display:'flex',gap:6,alignItems:'center'}}><X size={14} /> Declined</div>
                 ) : (
-                  <div style={{fontSize:12,color:'#555',lineHeight:1.6}}>
-                    Our relationship manager will contact you shortly to coordinate.
+                  <div style={{fontSize:12,color:'var(--gray3)',display:'flex',gap:6,alignItems:'center'}}>
+                    <PhoneIcon size={14} /> Our manager will call you
                   </div>
                 )}
               </div>
@@ -866,19 +945,20 @@ function RequestsTab({ myProfile, introductions, onRespond }) {
         )
       ) : (
         sent.length === 0 ? (
-          <div style={{textAlign:'center',padding:'60px 0',color:'#8e8e8e',fontSize:13}}>No requests sent yet</div>
+          <EmptyState icon={Send} title="No requests sent" text="Open a profile and tap Talk / Meet" />
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {sent.map(i => (
-              <div key={i.id} style={{padding:'14px',background:'#f5f5f5',borderRadius:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <div>
-                  <div style={{fontSize:14,fontWeight:500}}>{profilesById[i.to_profile] || 'Profile'}</div>
-                  <div style={{fontSize:11,color:'#8e8e8e',textTransform:'capitalize'}}>{i.request_type === 'meeting' ? 'Meeting request' : 'Talk request'}</div>
+              <div key={i.id} className="list-row" style={{display:'flex',alignItems:'center',gap:12}}>
+                <div className="avatar" style={{width:42,height:42}}>
+                  {i.request_type === 'meeting' ? <CalendarIcon size={18} /> : <PhoneIcon size={18} />}
                 </div>
-                <span style={{fontSize:11,fontWeight:600,padding:'3px 10px',borderRadius:20,
-                  background: i.status==='declined'?'#f5f5f5':i.status==='closed'?'#f5f5f5':(i.status==='contacted'||i.status==='accepted')?'#f0fdf4':'#fff8e1',
-                  color: i.status==='declined'?'#8e8e8e':i.status==='closed'?'#8e8e8e':(i.status==='contacted'||i.status==='accepted')?'#16a34a':'#b45309',
-                  textTransform:'capitalize'}}>{i.status==='declined' ? 'Not Accepted' : i.status}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:15,fontWeight:600}}>{profilesById[i.to_profile] || 'Profile'}</div>
+                  <div style={{fontSize:12,color:'var(--gray3)'}}>{i.request_type === 'meeting' ? 'Meeting' : 'Talk'}</div>
+                </div>
+                <span className={'chip ' + ((i.status==='declined' || i.status==='closed') ? 'chip-muted' : (i.status==='contacted'||i.status==='accepted') ? 'chip-success' : 'chip-warning')}
+                  style={{textTransform:'capitalize'}}>{i.status==='declined' ? 'Not accepted' : (i.status || 'pending')}</span>
               </div>
             ))}
           </div>
@@ -1170,31 +1250,28 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
   return (
     <div>
       <div className={'toast ' + (toast?'show':'')}>{toast}</div>
-      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
-        <button onClick={onCancel} style={{background:'none',border:'none',fontSize:20,cursor:'pointer'}}>←</button>
-        <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,margin:0}}>Edit Profile</h2>
-      </div>
+      <PageHeader title="Edit Profile" onBack={onCancel} />
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Personal Info</div>
+        <SectionLabel style={{marginBottom:14}}>Personal Info</SectionLabel>
 
         <div className="form-group">
-          <label className="form-label">First Name *</label>
+          <FormLabel>First Name *</FormLabel>
           <input className="form-input" value={form.first_name} onChange={e=>set('first_name',e.target.value)} />
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Middle Name</label>
+            <FormLabel>Middle Name</FormLabel>
             <input className="form-input" value={form.middle_name} onChange={e=>set('middle_name',e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Last Name / Surname *</label>
+            <FormLabel>Last Name / Surname *</FormLabel>
             <input className="form-input" value={form.last_name} onChange={e=>set('last_name',e.target.value)} />
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Date of Birth *</label>
+            <FormLabel>Date of Birth *</FormLabel>
             <input className="form-input" type="date" value={form.date_of_birth}
               min={dobInputBounds().min} max={dobInputBounds().max}
               onChange={e=>set('date_of_birth',e.target.value)} />
@@ -1208,7 +1285,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             })()}
           </div>
           <div className="form-group">
-            <label className="form-label">Gender *</label>
+            <FormLabel>Gender *</FormLabel>
             <select className="form-select" value={form.gender} onChange={e=>set('gender',e.target.value)}>
               <option>Male</option><option>Female</option>
             </select>
@@ -1216,36 +1293,36 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Height</label>
+            <FormLabel>Height</FormLabel>
             <select className="form-select" value={form.height} onChange={e=>set('height',e.target.value)}>
               <option value="">Select</option>
               {HEIGHT_RANGES.map(h=><option key={h}>{h}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Weight</label>
+            <FormLabel>Weight</FormLabel>
             <ChipSelect options={WEIGHT_RANGES} value={form.weight} onChange={v=>set('weight',v)} includeEmpty />
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Complexion</label>
+            <FormLabel>Complexion</FormLabel>
             <ChipSelect options={COMPLEXIONS} value={form.complexion} onChange={v=>set('complexion',v)} includeEmpty />
           </div>
           <div className="form-group">
-            <label className="form-label">Body Type</label>
+            <FormLabel>Body Type</FormLabel>
             <ChipSelect options={BODY_TYPES} value={form.body_type} onChange={v=>set('body_type',v)} includeEmpty />
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Marital Status</label>
+            <FormLabel>Marital Status</FormLabel>
             <select className="form-select" value={form.marital_status} onChange={e=>set('marital_status',e.target.value)}>
               {MARITAL_STATUSES.map(s=><option key={s}>{s}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Nationality</label>
+            <FormLabel>Nationality</FormLabel>
             <select className="form-select" value={form.nationality} onChange={e=>set('nationality',e.target.value)}>
               {COUNTRIES.filter(c=>c!=='Open to All').map(n=><option key={n}>{n}</option>)}
             </select>
@@ -1254,7 +1331,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         {form.marital_status !== 'Never Married' && (
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Have Children?</label>
+              <FormLabel>Have Children?</FormLabel>
               <select className="form-select" value={form.have_children} onChange={e=>set('have_children',e.target.value)}>
                 <option value="">Select</option>
                 {HAVE_CHILDREN_OPTIONS.map(h=><option key={h}>{h}</option>)}
@@ -1262,7 +1339,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             </div>
             {form.have_children === 'Yes' && (
               <div className="form-group">
-                <label className="form-label">Children Living With</label>
+                <FormLabel>Children Living With</FormLabel>
                 <select className="form-select" value={form.children_living_with} onChange={e=>set('children_living_with',e.target.value)}>
                   <option value="">Select</option>
                   {CHILDREN_LIVING_WITH_OPTIONS.map(c=><option key={c}>{c}</option>)}
@@ -1272,7 +1349,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           </div>
         )}
         <div className="form-group">
-          <label className="form-label">Physical Disability</label>
+          <FormLabel>Physical Disability</FormLabel>
           <select className="form-select" value={form.physical_disability} onChange={e=>set('physical_disability',e.target.value)}>
             {PHYSICAL_DISABILITY_OPTIONS.map(o=><option key={o}>{o}</option>)}
           </select>
@@ -1283,48 +1360,48 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Blood Group</label>
+            <FormLabel>Blood Group</FormLabel>
             <ChipSelect options={BLOOD_GROUPS} value={form.blood_group} onChange={v=>set('blood_group',v)} includeEmpty />
           </div>
           <div className="form-group">
-            <label className="form-label">Health Information</label>
+            <FormLabel>Health Information</FormLabel>
             <ChipSelect options={HEALTH_INFO_OPTIONS} value={form.health_info} onChange={v=>set('health_info',v)} includeEmpty />
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Languages I Speak</label>
+          <FormLabel>Languages I Speak</FormLabel>
           <CheckboxDropdown options={LANGUAGES_SPOKEN} selected={form.languages_spoken}
             onChange={v=>set('languages_spoken',v)} placeholder="Select languages..." />
         </div>
         <div className="form-group">
-          <label className="form-label">Grew Up In</label>
+          <FormLabel>Grew Up In</FormLabel>
           <ChipSelect options={GREW_UP_IN_OPTIONS} value={form.grew_up_in} onChange={v=>set('grew_up_in',v)} includeEmpty />
         </div>
         <div className="form-group">
-          <label className="form-label">Alternate Email</label>
+          <FormLabel>Alternate Email</FormLabel>
           <input className="form-input" value={form.alternate_email} onChange={e=>set('alternate_email',e.target.value)} />
         </div>
       </div>
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Horoscope</div>
+        <SectionLabel style={{marginBottom:14}}>Horoscope</SectionLabel>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Birth Time</label>
+            <FormLabel>Birth Time</FormLabel>
             <input className="form-input" type="time" value={form.birth_time} onChange={e=>set('birth_time',e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Time of Birth Accuracy</label>
+            <FormLabel>Time of Birth Accuracy</FormLabel>
             <ChipSelect options={TIME_OF_BIRTH_ACCURACY} value={form.time_of_birth_accuracy} onChange={v=>set('time_of_birth_accuracy',v)} includeEmpty />
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Birth Place (City)</label>
+            <FormLabel>Birth Place (City)</FormLabel>
             <input className="form-input" value={form.birth_place} onChange={e=>set('birth_place',e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Country of Birth</label>
+            <FormLabel>Country of Birth</FormLabel>
             <select className="form-select" value={form.country_of_birth} onChange={e=>set('country_of_birth',e.target.value)}>
               <option value="">Select</option>
               {COUNTRIES.filter(c=>c!=='Open to All').map(c=><option key={c}>{c}</option>)}
@@ -1333,16 +1410,16 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Manglik</label>
+            <FormLabel>Manglik</FormLabel>
             <ChipSelect options={MANGLIK_OPTIONS} value={form.manglik} onChange={v=>set('manglik',v)} includeEmpty />
           </div>
           <div className="form-group">
-            <label className="form-label">Kundli Available?</label>
+            <FormLabel>Kundli Available?</FormLabel>
             <ChipSelect options={KUNDLI_AVAILABLE} value={form.kundli_available} onChange={v=>set('kundli_available',v)} includeEmpty />
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Horoscope Match Required?</label>
+          <FormLabel>Horoscope Match Required?</FormLabel>
           <select className="form-select" value={form.horoscope_match_required} onChange={e=>set('horoscope_match_required',e.target.value)}>
             <option value="">Select</option>
             <option>Yes</option><option>No</option><option>Flexible</option>
@@ -1358,9 +1435,9 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
       </div>
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Religion & Community</div>
+        <SectionLabel style={{marginBottom:14}}>Religion & Community</SectionLabel>
         <div className="form-group">
-          <label className="form-label">Religion</label>
+          <FormLabel>Religion</FormLabel>
           <select className="form-select" value={form.religion} onChange={e=>set('religion',e.target.value)}>
             {RELIGIONS.map(r=><option key={r}>{r}</option>)}
           </select>
@@ -1368,18 +1445,18 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         {form.religion === 'Muslim' && (
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Denomination / Sect</label>
+              <FormLabel>Denomination / Sect</FormLabel>
               <ChipSelect options={ISLAMIC_DENOMINATIONS} value={form.islamic_denomination} onChange={v=>set('islamic_denomination',v)} includeEmpty />
             </div>
             {form.islamic_denomination === 'Sunni' && (
               <div className="form-group">
-                <label className="form-label">School of Thought (Madhab)</label>
+                <FormLabel>School of Thought (Madhab)</FormLabel>
                 <ChipSelect options={SUNNI_SCHOOLS_OF_THOUGHT} value={form.islamic_school_of_thought} onChange={v=>set('islamic_school_of_thought',v)} includeEmpty />
               </div>
             )}
             {form.islamic_denomination === 'Shia' && (
               <div className="form-group">
-                <label className="form-label">Shia Branch</label>
+                <FormLabel>Shia Branch</FormLabel>
                 <ChipSelect options={SHIA_BRANCHES} value={form.islamic_shia_branch} onChange={v=>set('islamic_shia_branch',v)} includeEmpty />
               </div>
             )}
@@ -1388,7 +1465,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         {form.religion === 'Christian' && (
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Denomination</label>
+              <FormLabel>Denomination</FormLabel>
               <select className="form-select" value={form.christian_denomination}
                 onChange={e=>set('christian_denomination',e.target.value)}>
                 <option value="">Select</option>
@@ -1405,7 +1482,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <div className="form-row">
             {RELIGION_HIERARCHY[form.religion].denomination && (
               <div className="form-group">
-                <label className="form-label">{RELIGION_HIERARCHY[form.religion].denomination.label}</label>
+                <FormLabel>{RELIGION_HIERARCHY[form.religion].denomination.label}</FormLabel>
                 <select className="form-select" value={form.religion_denomination}
                   onChange={e=>set('religion_denomination',e.target.value)}>
                   <option value="">Select</option>
@@ -1415,7 +1492,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             )}
             {form.religion === 'Zoroastrian' && (
               <div className="form-group">
-                <label className="form-label">{RELIGION_HIERARCHY[form.religion].community.label}</label>
+                <FormLabel>{RELIGION_HIERARCHY[form.religion].community.label}</FormLabel>
                 <select className="form-select" value={form.religion_denomination_2}
                   onChange={e=>set('religion_denomination_2',e.target.value)}>
                   <option value="">Select</option>
@@ -1428,7 +1505,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         <div className="form-row">
           {!NO_RELIGION_VALUES.includes(form.religion) && form.religion !== 'Zoroastrian' && (
             <div className="form-group">
-              <label className="form-label">{RELIGION_HIERARCHY[form.religion]?.community.label || 'Community / Caste'}</label>
+              <FormLabel>{RELIGION_HIERARCHY[form.religion]?.community.label || 'Community / Caste'}</FormLabel>
               <select className="form-select" value={form.community} onChange={e=>setCommunity(e.target.value)}>
                 <option value="">Select</option>
                 {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES
@@ -1450,7 +1527,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             </div>
           )}
           <div className="form-group">
-            <label className="form-label">Mother Tongue</label>
+            <FormLabel>Mother Tongue</FormLabel>
             <select className="form-select" value={form.mother_tongue} onChange={e=>set('mother_tongue',e.target.value)}>
               <option value="">Select</option>
               {MOTHER_TONGUES.map(m=><option key={m}>{m}</option>)}
@@ -1463,7 +1540,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         {form.religion === 'Muslim' && (
           <div className="form-group">
-            <label className="form-label">Sub-Caste / Division</label>
+            <FormLabel>Sub-Caste / Division</FormLabel>
             <select className="form-select" value={form.islamic_sub_caste_division}
               onChange={e=>set('islamic_sub_caste_division',e.target.value)}>
               {ISLAMIC_SUB_CASTE_DIVISIONS.map(s=><option key={s}>{s}</option>)}
@@ -1473,12 +1550,12 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         )}
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Sub-Caste</label>
+            <FormLabel>Sub-Caste</FormLabel>
             <input className="form-input" value={form.sub_caste} onChange={e=>set('sub_caste',e.target.value)} />
           </div>
           {(form.religion === 'Hindu' || form.religion === 'Jain') && (
             <div className="form-group">
-              <label className="form-label">Gotra</label>
+              <FormLabel>Gotra</FormLabel>
               <select className="form-select" value={form.gotra} onChange={e=>set('gotra',e.target.value)}>
                 <option value="">Select</option>
                 {(form.religion === 'Hindu' ? GOTRAS : JAIN_GOTRAS).map(g=><option key={g}>{g}</option>)}
@@ -1495,53 +1572,53 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           )}
         </div>
         <div className="form-group">
-          <label className="form-label">Caste No Bar?</label>
+          <FormLabel>Caste No Bar?</FormLabel>
           <ChipSelect options={CASTE_NO_BAR_OPTIONS} value={form.caste_no_bar} onChange={v=>set('caste_no_bar',v)} includeEmpty />
         </div>
       </div>
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Location Details</div>
+        <SectionLabel style={{marginBottom:14}}>Location Details</SectionLabel>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">City *</label>
+            <FormLabel>City *</FormLabel>
             <input className="form-input" value={form.city} onChange={e=>set('city',e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">State</label>
+            <FormLabel>State</FormLabel>
             <input className="form-input" value={form.state} onChange={e=>set('state',e.target.value)} />
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Zip / PIN Code</label>
+            <FormLabel>Zip / PIN Code</FormLabel>
             <input className="form-input" value={form.zip_code} onChange={e=>set('zip_code',e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Ethnic Origin</label>
+            <FormLabel>Ethnic Origin</FormLabel>
             <input className="form-input" value={form.ethnic_origin} onChange={e=>set('ethnic_origin',e.target.value)} />
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Native Place</label>
+            <FormLabel>Native Place</FormLabel>
             <input className="form-input" value={form.native_place} onChange={e=>set('native_place',e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Relocation Preference</label>
+            <FormLabel>Relocation Preference</FormLabel>
             <ChipSelect options={RELOCATION_PREFERENCES} value={form.relocation_preference} onChange={v=>set('relocation_preference',v)} includeEmpty />
           </div>
         </div>
       </div>
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Education & Career</div>
+        <SectionLabel style={{marginBottom:14}}>Education & Career</SectionLabel>
         <div className="form-group">
-          <label className="form-label">Highest Education *</label>
+          <FormLabel>Highest Education *</FormLabel>
           <ChipSelect options={EDUCATIONS} value={form.education} onChange={v=>set('education',v)} includeEmpty />
         </div>
         <div className="form-group">
-          <label className="form-label">Degree</label>
+          <FormLabel>Degree</FormLabel>
           <select className="form-select" value={form.degree} onChange={e=>set('degree',e.target.value)}>
             <option value="">Select</option>
             {Object.entries(DEGREE_OPTIONS).map(([cat, options]) => (
@@ -1556,16 +1633,16 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           )}
         </div>
         <div className="form-group">
-          <label className="form-label">College/Institution Name</label>
+          <FormLabel>College/Institution Name</FormLabel>
           <input className="form-input" value={form.college_name} onChange={e=>set('college_name',e.target.value)} />
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Employment Type</label>
+            <FormLabel>Employment Type</FormLabel>
             <ChipSelect options={EMPLOYMENT_TYPES} value={form.employment_type} onChange={v=>set('employment_type',v)} includeEmpty />
           </div>
           <div className="form-group">
-            <label className="form-label">Profession Category</label>
+            <FormLabel>Profession Category</FormLabel>
             <select className="form-select" value={form.profession} onChange={e=>set('profession',e.target.value)}>
               <option value="">Select</option>
               {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
@@ -1573,18 +1650,18 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Employer</label>
+          <FormLabel>Employer</FormLabel>
           <input className="form-input" value={form.employer} onChange={e=>set('employer',e.target.value)} />
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Annual Income</label>
+            <FormLabel>Annual Income</FormLabel>
             <select className="form-select" value={form.annual_income} onChange={e=>set('annual_income',e.target.value)}>
               {(form.annual_income_currency === 'USD' ? USD_INCOME_RANGES : INCOME_RANGES).map(i=><option key={i}>{i}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Currency</label>
+            <FormLabel>Currency</FormLabel>
             <select className="form-select" value={form.annual_income_currency} onChange={e=>{
               setForm(p=>({...p, annual_income_currency:e.target.value, annual_income:''}))
             }}>
@@ -1595,69 +1672,69 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
       </div>
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Lifestyle</div>
+        <SectionLabel style={{marginBottom:14}}>Lifestyle</SectionLabel>
         <div className="form-group">
-          <label className="form-label">Diet</label>
+          <FormLabel>Diet</FormLabel>
           <select className="form-select" value={form.diet} onChange={e=>set('diet',e.target.value)}>
             {DIETS.map(d=><option key={d}>{d}</option>)}
           </select>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Smoking</label>
+            <FormLabel>Smoking</FormLabel>
             <ChipSelect options={HABITS} value={form.smoking} onChange={v=>set('smoking',v)} includeEmpty />
           </div>
           <div className="form-group">
-            <label className="form-label">Drinking</label>
+            <FormLabel>Drinking</FormLabel>
             <ChipSelect options={HABITS} value={form.drinking} onChange={v=>set('drinking',v)} includeEmpty />
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Hobbies (short text)</label>
+          <FormLabel>Hobbies (short text)</FormLabel>
           <input className="form-input" value={form.hobbies} onChange={e=>set('hobbies',e.target.value)} />
         </div>
         <div className="form-group">
-          <label className="form-label">Interests (select up to {HOBBIES_MAX_SELECT})</label>
+          <FormLabel>Interests (select up to {HOBBIES_MAX_SELECT})</FormLabel>
           <MultiSelectChips groups={HOBBIES_INTERESTS} selected={form.hobbies_interests}
             onChange={(v)=>set('hobbies_interests',v)} maxSelect={HOBBIES_MAX_SELECT} />
         </div>
         <div className="form-group">
-          <label className="form-label">Favourite Cuisines</label>
+          <FormLabel>Favourite Cuisines</FormLabel>
           <CheckboxDropdown options={CUISINES} selected={form.cuisines} onChange={(v)=>set('cuisines',v)} placeholder="Select cuisines..." />
         </div>
         <div className="form-group">
-          <label className="form-label">Sports & Activities</label>
+          <FormLabel>Sports & Activities</FormLabel>
           <CheckboxDropdown options={SPORTS_LIST} selected={form.sports} onChange={(v)=>set('sports',v)} placeholder="Select sports..." />
         </div>
         <div className="form-group">
-          <label className="form-label">Favourite Music</label>
+          <FormLabel>Favourite Music</FormLabel>
           <CheckboxDropdown options={FAVOURITE_MUSIC} selected={form.favourite_music} onChange={(v)=>set('favourite_music',v)} placeholder="Select music..." />
         </div>
         <div className="form-group">
-          <label className="form-label">Favourite Books</label>
+          <FormLabel>Favourite Books</FormLabel>
           <CheckboxDropdown options={FAVOURITE_BOOKS} selected={form.favourite_books} onChange={(v)=>set('favourite_books',v)} placeholder="Select books..." />
         </div>
         <div className="form-group">
-          <label className="form-label">Dress Style</label>
+          <FormLabel>Dress Style</FormLabel>
           <ChipSelect options={DRESS_STYLES} value={form.dress_style} onChange={v=>set('dress_style',v)} includeEmpty />
         </div>
         <div className="form-group">
-          <label className="form-label">About Me</label>
+          <FormLabel>About Me</FormLabel>
           <textarea className="form-textarea" value={form.about_me} onChange={e=>set('about_me',e.target.value)} style={{minHeight:100}} />
         </div>
       </div>
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Family Background</div>
+        <SectionLabel style={{marginBottom:14}}>Family Background</SectionLabel>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Family Type</label>
+            <FormLabel>Family Type</FormLabel>
             <select className="form-select" value={form.family_type} onChange={e=>set('family_type',e.target.value)}>
               {FAMILY_TYPES.map(f=><option key={f}>{f}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Family Values</label>
+            <FormLabel>Family Values</FormLabel>
             <select className="form-select" value={form.family_values} onChange={e=>set('family_values',e.target.value)}>
               {FAMILY_VALUES.map(f=><option key={f}>{f}</option>)}
             </select>
@@ -1665,7 +1742,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Father's Profession</label>
+            <FormLabel>Father's Profession</FormLabel>
             <select className="form-select" value={form.father_profession} onChange={e=>set('father_profession',e.target.value)}>
               <option value="">Select</option>
               {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
@@ -1679,7 +1756,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             )}
           </div>
           <div className="form-group">
-            <label className="form-label">Mother's Profession</label>
+            <FormLabel>Mother's Profession</FormLabel>
             <select className="form-select" value={form.mother_profession} onChange={e=>set('mother_profession',e.target.value)}>
               <option value="">Select</option>
               <option value="Homemaker">Homemaker</option>
@@ -1696,14 +1773,14 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Brothers</label>
+            <FormLabel>Brothers</FormLabel>
             <select className="form-select" value={form.brothers_count}
               onChange={e=>setSiblingCount('brothers_count',e.target.value)}>
               {SIBLING_COUNT_OPTIONS.map(n=><option key={n} value={n}>{n}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Brothers Married</label>
+            <FormLabel>Brothers Married</FormLabel>
             <select className="form-select" value={form.brothers_married_count}
               onChange={e=>setSiblingCount('brothers_married_count',e.target.value)}>
               {SIBLING_COUNT_OPTIONS.filter(n=>n<=form.brothers_count).map(n=><option key={n} value={n}>{n}</option>)}
@@ -1712,14 +1789,14 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Sisters</label>
+            <FormLabel>Sisters</FormLabel>
             <select className="form-select" value={form.sisters_count}
               onChange={e=>setSiblingCount('sisters_count',e.target.value)}>
               {SIBLING_COUNT_OPTIONS.map(n=><option key={n} value={n}>{n}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Sisters Married</label>
+            <FormLabel>Sisters Married</FormLabel>
             <select className="form-select" value={form.sisters_married_count}
               onChange={e=>setSiblingCount('sisters_married_count',e.target.value)}>
               {SIBLING_COUNT_OPTIONS.filter(n=>n<=form.sisters_count).map(n=><option key={n} value={n}>{n}</option>)}
@@ -1727,20 +1804,19 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Family City</label>
+          <FormLabel>Family City</FormLabel>
           <input className="form-input" value={form.family_city} onChange={e=>set('family_city',e.target.value)} />
         </div>
         <div className="form-group">
-          <label className="form-label">Family Financial Status</label>
+          <FormLabel>Family Financial Status</FormLabel>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {FAMILY_FINANCIAL_STATUS.map(f=>{
               const isSelected = form.family_financial_status === f.label
               return (
                 <div key={f.label} onClick={()=>set('family_financial_status', f.label)}
-                  style={{border:'1.5px solid ' + (isSelected ? '#000' : 'rgba(0,0,0,0.1)'), borderRadius:10, overflow:'hidden', cursor:'pointer'}}>
-                  <div style={{padding:'12px 16px', fontWeight:600, fontSize:14,
-                    background: isSelected ? '#000' : 'transparent', color: isSelected ? '#fff' : '#333'}}>
-                    {isSelected ? '◉' : '○'} {f.label}
+                  style={{border:'1.5px solid ' + (isSelected ? 'var(--primary)' : 'var(--gray2)'), borderRadius:'var(--radius)', overflow:'hidden', cursor:'pointer', transition:'border-color 0.2s'}}>
+                  <div className={'radio-option' + (isSelected ? ' selected' : '')} style={{borderRadius:0, border:'none', fontWeight:600}}>
+                    <span className="radio-dot">{isSelected && <CheckIcon size={12} />}</span> {f.label}
                   </div>
                   {isSelected && (
                     <div style={{padding:'10px 16px 14px', fontSize:12, color:'#555', lineHeight:1.6}}>
@@ -1754,43 +1830,43 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Living With Parents?</label>
+          <FormLabel>Living With Parents?</FormLabel>
           <ChipSelect options={LIVING_WITH_PARENTS_OPTIONS} value={form.living_with_parents} onChange={v=>set('living_with_parents',v)} includeEmpty />
         </div>
       </div>
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Assets</div>
+        <SectionLabel style={{marginBottom:14}}>Assets</SectionLabel>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Own House</label>
+            <FormLabel>Own House</FormLabel>
             <ChipSelect options={OWN_HOUSE_OPTIONS} value={form.own_house} onChange={v=>set('own_house',v)} includeEmpty />
           </div>
           <div className="form-group">
-            <label className="form-label">House Type</label>
+            <FormLabel>House Type</FormLabel>
             <ChipSelect options={HOUSE_TYPES} value={form.house_type} onChange={v=>set('house_type',v)} includeEmpty />
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Vehicle Ownership</label>
+            <FormLabel>Vehicle Ownership</FormLabel>
             <ChipSelect options={VEHICLE_OWNERSHIP} value={form.vehicle_ownership} onChange={v=>set('vehicle_ownership',v)} includeEmpty />
           </div>
           <div className="form-group">
-            <label className="form-label">Vehicle Details</label>
+            <FormLabel>Vehicle Details</FormLabel>
             <input className="form-input" placeholder="Optional, e.g. Hyundai Creta" value={form.vehicle_model} onChange={e=>set('vehicle_model',e.target.value)} />
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Family Income Range</label>
+            <FormLabel>Family Income Range</FormLabel>
             <select className="form-select" value={form.family_income_range} onChange={e=>set('family_income_range',e.target.value)}>
               <option value="">Select</option>
               {(form.family_income_currency === 'USD' ? USD_FAMILY_INCOME_RANGES : FAMILY_INCOME_RANGES).map(f=><option key={f}>{f}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Currency</label>
+            <FormLabel>Currency</FormLabel>
             <select className="form-select" value={form.family_income_currency} onChange={e=>{
               setForm(p=>({...p, family_income_currency:e.target.value, family_income_range:''}))
             }}>
@@ -1801,23 +1877,23 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
       </div>
 
       <div className="card" style={{marginBottom:12}}>
-        <div className="section-label" style={{marginBottom:14}}>Partner Preferences</div>
+        <SectionLabel style={{marginBottom:14}}>Partner Preferences</SectionLabel>
         <div className="form-group">
-          <label className="form-label">Age Preference</label>
+          <FormLabel>Age Preference</FormLabel>
           <DualRangeSlider min={18} max={70}
             valueMin={form.partner_age_min} valueMax={form.partner_age_max}
             onChange={(lo,hi)=>setForm(p=>({...p, partner_age_min:lo, partner_age_max:hi}))}
             formatLabel={v=>v+' yrs'} />
         </div>
         <div className="form-group">
-          <label className="form-label">Height Preference</label>
+          <FormLabel>Height Preference</FormLabel>
           <DualRangeSlider min={PARTNER_HEIGHT_MIN_INCHES} max={PARTNER_HEIGHT_MAX_INCHES}
             valueMin={form.partner_height_min} valueMax={form.partner_height_max}
             onChange={(lo,hi)=>setForm(p=>({...p, partner_height_min:lo, partner_height_max:hi}))}
             formatLabel={formatHeightFromInches} />
         </div>
         <div className="form-group">
-          <label className="form-label">Income Preference</label>
+          <FormLabel>Income Preference</FormLabel>
           <select className="form-select" value={form.partner_income_currency} onChange={e=>{
             const bounds = PARTNER_INCOME_BOUNDS[e.target.value]
             setForm(p=>({...p, partner_income_currency:e.target.value, partner_income_min:bounds.min, partner_income_max:bounds.max}))
@@ -1835,7 +1911,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             }} />
         </div>
         <div className="form-group">
-          <label className="form-label">Religion Preference</label>
+          <FormLabel>Religion Preference</FormLabel>
           <select className="form-select" value={form.partner_religion} onChange={e=>set('partner_religion',e.target.value)}>
             <option value="Any">Any / Open to all</option>
             {RELIGIONS.map(r=><option key={r}>{r}</option>)}
@@ -1843,7 +1919,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         {form.partner_religion !== 'Any' && (
           <div className="form-group">
-            <label className="form-label">Preferred Community</label>
+            <FormLabel>Preferred Community</FormLabel>
             <CheckboxDropdown
               options={[
                 ...(form.partner_religion === 'Muslim' ? ISLAMIC_COMMUNITIES
@@ -1861,33 +1937,33 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           </div>
         )}
         <div className="form-group">
-          <label className="form-label">Education Level Preference</label>
+          <FormLabel>Education Level Preference</FormLabel>
           <CheckboxDropdown options={EDUCATIONS} selected={form.partner_education_level_preferences}
             onChange={v=>set('partner_education_level_preferences',v)} placeholder="Select education levels..." />
           <div className="form-hint">Khaali chhodne par sab education levels acceptable maane jaayenge</div>
         </div>
         <div className="form-group">
-          <label className="form-label">Location Preference</label>
+          <FormLabel>Location Preference</FormLabel>
           <ChipSelect options={LOCATION_PREFERENCES} value={form.partner_location} onChange={v=>set('partner_location',v)} includeEmpty />
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Partner City Preference</label>
+            <FormLabel>Partner City Preference</FormLabel>
             <input className="form-input" value={form.partner_city_preference} onChange={e=>set('partner_city_preference',e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Partner State Preference</label>
+            <FormLabel>Partner State Preference</FormLabel>
             <input className="form-input" value={form.partner_state_preference} onChange={e=>set('partner_state_preference',e.target.value)} />
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Partner Country Preference</label>
+          <FormLabel>Partner Country Preference</FormLabel>
           <select className="form-select" value={form.partner_country_preference} onChange={e=>set('partner_country_preference',e.target.value)}>
             {COUNTRIES.map(c=><option key={c}>{c}</option>)}
           </select>
         </div>
         <div className="form-group">
-          <label className="form-label">Additional Notes</label>
+          <FormLabel>Additional Notes</FormLabel>
           <textarea className="form-textarea" value={form.partner_notes} onChange={e=>set('partner_notes',e.target.value)} />
         </div>
       </div>
@@ -1895,43 +1971,43 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
       {onManagePrivacy ? (
         <div className="card" style={{marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div>
-            <div className="section-label" style={{marginBottom:4}}>Privacy & Sensitive Info</div>
-            <div style={{fontSize:12,color:'#8e8e8e'}}>Community, income, contact & other visibility settings</div>
+            <SectionLabel style={{marginBottom:4}}>Privacy & Sensitive Info</SectionLabel>
+            <div style={{fontSize:12,color:'var(--gray3)'}}>Who sees your community, income, contact</div>
           </div>
-          <button type="button" className="btn btn-outline btn-sm" style={{flexShrink:0}} onClick={onManagePrivacy}>
-            Manage →
+          <button type="button" className="icon-btn" aria-label="Manage privacy" style={{flexShrink:0}} onClick={onManagePrivacy}>
+            <ChevronRight size={20} />
           </button>
         </div>
       ) : (
         <div className="card" style={{marginBottom:12}}>
-          <div className="section-label" style={{marginBottom:14}}>Privacy & Sensitive Info</div>
+          <SectionLabel style={{marginBottom:14}}>Privacy & Sensitive Info</SectionLabel>
           <div className="form-group">
-            <label className="form-label">Who can see your Community/Caste?</label>
+            <FormLabel>Who can see your Community/Caste?</FormLabel>
             <ChipSelect options={PRIVACY_LEVELS} value={form.community_privacy} onChange={v=>set('community_privacy',v)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Who can see your College/Institution Name?</label>
+            <FormLabel>Who can see your College/Institution Name?</FormLabel>
             <ChipSelect options={PRIVACY_LEVELS} value={form.college_privacy} onChange={v=>set('college_privacy',v)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Who can see your Company Name?</label>
+            <FormLabel>Who can see your Company Name?</FormLabel>
             <ChipSelect options={PRIVACY_LEVELS} value={form.company_privacy} onChange={v=>set('company_privacy',v)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Who can see your Income?</label>
+            <FormLabel>Who can see your Income?</FormLabel>
             <ChipSelect options={PRIVACY_LEVELS} value={form.income_privacy} onChange={v=>set('income_privacy',v)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Who can see your Contact Details?</label>
+            <FormLabel>Who can see your Contact Details?</FormLabel>
             <ChipSelect options={PRIVACY_LEVELS} value={form.contact_privacy} onChange={v=>set('contact_privacy',v)} />
           </div>
         </div>
       )}
 
       <div style={{display:'flex',gap:10,marginTop:8,marginBottom:20}}>
-        <button className="btn btn-outline" style={{flex:1}} onClick={onCancel}>Cancel</button>
-        <button className="btn btn-black" style={{flex:2}} onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving...' : 'Save Changes'}
+        <button className="btn btn-outline" style={{flex:1}} onClick={onCancel}><X size={16} /> Cancel</button>
+        <button className="btn btn-primary" style={{flex:2}} onClick={handleSave} disabled={saving}>
+          <CheckIcon size={16} /> {saving ? 'Saving...' : 'Save'}
         </button>
       </div>
     </div>

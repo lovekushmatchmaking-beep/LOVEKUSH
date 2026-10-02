@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react'
+import { Gem, Lock, BadgeCheck, Globe, Users, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export default function Landing({ user }) {
@@ -62,7 +63,7 @@ export default function Landing({ user }) {
       ctx.beginPath(); ctx.ellipse(0,0,sz*1.8,sz*0.3,0,0,Math.PI*2); ctx.fill()
       ctx.beginPath(); ctx.moveTo(-sz*0.2,0); ctx.lineTo(-sz*0.9,sz); ctx.lineTo(sz*0.3,sz*0.1); ctx.closePath(); ctx.fill()
       ctx.beginPath(); ctx.moveTo(-sz*0.2,0); ctx.lineTo(-sz*0.9,-sz); ctx.lineTo(sz*0.3,-sz*0.1); ctx.closePath(); ctx.fill()
-      ctx.font = '300 ' + Math.max(8,sz*0.65) + 'px DM Sans'
+      ctx.font = '300 ' + Math.max(8,sz*0.65) + 'px Poppins'
       ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.letterSpacing='0.2em'
       ctx.fillText('LOVEKUSH', -24, -sz*1.2)
       ctx.restore()
@@ -120,11 +121,11 @@ export default function Landing({ user }) {
         textTimer+=dt
         if(textTimer>0.12&&textI<BRAND.length){textI++;textTimer=0}
         if(textI>0){
-          ctx.font='200 ' + Math.min(W()*0.07,56) + 'px DM Sans'
+          ctx.font='200 ' + Math.min(W()*0.07,56) + 'px Poppins'
           ctx.fillStyle='#000'; ctx.textAlign='center'; ctx.letterSpacing='0.5em'
           ctx.fillText(BRAND.slice(0,textI),W()/2,H()/2+8)
           if(textI===BRAND.length){
-            ctx.font='300 ' + Math.min(W()*0.02,13) + 'px DM Sans'
+            ctx.font='300 ' + Math.min(W()*0.02,13) + 'px Poppins'
             ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.letterSpacing='0.3em'
             ctx.fillText('GLOBAL MATCHMAKING',W()/2,H()/2+32)
           }
@@ -161,11 +162,11 @@ export default function Landing({ user }) {
         ctx.fillStyle='rgba(0,0,0,0.88)'
         roundRect(ctx,cx,cy,200,72,10); ctx.fill()
         ctx.fillStyle='#fff'
-        ctx.font='400 10px DM Sans'; ctx.letterSpacing='0.2em'
+        ctx.font='400 10px Poppins'; ctx.letterSpacing='0.2em'
         ctx.fillText(city.name.toUpperCase(), cx+12, cy+18)
         ctx.font='400 14px Cormorant Garamond'
         ctx.fillText(city.couple, cx+12, cy+36)
-        ctx.font='300 11px DM Sans'; ctx.fillStyle='rgba(255,255,255,0.6)'
+        ctx.font='300 11px Poppins'; ctx.fillStyle='rgba(255,255,255,0.6)'
         wrapText(ctx, city.story, cx+12, cy+52, 176, 14)
         ctx.restore()
 
@@ -262,12 +263,12 @@ export default function Landing({ user }) {
                 <circle cx="30" cy="37" r="2.5" fill="black"/>
               </g>
             </svg>
-            <div style={{fontFamily:'DM Sans',fontSize:'clamp(32px,7vw,64px)',fontWeight:200,letterSpacing:'0.5em',marginBottom:6}}>LOVEKUSH</div>
+            <div style={{fontFamily:'Poppins',fontSize:'clamp(32px,7vw,64px)',fontWeight:200,letterSpacing:'0.5em',marginBottom:6}}>LOVEKUSH</div>
             <div style={{fontSize:11,letterSpacing:'0.35em',opacity:0.4,textTransform:'uppercase',marginBottom:16}}>Global Matchmaking Services</div>
             <div style={{width:40,height:1,background:'rgba(0,0,0,0.2)',margin:'0 auto 16px'}}></div>
             <div style={{fontFamily:'Cormorant Garamond',fontSize:'clamp(18px,3vw,26px)',fontStyle:'italic',fontWeight:300,marginBottom:36,opacity:0.8}}>Bridging Hearts, Building Legacies.</div>
             <div style={{display:'flex',gap:12,justifyContent:'center',flexWrap:'wrap'}}>
-              <button className="btn btn-black btn-lg" onClick={()=>navigate('/register')} style={{pointerEvents:'all'}}>Begin Your Journey →</button>
+              <button className="btn btn-black btn-lg" onClick={()=>navigate('/register')} style={{pointerEvents:'all'}}>Begin Your Journey <ArrowRight size={18} /></button>
               <button className="btn btn-outline btn-lg" onClick={()=>document.getElementById('features').scrollIntoView({behavior:'smooth'})} style={{pointerEvents:'all'}}>Learn More ↓</button>
             </div>
           </div>
@@ -277,23 +278,23 @@ export default function Landing({ user }) {
       {/* Features Section */}
       <div id="features" style={{background:'#fff',padding:'60px 20px'}}>
         <div style={{maxWidth:600,margin:'0 auto'}}>
-          <div className="section-label" style={{textAlign:'center',marginBottom:8}}>Why Lovekush</div>
+          <div className="section-label" style={{justifyContent:'center',marginBottom:8}}>Why Lovekush</div>
           <h2 style={{fontFamily:'Cormorant Garamond',fontSize:'clamp(28px,5vw,42px)',fontWeight:300,textAlign:'center',marginBottom:40,lineHeight:1.2}}>
             A service built on<br/><em>trust & discretion.</em>
           </h2>
 
           <div style={{display:'flex',flexDirection:'column',gap:1,border:'1px solid rgba(0,0,0,0.08)',borderRadius:16,overflow:'hidden'}}>
             {[
-              {icon:'💎',title:'Handpicked Introductions',desc:'Every match personally reviewed. No random browsing.'},
-              {icon:'🔒',title:'Complete Privacy',desc:'Contact details hidden until you choose to share.'},
-              {icon:'✅',title:'Verified Profiles Only',desc:'Every profile reviewed before being shown to anyone.'},
-              {icon:'🌍',title:'Global Reach',desc:'India, UK, USA, Canada, UAE, Australia and 50+ countries.'},
-              {icon:'👨‍👩‍👧',title:'Family-First',desc:'Serious marriage seekers only. No dating vibe.'},
+              {icon:Gem,title:'Handpicked Introductions',desc:'Every match personally reviewed. No random browsing.'},
+              {icon:Lock,title:'Complete Privacy',desc:'Contact details hidden until you choose to share.'},
+              {icon:BadgeCheck,title:'Verified Profiles Only',desc:'Every profile reviewed before being shown to anyone.'},
+              {icon:Globe,title:'Global Reach',desc:'India, UK, USA, Canada, UAE, Australia and 50+ countries.'},
+              {icon:Users,title:'Family-First',desc:'Serious marriage seekers only. No dating vibe.'},
             ].map(f=>(
               <div key={f.title} style={{display:'flex',gap:14,padding:'20px',background:'#fff',transition:'background 0.2s'}}
-                onMouseEnter={e=>e.currentTarget.style.background='#f9f9f9'}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--gray1)'}
                 onMouseLeave={e=>e.currentTarget.style.background='#fff'}>
-                <span style={{fontSize:22,flexShrink:0,paddingTop:2}}>{f.icon}</span>
+                <span className="avatar" style={{width:40,height:40,borderRadius:12}}><f.icon size={20} /></span>
                 <div>
                   <div style={{fontWeight:500,marginBottom:3}}>{f.title}</div>
                   <div style={{fontSize:13,color:'#8e8e8e',lineHeight:1.5}}>{f.desc}</div>
@@ -311,7 +312,7 @@ export default function Landing({ user }) {
 
       {/* Footer */}
       <footer style={{borderTop:'1px solid rgba(0,0,0,0.08)',padding:'40px 20px',textAlign:'center',background:'#fff'}}>
-        <div style={{fontFamily:'DM Sans',fontSize:20,fontWeight:200,letterSpacing:'0.45em',marginBottom:6}}>LOVEKUSH</div>
+        <div style={{fontFamily:'Poppins',fontSize:20,fontWeight:200,letterSpacing:'0.45em',marginBottom:6}}>LOVEKUSH</div>
         <div style={{fontFamily:'Cormorant Garamond',fontStyle:'italic',fontSize:14,opacity:0.4,marginBottom:20}}>Bridging Hearts, Building Legacies.</div>
         <div style={{display:'flex',gap:20,justifyContent:'center',flexWrap:'wrap',marginBottom:16}}>
           {['About','Privacy Policy','Terms','Contact'].map(l=>(

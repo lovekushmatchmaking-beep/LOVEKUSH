@@ -1,9 +1,10 @@
 import React from 'react'
+import { UserRound, PartyPopper, ShieldCheck, ArrowRight } from 'lucide-react'
 
 // Halka CSS-only confetti burst — koi extra library nahi chahiye.
 // Har piece ek chhota rotated rectangle hai, random left/delay/color ke
 // saath, jo @keyframes confetti-fall se gir kar fade out hota hai.
-const CONFETTI_COLORS = ['#e53e3e', '#f6ad55', '#68d391', '#63b3ed', '#b794f4', '#f687b3', '#000']
+const CONFETTI_COLORS = ['#e53e3e', '#f6ad55', '#68d391', '#63b3ed', '#b794f4', '#f687b3', '#9e3b5a', '#b8913f']
 const CONFETTI_PIECES = Array.from({ length: 40 }, (_, i) => ({
   id: i,
   left: Math.random() * 100,
@@ -34,25 +35,25 @@ export default function SignupComplete({ profile, photoPreview, onContinue }) {
       ))}
 
       <div style={{marginTop:'12vh',textAlign:'center',position:'relative',zIndex:1}}>
-        <div style={{width:140,height:180,borderRadius:20,background:'#e0e0e0',overflow:'hidden',margin:'0 auto 20px',boxShadow:'var(--shadow-lg)',position:'relative'}}>
+        <div style={{width:140,height:180,borderRadius:20,background:'var(--gray1)',overflow:'hidden',margin:'0 auto 20px',boxShadow:'var(--shadow-lg)',position:'relative'}}>
           {photoPreview
             ? <img src={photoPreview} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
-            : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:48}}>👤</div>
+            : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--primary-soft)',color:'var(--primary)'}}><UserRound size={48} /></div>
           }
-          <div style={{position:'absolute',top:8,right:8,background:'rgba(0,0,0,0.7)',color:'#fff',fontSize:9,padding:'3px 8px',borderRadius:20,letterSpacing:'0.08em'}}>JUST JOINED</div>
+          <div style={{position:'absolute',top:8,right:8,background:'var(--primary)',color:'#fff',width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center'}} title="Just joined"><PartyPopper size={15} /></div>
         </div>
 
-        <h1 style={{fontFamily:'Cormorant Garamond',fontWeight:300,fontSize:28,marginBottom:6}}>
-          Welcome, {profile?.full_name?.split(' ')[0] || 'there'}! 🎉
+        <h1 style={{fontFamily:'var(--font-display)',fontWeight:500,fontSize:28,marginBottom:6}}>
+          Welcome, {profile?.full_name?.split(' ')[0] || 'there'}!
         </h1>
         <div className="profile-code" style={{display:'inline-block',marginBottom:16}}>{profile?.profile_code}</div>
-        <p style={{fontSize:14,color:'#8e8e8e',lineHeight:1.7,maxWidth:320,margin:'0 auto'}}>
-          Aapki profile ban gayi hai! Hamari team 24-48 ghanto me review karegi, uske baad aapko matches milne shuru ho jayenge.
+        <p style={{fontSize:14,color:'var(--gray3)',lineHeight:1.7,maxWidth:320,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+          <ShieldCheck size={16} style={{color:'var(--primary)'}} /> Review in 24-48 hrs, then matches begin
         </p>
       </div>
 
       <div style={{marginTop:'auto',width:'100%',maxWidth:420,paddingBottom:40,paddingTop:30,position:'relative',zIndex:1}}>
-        <button className="btn btn-black btn-full btn-lg" onClick={onContinue}>Begin your journey →</button>
+        <button className="btn btn-primary btn-full btn-lg" onClick={onContinue}>Begin your journey <ArrowRight size={18} /></button>
       </div>
     </div>
   )

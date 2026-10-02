@@ -240,7 +240,7 @@ export default function Admin({ staffUser }) {
   return (
     <div style={{ minHeight: '100vh', background: '#fff' }}>
       <nav className="navbar">
-        <span style={{ fontFamily: 'DM Sans', fontSize: 15, fontWeight: 200, letterSpacing: '0.35em' }}>ADMIN</span>
+        <span style={{ fontFamily:'var(--font-display)', fontSize: 15, fontWeight:500, letterSpacing: '0.35em' }}>ADMIN</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 11, color: '#8e8e8e' }}>{staffUser.role === 'admin' ? 'Admin' : 'Relationship Manager'}</span>
           <button className="btn btn-outline" style={{ fontSize: 11, padding: '6px 14px' }} onClick={logout}>Logout</button>
@@ -313,7 +313,7 @@ export default function Admin({ staffUser }) {
             { label: 'Blocked', val: stats.blocked, bg: '#fef2f2' },
           ].map(s => (
             <div key={s.label} style={{ background: s.bg, borderRadius: 'var(--radius)', padding: '14px 16px' }}>
-              <div style={{ fontFamily: 'Cormorant Garamond', fontSize: 28, fontWeight: 300 }}>{s.val}</div>
+              <div style={{ fontFamily:'var(--font-display)', fontSize: 28, fontWeight:500 }}>{s.val}</div>
               <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{s.label}</div>
             </div>
           ))}
@@ -514,7 +514,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
 
-      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,marginBottom:4}}>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>
         Matches for {profile.full_name}
       </h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>
@@ -642,7 +642,7 @@ function ShareLinksView({ staffUserId, onBack }) {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
-      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,marginBottom:20}}>My Share Links</h2>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>My Share Links</h2>
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
@@ -721,7 +721,7 @@ function CasteSuggestionsView({ onBack }) {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
-      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,marginBottom:20}}>Caste Suggestions</h2>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>Caste Suggestions</h2>
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
@@ -807,7 +807,7 @@ function CoordinationRequestsView({ onBack }) {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
-      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,marginBottom:20}}>Coordination Requests</h2>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>Coordination Requests</h2>
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>

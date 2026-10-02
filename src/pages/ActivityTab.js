@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
+import { PageHeader, EmptyState } from '../components/ui'
 import SignedImage from '../components/SignedImage'
+import { Eye, Heart, Star, Inbox, Send, HeartHandshake, UserRound } from 'lucide-react'
 
 // Jeevansathi ke "Activity" tab jaisa — Profile Visits / Shortlisted /
 // Interests Received stat tiles + Received/Sent/Accepted lists.
@@ -34,43 +36,42 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
 
   return (
     <div>
-      <h2 style={{fontFamily:'Cormorant Garamond',fontSize:26,fontWeight:300,marginBottom:20}}>Activity</h2>
+      <PageHeader title="Notifications" />
 
-      <div className="stats-row">
-        <div className="stat-card">
-          <span className="stat-num">{profileViewsCount}</span>
-          <span className="stat-label">Profile Visits</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-num">{shortlistedCount}</span>
-          <span className="stat-label">Shortlisted Profiles</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-num">{(receivedActions || []).length}</span>
-          <span className="stat-label">Interests Received</span>
-        </div>
+      <div className="stats-row" style={{gridTemplateColumns:'repeat(3,1fr)'}}>
+        {[
+          { icon: Eye, n: profileViewsCount, l: 'Visits' },
+          { icon: Heart, n: shortlistedCount, l: 'Liked' },
+          { icon: Inbox, n: (receivedActions || []).length, l: 'Interests' },
+        ].map(({ icon: Icon, n, l }) => (
+          <div key={l} className="stat-card" style={{textAlign:'center',padding:'14px 6px'}}>
+            <Icon size={18} className="stat-icon" />
+            <span className="stat-num" style={{fontSize:20}}>{n}</span>
+            <span className="stat-label">{l}</span>
+          </div>
+        ))}
       </div>
 
-      <div className="section-label" style={{marginBottom:10}}>Interests</div>
-      <div style={{display:'flex',gap:8,marginBottom:16}}>
-        {['Received', 'Accepted', 'Sent'].map(t => (
-          <div key={t} className={'radio-option ' + (tab===t?'selected':'')} onClick={()=>setTab(t)} style={{flex:1,textAlign:'center'}}>
-            {t}
-          </div>
+      <div className="pill-tabs" style={{marginBottom:16}}>
+        {[['Received', Inbox], ['Accepted', HeartHandshake], ['Sent', Send]].map(([t, Icon]) => (
+          <button key={t} className={'pill-tab ' + (tab===t?'active':'')} onClick={()=>setTab(t)}
+            style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+            <Icon size={15} /> {t}
+          </button>
         ))}
       </div>
 
       {tab === 'Received' && (
         (receivedActions || []).length === 0 ? (
-          <EmptyState text="Abhi tak koi interest nahi mila." />
+          <EmptyState icon={Inbox} title="No interests yet" />
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {receivedActions.map(r => (
               <ActivityRow key={r.actor_profile_id}
                 name={r.actorProfile?.full_name || 'Profile'}
-                sub={r.actorProfile ? `${r.actorProfile.age || ''} years • ${r.actorProfile.city || ''}` : ''}
+                sub={r.actorProfile ? `${r.actorProfile.age || ''} yrs · ${r.actorProfile.city || ''}` : ''}
                 photoPath={r.actorPhotoPath}
-                badge={r.action === 'super_like' ? '⭐ Super Like' : '👍 Like'}
+                badge={r.action === 'super_like' ? <Star size={18} style={{color:'var(--gold)',fill:'var(--gold)'}} aria-label="Super like" /> : <Heart size={18} style={{color:'var(--primary)',fill:'var(--primary)'}} aria-label="Like" />}
                 onClick={() => r.actorProfile && onViewProfile({ ...r.actorProfile, primaryPhotoPath: r.actorPhotoPath })} />
             ))}
           </div>
@@ -79,15 +80,15 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
 
       {tab === 'Accepted' && (
         acceptedRows.length === 0 ? (
-          <EmptyState text="Koi mutual interest nahi hai abhi." />
+          <EmptyState icon={HeartHandshake} title="No mutual likes yet" />
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {acceptedRows.map(r => (
               <ActivityRow key={r.id}
                 name={r.profile?.full_name || 'Profile'}
-                sub={r.profile ? `${r.profile.age || ''} years • ${r.profile.city || ''}` : ''}
+                sub={r.profile ? `${r.profile.age || ''} yrs · ${r.profile.city || ''}` : ''}
                 photoPath={r.profile?.primaryPhotoPath}
-                badge="✓ Mutual"
+                badge={<HeartHandshake size={18} style={{color:'var(--primary)'}} aria-label="Mutual" />}
                 onClick={() => r.profile && onViewProfile(r.profile)} />
             ))}
           </div>
@@ -96,15 +97,15 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
 
       {tab === 'Sent' && (
         sentRows.length === 0 ? (
-          <EmptyState text="Aapne abhi tak koi interest nahi bheja." />
+          <EmptyState icon={Send} title="Nothing sent yet" />
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {sentRows.map(r => (
               <ActivityRow key={r.id}
                 name={r.profile?.full_name || 'Profile'}
-                sub={r.profile ? `${r.profile.age || ''} years • ${r.profile.city || ''}` : ''}
+                sub={r.profile ? `${r.profile.age || ''} yrs · ${r.profile.city || ''}` : ''}
                 photoPath={r.profile?.primaryPhotoPath}
-                badge={r.action === 'super_like' ? '⭐ Super Like' : '👍 Like'}
+                badge={r.action === 'super_like' ? <Star size={18} style={{color:'var(--gold)',fill:'var(--gold)'}} aria-label="Super like" /> : <Heart size={18} style={{color:'var(--primary)',fill:'var(--primary)'}} aria-label="Like" />}
                 onClick={() => r.profile && onViewProfile(r.profile)} />
             ))}
           </div>
@@ -116,28 +117,19 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
 
 function ActivityRow({ name, sub, photoPath, badge, onClick }) {
   return (
-    <div style={{display:'flex',gap:12,alignItems:'center',padding:'10px 12px',background:'#f5f5f5',borderRadius:12,cursor: onClick ? 'pointer' : 'default'}}
+    <div className={'list-row' + (onClick ? ' clickable' : '')} style={{display:'flex',gap:12,alignItems:'center'}}
       onClick={onClick}>
-      <div style={{width:48,height:48,borderRadius:'50%',background:'#e0e0e0',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div className="avatar" style={{width:48,height:48}}>
         {photoPath
           ? <SignedImage path={photoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
-          : <span style={{fontSize:18}}>👤</span>
+          : <UserRound size={20} />
         }
       </div>
-      <div style={{flex:1}}>
-        <div style={{fontWeight:600,fontSize:14}}>{name}</div>
-        {sub && <div style={{fontSize:12,color:'#8e8e8e'}}>{sub}</div>}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontWeight:600,fontSize:15}}>{name}</div>
+        {sub && <div style={{fontSize:12,color:'var(--gray3)'}}>{sub}</div>}
       </div>
-      <div style={{fontSize:11,color:'#4a5568',flexShrink:0}}>{badge}</div>
-    </div>
-  )
-}
-
-function EmptyState({ text }) {
-  return (
-    <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e'}}>
-      <div style={{fontSize:36,marginBottom:10}}>💌</div>
-      <div style={{fontSize:13}}>{text}</div>
+      <div style={{flexShrink:0,display:'flex'}}>{badge}</div>
     </div>
   )
 }

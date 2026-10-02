@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { UserRound } from 'lucide-react'
 import { supabase } from '../supabase'
 
 // PEHLE: photos "public" bucket mein the — jo bhi URL jaanta tha, dekh
@@ -31,15 +32,15 @@ export default function SignedImage({ path, fallback, style, alt }) {
 
   if (failed || !path) {
     return fallback || (
-      <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f0f0' }}>
-        <span style={{ fontSize: 20 }}>👤</span>
+      <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary-soft)', color: 'var(--primary)' }}>
+        <UserRound size={20} />
       </div>
     )
   }
 
   if (!url) {
-    return <div style={{ ...style, background: '#f0f0f0' }} />
+    return <div className="img-skeleton" style={style} />
   }
 
-  return <img src={url} alt={alt || ''} style={style} />
+  return <img src={url} alt={alt || ''} style={{ animation: 'fadeIn 0.3s ease', ...style }} />
 }

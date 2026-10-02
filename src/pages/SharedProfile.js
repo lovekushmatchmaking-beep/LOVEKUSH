@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Lock } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 
@@ -40,7 +41,7 @@ export default function SharedProfile() {
 
   if (error) return (
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:12,padding:20,textAlign:'center'}}>
-      <div style={{fontSize:40}}>🔒</div>
+      <div className="empty-state-icon" style={{margin:0}}><Lock size={28} /></div>
       <div style={{fontSize:16,fontWeight:600}}>Link Not Available</div>
       <div style={{fontSize:13,color:'#8e8e8e',maxWidth:320}}>{error}</div>
     </div>

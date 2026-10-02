@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
+import { FormLabel, SectionLabel, PageHeader } from '../components/ui'
 import { supabase } from '../supabase'
 import { PRIVACY_LEVELS } from '../constants/profileOptions'
+import { Lock, KeyRound, EyeOff, ChevronRight, Trash2, Eye, Check } from 'lucide-react'
 
 const HIDE_DURATIONS = [
   { label: '7 days', days: 7 },
@@ -8,8 +10,8 @@ const HIDE_DURATIONS = [
   { label: '30 days', days: 30 },
 ]
 
-export default function AccountSettings({ profile, user, onProfileUpdate, onBack, onDeleted }) {
-  const [view, setView] = useState('menu') // 'menu' | 'privacy' | 'password' | 'hidedelete'
+export default function AccountSettings({ profile, user, onProfileUpdate, onBack, onDeleted, initialView }) {
+  const [view, setView] = useState(initialView || 'menu') // 'menu' | 'privacy' | 'password' | 'hidedelete'
   const [toast, setToast] = useState('')
 
   const showToast = (msg) => {
@@ -17,36 +19,34 @@ export default function AccountSettings({ profile, user, onProfileUpdate, onBack
     setTimeout(() => setToast(''), 3500)
   }
 
-  const back = () => (view === 'menu' ? onBack() : setView('menu'))
+  // Drawer se seedha kisi sub-view pe aaye ho to back = wahin wapas
+  const back = () => (view === 'menu' || view === initialView ? onBack() : setView('menu'))
 
   return (
     <div>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
-        <button onClick={back} style={{background:'none',border:'none',fontSize:20,cursor:'pointer',lineHeight:1}}>←</button>
-        <h2 style={{fontFamily:'Cormorant Garamond',fontSize:24,fontWeight:300,margin:0}}>
-          {view === 'menu' ? 'Account & Settings'
-            : view === 'privacy' ? 'Privacy Settings'
-            : view === 'password' ? 'Change Password'
-            : 'Hide / Delete Profile'}
-        </h2>
-      </div>
+      <PageHeader onBack={back} title={view === 'menu' ? 'Settings'
+        : view === 'privacy' ? 'Privacy'
+        : view === 'password' ? 'Password'
+        : 'Hide / Delete'} />
 
       <div className={'toast ' + (toast?'show':'')}>{toast}</div>
 
       {view === 'menu' && (
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
-          <button className="card" style={{textAlign:'left',cursor:'pointer',border:'1px solid rgba(0,0,0,0.1)'}} onClick={()=>setView('privacy')}>
-            <div style={{fontWeight:600,fontSize:15,marginBottom:2}}>Privacy Settings</div>
-            <div style={{fontSize:12,color:'#8e8e8e'}}>Control who sees your Community, Income, Contact & more</div>
-          </button>
-          <button className="card" style={{textAlign:'left',cursor:'pointer',border:'1px solid rgba(0,0,0,0.1)'}} onClick={()=>setView('password')}>
-            <div style={{fontWeight:600,fontSize:15,marginBottom:2}}>Change Password</div>
-            <div style={{fontSize:12,color:'#8e8e8e'}}>Update your login password</div>
-          </button>
-          <button className="card" style={{textAlign:'left',cursor:'pointer',border:'1px solid rgba(0,0,0,0.1)'}} onClick={()=>setView('hidedelete')}>
-            <div style={{fontWeight:600,fontSize:15,marginBottom:2}}>Hide / Delete Profile</div>
-            <div style={{fontSize:12,color:'#8e8e8e'}}>Temporarily hide your profile or permanently delete it</div>
-          </button>
+        <div className="menu-list">
+          {[
+            { v:'privacy', icon:Lock, title:'Privacy', sub:'Who sees your community, income, contact' },
+            { v:'password', icon:KeyRound, title:'Password', sub:'Change your login password' },
+            { v:'hidedelete', icon:EyeOff, title:'Hide / Delete', sub:'Pause or remove your profile' },
+          ].map(({v,icon:Icon,title,sub})=>(
+            <button key={v} className="menu-row" onClick={()=>setView(v)}>
+              <Icon size={20} className="menu-row-icon" />
+              <div>
+                <div>{title}</div>
+                <div className="menu-row-sub">{sub}</div>
+              </div>
+              <ChevronRight size={18} className="chev" />
+            </button>
+          ))}
         </div>
       )}
 
@@ -98,15 +98,15 @@ function PrivacySettingsView({ profile, onSave, showToast }) {
       <div className="card" style={{marginBottom:16}}>
         {FIELDS.map(([key, label]) => (
           <div className="form-group" key={key}>
-            <label className="form-label">Who can see your {label}?</label>
+            <FormLabel>Who can see your {label}?</FormLabel>
             <select className="form-select" value={form[key]} onChange={e=>set(key,e.target.value)}>
               {PRIVACY_LEVELS.map(p=><option key={p} value={p}>{p}</option>)}
             </select>
           </div>
         ))}
       </div>
-      <button className="btn btn-black btn-full" onClick={handleSave} disabled={saving}>
-        {saving ? 'Saving...' : 'Save Changes'}
+      <button className="btn btn-primary btn-full" onClick={handleSave} disabled={saving}>
+        <Check size={16} /> {saving ? 'Saving...' : 'Save'}
       </button>
     </div>
   )
@@ -133,16 +133,16 @@ function ChangePasswordView({ showToast }) {
     <div>
       <div className="card" style={{marginBottom:16}}>
         <div className="form-group">
-          <label className="form-label">New Password</label>
+          <FormLabel>New Password</FormLabel>
           <input className="form-input" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters" />
         </div>
         <div className="form-group">
-          <label className="form-label">Confirm New Password</label>
+          <FormLabel>Confirm New Password</FormLabel>
           <input className="form-input" type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} />
         </div>
       </div>
-      <button className="btn btn-black btn-full" onClick={handleSave} disabled={saving}>
-        {saving ? 'Saving...' : 'Change Password'}
+      <button className="btn btn-primary btn-full" onClick={handleSave} disabled={saving}>
+        <KeyRound size={16} /> {saving ? 'Saving...' : 'Change Password'}
       </button>
     </div>
   )
@@ -202,9 +202,9 @@ function HideDeleteView({ profile, user, onProfileUpdate, onDeleted, showToast }
   return (
     <div>
       <div className="card" style={{marginBottom:16}}>
-        <div className="section-label" style={{marginBottom:10}}>Hide Profile</div>
-        <p style={{fontSize:13,color:'#8e8e8e',marginBottom:14}}>
-          Your profile won't be shown in matches while hidden. You can unhide anytime.
+        <SectionLabel icon={EyeOff} style={{marginBottom:6}}>Hide Profile</SectionLabel>
+        <p style={{fontSize:13,color:'var(--gray3)',marginBottom:14}}>
+          Hidden from matches. Unhide anytime.
         </p>
         {isHidden ? (
           <>
@@ -212,7 +212,7 @@ function HideDeleteView({ profile, user, onProfileUpdate, onDeleted, showToast }
               Hidden until {new Date(profile.hidden_until).toLocaleDateString('en-IN')}.
             </div>
             <button className="btn btn-outline btn-full" onClick={unhideProfile} disabled={hiding}>
-              {hiding ? 'Please wait...' : 'Unhide Now'}
+              <Eye size={16} /> {hiding ? 'Please wait...' : 'Unhide'}
             </button>
           </>
         ) : (
@@ -225,15 +225,15 @@ function HideDeleteView({ profile, user, onProfileUpdate, onDeleted, showToast }
               ))}
             </div>
             <button className="btn btn-outline btn-full" onClick={hideProfile} disabled={hiding}>
-              {hiding ? 'Please wait...' : 'Hide My Profile'}
+              <EyeOff size={16} /> {hiding ? 'Please wait...' : 'Hide'}
             </button>
           </>
         )}
       </div>
 
-      <div className="card" style={{marginBottom:16,borderColor:'#e53e3e'}}>
-        <div className="section-label" style={{marginBottom:10,color:'#e53e3e'}}>Delete Profile</div>
-        <p style={{fontSize:13,color:'#8e8e8e',marginBottom:14}}>
+      <div className="card" style={{marginBottom:16,borderColor:'#f1c6c6'}}>
+        <SectionLabel icon={Trash2} style={{marginBottom:6,color:'var(--danger)'}}>Delete Profile</SectionLabel>
+        <p style={{fontSize:13,color:'var(--gray3)',marginBottom:14}}>
           This will permanently delete your profile, photos, matches and requests. This cannot be undone.
         </p>
         <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:13,marginBottom:14,cursor:'pointer'}}>
@@ -242,11 +242,11 @@ function HideDeleteView({ profile, user, onProfileUpdate, onDeleted, showToast }
         </label>
         <button
           className="btn btn-full"
-          style={{background:'#e53e3e',color:'#fff'}}
+          style={{background:'var(--danger)',color:'#fff'}}
           disabled={!deleteConfirmed || deleting}
           onClick={deleteProfile}
         >
-          {deleting ? 'Deleting...' : 'Yes, Delete My Profile Permanently'}
+          <Trash2 size={16} /> {deleting ? 'Deleting...' : 'Delete permanently'}
         </button>
       </div>
     </div>

@@ -25,8 +25,8 @@ export default function DualRangeSlider({ min, max, valueMin, valueMax, onChange
         <span>{fmt(valueMax)}</span>
       </div>
       <div style={{position:'relative', height:32}}>
-        <div style={{position:'absolute', top:14, left:0, right:0, height:4, borderRadius:2, background:'rgba(0,0,0,0.1)'}} />
-        <div style={{position:'absolute', top:14, height:4, borderRadius:2, background:'#000',
+        <div style={{position:'absolute', top:14, left:0, right:0, height:4, borderRadius:2, background:'var(--gray2)'}} />
+        <div style={{position:'absolute', top:14, height:4, borderRadius:2, background:'var(--primary)',
           left:pctMin+'%', width:(pctMax-pctMin)+'%'}} />
         <input type="range" min={min} max={max} value={valueMin} onChange={handleMinChange}
           style={{position:'absolute', width:'100%', top:0, margin:0, background:'transparent', pointerEvents:'none'}}
@@ -36,8 +36,10 @@ export default function DualRangeSlider({ min, max, valueMin, valueMax, onChange
           className="dual-range-thumb" />
       </div>
       <style>{`
-        .dual-range-thumb::-webkit-slider-thumb { pointer-events: auto; }
-        .dual-range-thumb::-moz-range-thumb { pointer-events: auto; }
+        .dual-range-thumb { -webkit-appearance: none; appearance: none; height: 32px; }
+        .dual-range-thumb::-webkit-slider-runnable-track { background: transparent; }
+        .dual-range-thumb::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid var(--primary); box-shadow: var(--shadow-md); cursor: grab; }
+        .dual-range-thumb::-moz-range-thumb { pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid var(--primary); box-shadow: var(--shadow-md); cursor: grab; }
       `}</style>
     </div>
   )

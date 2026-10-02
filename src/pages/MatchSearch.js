@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import { User, GraduationCap, Landmark, NotebookPen, ChevronDown, Search, SlidersHorizontal } from 'lucide-react'
+import { FormLabel, SectionLabel, PageHeader } from '../components/ui'
 import { supabase } from '../supabase'
 import DualRangeSlider from '../components/DualRangeSlider'
 import CheckboxDropdown from '../components/CheckboxDropdown'
@@ -28,10 +30,10 @@ function AccordionSection({ title, icon, defaultOpen, children }) {
     <div className="card" style={{ marginBottom: 12, padding: 0, overflow: 'hidden' }}>
       <div onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', cursor: 'pointer' }}>
-        <div className="section-label" style={{ margin: 0 }}>{icon ? icon + ' ' : ''}{title}</div>
-        <span style={{ fontSize: 16, color: '#8e8e8e', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>⌄</span>
+        <SectionLabel icon={icon} style={{ margin: 0 }}>{title}</SectionLabel>
+        <ChevronDown size={18} style={{ color: 'var(--gray3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s var(--ease)' }} />
       </div>
-      {open && <div style={{ padding: '0 18px 18px' }}>{children}</div>}
+      {open && <div className="page-enter" style={{ padding: '0 18px 18px' }}>{children}</div>}
     </div>
   )
 }
@@ -95,62 +97,59 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>←</button>
-        <h2 style={{ fontFamily: 'Cormorant Garamond', fontSize: 24, fontWeight: 300, margin: 0 }}>Tell us what you're looking for</h2>
-      </div>
+      <PageHeader title="Search" onBack={onBack} />
 
       {summaryParts.length > 0 && (
-        <div style={{ display: 'inline-block', margin: '10px 0 16px', padding: '6px 14px', borderRadius: 20, background: '#fff0f3', border: '1px solid #fde0e6', fontSize: 12, color: '#b4536b' }}>
-          Current Preferences: {summaryParts.join(' • ')}
+        <div className="chip chip-primary" style={{ margin: '0 0 16px', padding: '6px 14px', fontWeight: 500, fontSize: 12 }}>
+          <SlidersHorizontal size={13} /> {summaryParts.join(' · ')}
         </div>
       )}
 
-      <AccordionSection title="Basic Details" icon="👤" defaultOpen>
+      <AccordionSection title="Basic Details" icon={User} defaultOpen>
         <div className="form-group">
-          <label className="form-label">Age range</label>
+          <FormLabel>Age range</FormLabel>
           <DualRangeSlider min={18} max={70} valueMin={form.partner_age_min} valueMax={form.partner_age_max}
             onChange={(lo, hi) => setForm(p => ({ ...p, partner_age_min: lo, partner_age_max: hi }))}
             formatLabel={v => v + ' yrs'} />
         </div>
         <div className="form-group">
-          <label className="form-label">Height range</label>
+          <FormLabel>Height range</FormLabel>
           <DualRangeSlider min={PARTNER_HEIGHT_MIN_INCHES} max={PARTNER_HEIGHT_MAX_INCHES}
             valueMin={form.partner_height_min} valueMax={form.partner_height_max}
             onChange={(lo, hi) => setForm(p => ({ ...p, partner_height_min: lo, partner_height_max: hi }))}
             formatLabel={formatHeightFromInches} />
         </div>
         <div className="form-group">
-          <label className="form-label">Location Preference</label>
+          <FormLabel>Location Preference</FormLabel>
           <ChipSelect options={LOCATION_PREFERENCES} value={form.partner_location} onChange={v => set('partner_location', v)} includeEmpty />
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">City Preference</label>
+            <FormLabel>City Preference</FormLabel>
             <input className="form-input" placeholder="Optional" value={form.partner_city_preference} onChange={e => set('partner_city_preference', e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">State Preference</label>
+            <FormLabel>State Preference</FormLabel>
             <input className="form-input" placeholder="Optional" value={form.partner_state_preference} onChange={e => set('partner_state_preference', e.target.value)} />
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Country Preference</label>
+          <FormLabel>Country Preference</FormLabel>
           <select className="form-select" value={form.partner_country_preference} onChange={e => set('partner_country_preference', e.target.value)}>
             {COUNTRIES.map(c => <option key={c}>{c}</option>)}
           </select>
         </div>
       </AccordionSection>
 
-      <AccordionSection title="Education & Occupation" icon="🎓">
+      <AccordionSection title="Education & Occupation" icon={GraduationCap}>
         <div className="form-group">
-          <label className="form-label">Education Level Preference</label>
+          <FormLabel>Education Level Preference</FormLabel>
           <CheckboxDropdown options={EDUCATIONS} selected={form.partner_education_level_preferences}
             onChange={v => set('partner_education_level_preferences', v)} placeholder="Select education levels..." />
           <div className="form-hint">Khaali chhodne par sab education levels acceptable maane jaayenge</div>
         </div>
         <div className="form-group">
-          <label className="form-label">Income range</label>
+          <FormLabel>Income range</FormLabel>
           <select className="form-select" value={form.partner_income_currency} onChange={e => {
             const bounds = PARTNER_INCOME_BOUNDS[e.target.value]
             setForm(p => ({ ...p, partner_income_currency: e.target.value, partner_income_min: bounds.min, partner_income_max: bounds.max }))
@@ -169,9 +168,9 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
         </div>
       </AccordionSection>
 
-      <AccordionSection title="Religion and Ethnicity" icon="🕉️">
+      <AccordionSection title="Religion and Ethnicity" icon={Landmark}>
         <div className="form-group">
-          <label className="form-label">Religion Preference</label>
+          <FormLabel>Religion Preference</FormLabel>
           <select className="form-select" value={form.partner_religion} onChange={e => set('partner_religion', e.target.value)}>
             <option value="Any">Any / Open to all</option>
             {RELIGIONS.map(r => <option key={r}>{r}</option>)}
@@ -179,24 +178,25 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
         </div>
         {form.partner_religion !== 'Any' && (
           <div className="form-group">
-            <label className="form-label">Preferred Community</label>
+            <FormLabel>Preferred Community</FormLabel>
             <CheckboxDropdown options={communityOptions} selected={form.partner_community_ids} onChange={setPartnerCommunity} placeholder="Select communities..." />
             <div className="form-hint">"Any Community / No Bar" select karne par baaki communities apne aap unselect ho jaayengi</div>
           </div>
         )}
       </AccordionSection>
 
-      <AccordionSection title="Additional Preferences" icon="📝">
+      <AccordionSection title="Additional Preferences" icon={NotebookPen}>
         <div className="form-group">
-          <label className="form-label">Notes</label>
+          <FormLabel>Notes</FormLabel>
           <textarea className="form-textarea" placeholder="Any other preferences or expectations..."
             value={form.partner_notes} onChange={e => set('partner_notes', e.target.value)} />
         </div>
       </AccordionSection>
 
-      <div style={{ position: 'sticky', bottom: 0, background: '#fff', paddingTop: 12, paddingBottom: 4 }}>
-        <button className="btn btn-black btn-full btn-lg" onClick={handleSearch} disabled={saving}>
-          {saving ? 'Searching...' : 'Search'}
+      {/* Bottom nav ke upar chipka rehta hai */}
+      <div style={{ position: 'sticky', bottom: 'calc(84px + env(safe-area-inset-bottom))', paddingTop: 12, zIndex: 5 }}>
+        <button className="btn btn-primary btn-full btn-lg" onClick={handleSearch} disabled={saving}>
+          <Search size={18} /> {saving ? 'Searching...' : 'Search'}
         </button>
       </div>
     </div>

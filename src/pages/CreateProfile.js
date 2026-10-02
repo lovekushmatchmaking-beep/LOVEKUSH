@@ -1,4 +1,10 @@
 import React, { useState, useRef } from 'react'
+import { FormLabel } from '../components/ui'
+import { iconForLabel } from '../components/fieldIcons'
+import {
+  User, Landmark, GraduationCap, Coffee, Users, Camera, Check, ChevronLeft, ArrowRight,
+  RefreshCw, X, Plus, Info, ShieldCheck, Sparkles,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, generateProfileCode } from '../supabase'
 
@@ -57,6 +63,8 @@ function ChipSelect({ options, value, onChange, includeEmpty, emptyLabel }) {
 }
 
 const STEPS = ['Personal','Religion & Community','Education','Lifestyle','Family','Photos']
+// Har step ka icon — step tabs aur question badge dono mein use hota hai
+const STEP_ICONS = [User, Landmark, GraduationCap, Coffee, Users, Camera]
 const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
 // Personal Details ab ek-ek sawaal karke (Jeevansathi jaisa one-question-
@@ -83,6 +91,12 @@ const PERSONAL_QUESTIONS = [
 // and Physical Disability were removed from the signup wizard (user's ask:
 // too many screens for a new signup) — these still exist as DB columns and
 // can be filled in later via Edit Profile.
+
+// Bada soft icon badge — har question screen ke upar (Jeevansathi/IG style)
+function QuestionBadge({ label, fallback }) {
+  const Icon = (label && iconForLabel(label)) || fallback
+  return Icon ? <div className="q-badge"><Icon size={24} /></div> : null
+}
 
 export default function CreateProfile({ user, adminMode, onComplete }) {
   const navigate = useNavigate()
@@ -222,13 +236,13 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       render: () => (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Religion *</label>
+            <FormLabel>Religion *</FormLabel>
             <select className="form-select" value={form.religion} onChange={e=>set('religion',e.target.value)}>
               {RELIGIONS.map(r=><option key={r}>{r}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Mother Tongue</label>
+            <FormLabel>Mother Tongue</FormLabel>
             <select className="form-select" value={form.mother_tongue} onChange={e=>set('mother_tongue',e.target.value)}>
               <option value="">Select</option>
               {MOTHER_TONGUES.map(m=><option key={m}>{m}</option>)}
@@ -247,18 +261,18 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       render: () => (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Denomination / Sect</label>
+            <FormLabel>Denomination / Sect</FormLabel>
             <ChipSelect options={ISLAMIC_DENOMINATIONS} value={form.islamic_denomination} onChange={v=>set('islamic_denomination',v)} includeEmpty />
           </div>
           {form.islamic_denomination === 'Sunni' && (
             <div className="form-group">
-              <label className="form-label">School of Thought (Madhab)</label>
+              <FormLabel>School of Thought (Madhab)</FormLabel>
               <ChipSelect options={SUNNI_SCHOOLS_OF_THOUGHT} value={form.islamic_school_of_thought} onChange={v=>set('islamic_school_of_thought',v)} includeEmpty />
             </div>
           )}
           {form.islamic_denomination === 'Shia' && (
             <div className="form-group">
-              <label className="form-label">Shia Branch</label>
+              <FormLabel>Shia Branch</FormLabel>
               <ChipSelect options={SHIA_BRANCHES} value={form.islamic_shia_branch} onChange={v=>set('islamic_shia_branch',v)} includeEmpty />
             </div>
           )}
@@ -271,7 +285,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       render: () => (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Denomination</label>
+            <FormLabel>Denomination</FormLabel>
             <select className="form-select" value={form.christian_denomination}
               onChange={e=>set('christian_denomination',e.target.value)}>
               <option value="">Select</option>
@@ -293,7 +307,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         <div className="form-row">
           {RELIGION_HIERARCHY[form.religion]?.denomination && (
             <div className="form-group">
-              <label className="form-label">{RELIGION_HIERARCHY[form.religion].denomination.label}</label>
+              <FormLabel>{RELIGION_HIERARCHY[form.religion].denomination.label}</FormLabel>
               <select className="form-select" value={form.religion_denomination}
                 onChange={e=>set('religion_denomination',e.target.value)}>
                 <option value="">Select</option>
@@ -303,7 +317,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           )}
           {form.religion === 'Zoroastrian' && (
             <div className="form-group">
-              <label className="form-label">{RELIGION_HIERARCHY[form.religion].community.label}</label>
+              <FormLabel>{RELIGION_HIERARCHY[form.religion].community.label}</FormLabel>
               <select className="form-select" value={form.religion_denomination_2}
                 onChange={e=>set('religion_denomination_2',e.target.value)}>
                 <option value="">Select</option>
@@ -320,9 +334,9 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       render: () => (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">
+            <FormLabel>
               {RELIGION_HIERARCHY[form.religion]?.community.label || 'Community / Caste'}
-            </label>
+            </FormLabel>
             <select className="form-select" value={form.community} onChange={e=>setCommunity(e.target.value)}>
               <option value="">Select</option>
               {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES
@@ -343,7 +357,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             )}
           </div>
           <div className="form-group">
-            <label className="form-label">Sub-Caste</label>
+            <FormLabel>Sub-Caste</FormLabel>
             <input className="form-input" placeholder="Optional" value={form.sub_caste}
               onChange={e=>set('sub_caste',e.target.value)} />
           </div>
@@ -369,7 +383,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         <div className="form-row">
           {(form.religion === 'Hindu' || form.religion === 'Jain') && (
             <div className="form-group">
-              <label className="form-label">Gotra</label>
+              <FormLabel>Gotra</FormLabel>
               <select className="form-select" value={form.gotra} onChange={e=>set('gotra',e.target.value)}>
                 <option value="">Select</option>
                 {(form.religion === 'Hindu' ? GOTRAS : JAIN_GOTRAS).map(g=><option key={g}>{g}</option>)}
@@ -385,7 +399,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             </div>
           )}
           <div className="form-group">
-            <label className="form-label">Manglik</label>
+            <FormLabel>Manglik</FormLabel>
             <ChipSelect options={MANGLIK_OPTIONS} value={form.manglik} onChange={v=>set('manglik',v)} includeEmpty />
           </div>
         </div>
@@ -479,7 +493,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       render: () => (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Father's Profession</label>
+            <FormLabel>Father's Profession</FormLabel>
             <select className="form-select" value={form.father_profession} onChange={e=>set('father_profession',e.target.value)}>
               <option value="">Select</option>
               {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
@@ -493,7 +507,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             )}
           </div>
           <div className="form-group">
-            <label className="form-label">Mother's Profession</label>
+            <FormLabel>Mother's Profession</FormLabel>
             <select className="form-select" value={form.mother_profession} onChange={e=>set('mother_profession',e.target.value)}>
               <option value="">Select</option>
               <option value="Homemaker">Homemaker</option>
@@ -515,14 +529,14 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       render: () => (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Brothers</label>
+            <FormLabel>Brothers</FormLabel>
             <select className="form-select" value={form.brothers_count}
               onChange={e=>setSiblingCount('brothers_count',e.target.value)}>
               {SIBLING_COUNT_OPTIONS.map(n=><option key={n} value={n}>{n}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Brothers Married</label>
+            <FormLabel>Brothers Married</FormLabel>
             <select className="form-select" value={form.brothers_married_count}
               onChange={e=>setSiblingCount('brothers_married_count',e.target.value)}>
               {SIBLING_COUNT_OPTIONS.filter(n=>n<=form.brothers_count).map(n=><option key={n} value={n}>{n}</option>)}
@@ -536,14 +550,14 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       render: () => (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Sisters</label>
+            <FormLabel>Sisters</FormLabel>
             <select className="form-select" value={form.sisters_count}
               onChange={e=>setSiblingCount('sisters_count',e.target.value)}>
               {SIBLING_COUNT_OPTIONS.map(n=><option key={n} value={n}>{n}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Sisters Married</label>
+            <FormLabel>Sisters Married</FormLabel>
             <select className="form-select" value={form.sisters_married_count}
               onChange={e=>setSiblingCount('sisters_married_count',e.target.value)}>
               {SIBLING_COUNT_OPTIONS.filter(n=>n<=form.sisters_count).map(n=><option key={n} value={n}>{n}</option>)}
@@ -842,19 +856,22 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     <div style={{minHeight:'100vh',background:'#fff'}}>
       <div className={'toast ' + (toast?'show':'')}>{toast}</div>
 
-      <div style={{position:'sticky',top:0,zIndex:90,background:'rgba(255,255,255,0.97)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(0,0,0,0.06)',padding:'12px 20px'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-          <div style={{fontFamily:'DM Sans',fontSize:14,fontWeight:200,letterSpacing:'0.3em'}}>LOVEKUSH</div>
-          <div style={{fontSize:12,color:'#8e8e8e'}}>Step {step+1} of {STEPS.length}</div>
+      <div style={{position:'sticky',top:0,zIndex:90,background:'rgba(255,255,255,0.92)',backdropFilter:'blur(16px)',WebkitBackdropFilter:'blur(16px)',borderBottom:'1px solid var(--border)',padding:'12px 20px 4px'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,maxWidth:480,marginLeft:'auto',marginRight:'auto'}}>
+          <div className="nav-brand" style={{fontSize:14}}>LOVEKUSH</div>
+          <div style={{fontSize:12,color:'var(--gray3)'}}>{step+1}/{STEPS.length}</div>
         </div>
         <div className="progress-wrap"><div className="progress-fill" style={{width:pct+'%'}}></div></div>
         <div className="step-tabs">
-          {STEPS.map((s,i)=>(
-            <div key={s} className={'step-tab ' + (i===step?'active':i<step?'done':'')}
-              onClick={()=>{ if(i<step){ setStep(i); setSubQ(0) } }}>
-              {i<step?'✓ ':''}{s}
-            </div>
-          ))}
+          {STEPS.map((s,i)=>{
+            const Icon = i<step ? Check : STEP_ICONS[i]
+            return (
+              <div key={s} className={'step-tab ' + (i===step?'active':i<step?'done':'')} title={s}
+                onClick={()=>{ if(i<step){ setStep(i); setSubQ(0) } }}>
+                <Icon size={14} />{i===step && <span>{s}</span>}
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -864,10 +881,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           const q = PERSONAL_QUESTIONS[personalQ]
           return (
           <div>
-            {personalQ===0 && (
-              <div style={{fontSize:12,color:'#8e8e8e',marginBottom:8}}>Personal Details</div>
-            )}
-            <div style={{fontSize:11,color:'#8e8e8e',marginBottom:6}}>Question {personalQ+1} of {PERSONAL_QUESTIONS.length}</div>
+            <QuestionBadge label={q.label} fallback={User} />
+            <div style={{fontSize:11,color:'var(--gray3)',marginBottom:6}}>{personalQ+1} / {PERSONAL_QUESTIONS.length}</div>
             <h2 className="page-title">{q.label}{q.required?' *':''}</h2>
             {q.hint && <p className="page-subtitle">{q.hint}</p>}
 
@@ -876,12 +891,12 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                 <div style={{fontSize:12,fontWeight:600,marginBottom:10}}>Client Contact (internal — used to share matches, never shown on public profile)</div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Client Phone / WhatsApp</label>
+                    <FormLabel>Client Phone / WhatsApp</FormLabel>
                     <input className="form-input" placeholder="9876543210" value={form.client_phone}
                       onChange={e=>set('client_phone',e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Client Email</label>
+                    <FormLabel>Client Email</FormLabel>
                     <input className="form-input" placeholder="client@email.com" value={form.client_email}
                       onChange={e=>set('client_email',e.target.value)} />
                   </div>
@@ -916,7 +931,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                 <div className="radio-group">
                   {q.options.map(o=>(
                     <div key={o} className={'radio-option ' + (form[q.key]===o?'selected':'')} onClick={()=>set(q.key,o)}>
-                      {form[q.key]===o?'◉':'○'} {o}
+                      <span className="radio-dot">{form[q.key]===o && <Check size={12} />}</span> {o}
                     </div>
                   ))}
                 </div>
@@ -944,7 +959,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           const blk = blocks[idx]
           return (
             <div>
-              <div style={{fontSize:11,color:'#8e8e8e',marginBottom:6}}>Question {idx+1} of {blocks.length}</div>
+              <QuestionBadge label={blk.title} fallback={STEP_ICONS[step]} />
+              <div style={{fontSize:11,color:'var(--gray3)',marginBottom:6}}>{idx+1} / {blocks.length}</div>
               <h2 className="page-title">{blk.title}</h2>
               {blk.subtitle && <p className="page-subtitle">{blk.subtitle}</p>}
               {blk.render()}
@@ -953,11 +969,13 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         })()}
         {step===5 && (
           <div>
+            <QuestionBadge fallback={Camera} />
             <h2 className="page-title">Your Photos</h2>
-            <p className="page-subtitle">Profile photo required, Secondary photo optional.</p>
+            <p className="page-subtitle">1 required · 1 optional</p>
 
-            <div className="notice" style={{marginBottom:20}}>
-              <strong>Photo Guidelines:</strong> Photo <strong>full standing</strong> honi chahiye (sirf face/headshot nahi) — bina kisi filter ke, natural lighting mein, bina sunglasses/edited-image ke. Yeh isliye zaroori hai taaki family/partner ko aapki real, honest tasveer dikhe.
+            <div className="notice" style={{marginBottom:20,display:'flex',gap:10}}>
+              <Info size={18} style={{color:'var(--primary)',flexShrink:0,marginTop:2}} />
+              <span><strong>Full standing</strong> photo · no filters · natural light · no sunglasses</span>
             </div>
 
             <div className="photo-grid" style={{gridTemplateColumns:'repeat(2, 1fr)'}}>
@@ -971,16 +989,16 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                         <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#fff',background:'rgba(0,0,0,0.3)'}}>Processing...</div>
                       )}
                       {idx===0 ? (
-                        <button className="remove-btn" onClick={e=>{e.stopPropagation();fileRefs.current[idx].current.click()}} title="Change Photo">↻</button>
+                        <button className="remove-btn" onClick={e=>{e.stopPropagation();fileRefs.current[idx].current.click()}} title="Change Photo" aria-label="Change photo"><RefreshCw size={13} /></button>
                       ) : (
-                        <button className="remove-btn" onClick={e=>{e.stopPropagation();removePhoto(idx)}}>✕</button>
+                        <button className="remove-btn" aria-label="Remove photo" onClick={e=>{e.stopPropagation();removePhoto(idx)}}><X size={13} /></button>
                       )}
                       <div style={{position:'absolute',bottom:6,left:6,background:'rgba(0,0,0,0.65)',backdropFilter:'blur(4px)',color:'#fff',fontSize:9,padding:'3px 8px',borderRadius:20,letterSpacing:'0.1em'}}>{idx===0?'PROFILE':'SECONDARY'}</div>
                     </>
                   ) : (
                     <>
-                      <span style={{fontSize:24,opacity:0.25}}>+</span>
-                      <span style={{fontSize:9,opacity:0.35,letterSpacing:'0.1em'}}>{idx===0?'PROFILE PHOTO *':'SECONDARY PHOTO'}</span>
+                      <span className="avatar" style={{width:44,height:44}}>{idx===0 ? <Camera size={20} /> : <Plus size={20} />}</span>
+                      <span style={{fontSize:11,color:'var(--gray3)'}}>{idx===0?'Profile *':'Secondary'}</span>
                     </>
                   )}
                   <input ref={fileRefs.current[idx]} type="file" accept="image/*" style={{display:'none'}}
@@ -999,7 +1017,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
 
             <div style={{marginBottom:24}}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-                <span style={{fontSize:12,color:'#8e8e8e'}}>Profile Completeness</span>
+                <span style={{fontSize:12,color:'var(--gray3)',display:'flex',alignItems:'center',gap:6}}><Sparkles size={14} style={{color:'var(--primary)'}} /> Profile strength</span>
                 <span style={{fontSize:12,fontWeight:600}}>{completeness()}%</span>
               </div>
               <div className="progress-wrap">
@@ -1007,8 +1025,9 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               </div>
             </div>
 
-            <div className="notice">
-              <strong>After submission:</strong> Our team will review your profile within 24-48 hours before it becomes visible to potential matches.
+            <div className="notice" style={{display:'flex',gap:10,alignItems:'center'}}>
+              <ShieldCheck size={18} style={{color:'var(--primary)',flexShrink:0}} />
+              <span>Reviewed by our team in <strong>24-48 hrs</strong></span>
             </div>
           </div>
         )}
@@ -1016,26 +1035,26 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         <div style={{display:'flex',gap:10,marginTop:24}}>
           {step===0 ? (
             personalQ>0 && (
-              <button className="btn btn-outline" style={{flex:1}} onClick={goToPrevPersonalQ}>← Back</button>
+              <button className="btn btn-outline" style={{flex:1}} onClick={goToPrevPersonalQ} aria-label="Back"><ChevronLeft size={18} /> Back</button>
             )
           ) : step>=1 && step<=4 ? (
-            <button className="btn btn-outline" style={{flex:1}} onClick={goBackOverall}>← Back</button>
+            <button className="btn btn-outline" style={{flex:1}} onClick={goBackOverall} aria-label="Back"><ChevronLeft size={18} /> Back</button>
           ) : (
             step>0&&(
-              <button className="btn btn-outline" style={{flex:1}} onClick={()=>setStep(s=>s-1)}>← Back</button>
+              <button className="btn btn-outline" style={{flex:1}} onClick={()=>setStep(s=>s-1)} aria-label="Back"><ChevronLeft size={18} /> Back</button>
             )
           )}
           {step===0 ? (
-            <button className="btn btn-black" style={{flex:2}} onClick={goToNextPersonalQ}>
-              Continue →
+            <button className="btn btn-primary" style={{flex:2}} onClick={goToNextPersonalQ}>
+              Continue <ArrowRight size={18} />
             </button>
           ) : step<STEPS.length-1 ? (
-            <button className="btn btn-black" style={{flex:2}} onClick={goNextOverall}>
-              Continue →
+            <button className="btn btn-primary" style={{flex:2}} onClick={goNextOverall}>
+              Continue <ArrowRight size={18} />
             </button>
           ) : (
-            <button className="btn btn-black" style={{flex:2}} onClick={handleSubmit} disabled={saving || compressingIdx!==null}>
-              {saving ? 'Submitting...' : compressingIdx!==null ? 'Processing photo...' : '✓ Submit Profile'}
+            <button className="btn btn-primary" style={{flex:2}} onClick={handleSubmit} disabled={saving || compressingIdx!==null}>
+              {saving ? 'Submitting...' : compressingIdx!==null ? 'Processing photo...' : <><Check size={18} /> Submit Profile</>}
             </button>
           )}
         </div>

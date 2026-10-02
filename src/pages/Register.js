@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import { ArrowRight, ChevronLeft } from 'lucide-react'
+import { FormLabel } from '../components/ui'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 
@@ -116,19 +118,19 @@ export default function Register() {
 
             <form onSubmit={handleRegister}>
               <div className="form-group">
-                <label className="form-label">Email Address</label>
+                <FormLabel>Email Address</FormLabel>
                 <input className="form-input" type="email" placeholder="your@email.com"
                   value={form.email} onChange={e=>set('email',e.target.value)} required />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Password</label>
+                <FormLabel>Password</FormLabel>
                 <input className="form-input" type="password" placeholder="Minimum 6 characters"
                   value={form.password} onChange={e=>set('password',e.target.value)} required />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Confirm Password</label>
+                <FormLabel>Confirm Password</FormLabel>
                 <input className="form-input" type="password" placeholder="Repeat password"
                   value={form.confirm} onChange={e=>set('confirm',e.target.value)} required />
               </div>
@@ -137,13 +139,13 @@ export default function Register() {
 
               <div style={{marginBottom:16,fontSize:12,color:'#8e8e8e',lineHeight:1.6}}>
                 By registering, you agree to our{' '}
-                <span style={{color:'#000',cursor:'pointer',textDecoration:'underline'}}>Terms of Service</span>
+                <span style={{color:'var(--primary)',cursor:'pointer',textDecoration:'underline'}}>Terms of Service</span>
                 {' '}and{' '}
-                <span style={{color:'#000',cursor:'pointer',textDecoration:'underline'}}>Privacy Policy</span>.
+                <span style={{color:'var(--primary)',cursor:'pointer',textDecoration:'underline'}}>Privacy Policy</span>.
               </div>
 
               <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading}>
-                {loading ? 'Sending code...' : 'Continue →'}
+                {loading ? 'Sending code...' : 'Continue'} <ArrowRight size={18} />
               </button>
             </form>
 
@@ -151,13 +153,13 @@ export default function Register() {
 
             <div style={{textAlign:'center',fontSize:14,color:'#8e8e8e'}}>
               Already registered?{' '}
-              <Link to="/login" style={{color:'#000',fontWeight:500,textDecoration:'none'}}>Login here</Link>
+              <Link to="/login" style={{color:'var(--primary)',fontWeight:500,textDecoration:'none'}}>Login here</Link>
             </div>
           </>
         ) : (
           <form onSubmit={handleVerifyOtp}>
             <div className="form-group">
-              <label className="form-label">Verification Code</label>
+              <FormLabel>Verification Code</FormLabel>
               <input className="form-input" type="text" inputMode="numeric" placeholder="Enter verification code"
                 value={otp} onChange={e=>setOtp(e.target.value)} autoFocus required />
             </div>
@@ -166,16 +168,16 @@ export default function Register() {
             {resendMsg && <div className="form-hint" style={{marginBottom:12,color:'#16a34a'}}>{resendMsg}</div>}
 
             <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading}>
-              {loading ? 'Verifying...' : 'Verify & Continue →'}
+              {loading ? 'Verifying...' : 'Verify & Continue'} <ArrowRight size={18} />
             </button>
 
             <div style={{textAlign:'center',marginTop:16,fontSize:13,color:'#8e8e8e'}}>
               Code nahi mila?{' '}
-              <span onClick={handleResend} style={{color:'#000',fontWeight:500,textDecoration:'underline',cursor:'pointer'}}>Resend</span>
+              <span onClick={handleResend} style={{color:'var(--primary)',fontWeight:500,textDecoration:'underline',cursor:'pointer'}}>Resend</span>
             </div>
             <div style={{textAlign:'center',marginTop:8}}>
               <span onClick={()=>{ setStep('details'); setError(''); setOtp('') }}
-                style={{color:'#8e8e8e',fontSize:12,textDecoration:'underline',cursor:'pointer'}}>← Change email</span>
+                style={{color:'#8e8e8e',fontSize:12,textDecoration:'underline',cursor:'pointer'}}><ChevronLeft size={14} style={{verticalAlign:'-2px'}} /> Change email</span>
             </div>
           </form>
         )}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Heart, Lock } from 'lucide-react'
 import { supabase } from './supabase'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
@@ -59,10 +60,10 @@ export default function App() {
   }
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#fff' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontFamily: 'serif', fontSize: 28, letterSpacing: '0.5em', marginBottom: 8 }}>LOVEKUSH</div>
-        <div style={{ fontSize: 12, opacity: 0.4, letterSpacing: '0.2em' }}>Loading...</div>
+        <Heart size={28} style={{ color: 'var(--primary)', fill: 'var(--primary-soft)', marginBottom: 10, animation: 'pop 1.2s ease infinite' }} />
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, letterSpacing: '0.4em' }}>LOVEKUSH</div>
       </div>
     </div>
   )
@@ -88,7 +89,7 @@ export default function App() {
               : staffUser
                 ? <Admin staffUser={staffUser} />
                 : <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, textAlign: 'center', padding: 20 }}>
-                    <div style={{ fontSize: 40 }}>🔒</div>
+                    <div className="empty-state-icon" style={{ margin: 0 }}><Lock size={28} /></div>
                     <div style={{ fontSize: 16, fontWeight: 600 }}>Access Restricted</div>
                     <div style={{ fontSize: 13, color: '#8e8e8e', maxWidth: 320 }}>Yeh page sirf LOVEKUSH staff ke liye hai. Agar aap staff hain aur yeh galti se dikh raha hai, apne administrator se sampark karein.</div>
                   </div>
