@@ -6,7 +6,7 @@ import MatchSearch from './MatchSearch'
 import ProfileView from './ProfileView'
 import ActivityTab from './ActivityTab'
 import SearchByProfileId from './SearchByProfileId'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES,
   ISLAMIC_DENOMINATIONS, SUNNI_SCHOOLS_OF_THOUGHT, SHIA_BRANCHES, ISLAMIC_COMMUNITIES,
@@ -25,6 +25,9 @@ import SignedImage from '../components/SignedImage'
 import MultiSelectChips from '../components/MultiSelectChips'
 import DualRangeSlider from '../components/DualRangeSlider'
 import CheckboxDropdown from '../components/CheckboxDropdown'
+
+const DASHBOARD_TABS = ['home', 'matches', 'matchsearch', 'activity', 'requests', 'profile', 'searchid',
+  'editphotos', 'editprofile', 'accountsettings', 'biodata', 'disliked']
 
 const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
@@ -45,7 +48,15 @@ export default function Dashboard({ user }) {
   const [profile, setProfile] = useState(null)
   const [photos, setPhotos] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('home')
+  // Tab URL (?tab=...) me rehta hai, taaki browser/phone ka Back button
+  // pichhle tab pe le jaaye (har tab change ek naya history entry hai).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = DASHBOARD_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'home'
+  const setActiveTab = (tab) => {
+    if (tab === activeTab) return
+    setSearchParams(tab === 'home' ? {} : { tab })
+    window.scrollTo(0, 0)
+  }
   const [matches, setMatches] = useState([])
   const [myActions, setMyActions] = useState([]) // match_actions rows where actor = me
   const [myIntroductions, setMyIntroductions] = useState([]) // introductions (Talk/Meeting requests) involving me

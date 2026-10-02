@@ -85,6 +85,7 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 .btn-outline:hover { border-color: var(--black); }
 .btn-full { width: 100%; }
 .btn-lg { padding: 15px 32px; font-size: 14px; }
+.btn-sm { padding: 8px 14px; font-size: 12px; gap: 4px; }
 
 .form-group { margin-bottom: 14px; }
 
