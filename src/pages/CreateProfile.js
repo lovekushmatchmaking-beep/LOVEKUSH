@@ -793,6 +793,9 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           is_admin_managed: !!adminMode,
           managed_by_staff_id: adminMode ? user.id : null,
           profile_status: adminMode ? 'active' : 'pending', // Admin khud bana/verify kar raha hai, isliye seedha Active — customer-submitted profiles abhi bhi review ke liye Pending rehti hain
+          // Admin ki banayi profile ko selfie verification ki zaroorat nahi — seedha Verified badge.
+          // Self-signup profiles 'not_started' se shuru hoti hain (admin selfie request karega).
+          ...(adminMode ? { verification_status: 'verified', is_verified: true } : {}),
           profile_code: code,
           ...formToSave,
           full_name: fullName,

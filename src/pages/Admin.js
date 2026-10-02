@@ -18,6 +18,32 @@ import { generateShareLink, revokeShareLink, getMyShareLinks } from '../utils/sh
 
 const PAGE_SIZE = 30
 
+// ===== SELFIE VERIFICATION — existing profiles.verification_status ko hi
+// aage badhaya: not_started → selfie_requested → selfie_submitted →
+// verified / rejected. Self-signup profile tabhi live (active) hoti hai jab
+// admin selfie ko uploaded photo se match karke Verify kare. Admin ki banayi
+// profiles seedha verified + active banti hain (CreateProfile adminMode).
+// Database trigger guard_profile_verification non-staff ko yeh fields
+// badalne nahi deta (sirf selfie submit karna allowed hai).
+export const VERIFICATION_LABELS = {
+  not_started: 'Not verified',
+  selfie_requested: 'Selfie requested',
+  selfie_submitted: 'Selfie received — compare & verify',
+  verified: 'Verified',
+  rejected: 'Selfie rejected — waiting for a new one',
+}
+
+const verificationPatch = (status, currentProfileStatus) => {
+  if (status === 'verified') {
+    return { verification_status: 'verified', is_verified: true, profile_status: currentProfileStatus === 'blocked' ? 'blocked' : 'active' }
+  }
+  if (status === 'selfie_requested') return { verification_status: 'selfie_requested', selfie_requested_at: new Date().toISOString() }
+  return { verification_status: status, is_verified: false }
+}
+
+// Self-signup + abhi verified nahi — direct Approve se pehle confirm
+const needsSelfieVerification = (p) => !p.is_admin_managed && p.verification_status !== 'verified'
+
 export default function Admin({ staffUser }) {
   const navigate = useNavigate()
   const [profiles, setProfiles] = useState([])
@@ -88,8 +114,9 @@ export default function Admin({ staffUser }) {
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('profile_status', 'pending'),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('profile_status', 'active'),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('profile_status', 'blocked'),
-      // Needs Verification: ID document already uploaded by the client, par abhi tak verified nahi hua
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('id_document_uploaded', true).neq('verification_status', 'verified'),
+      // Needs Verification: selfie aa chuki hai (compare karna hai), ya ID document uploaded par abhi tak verified nahi hua
+      supabase.from('profiles').select('*', { count: 'exact', head: true })
+        .or('verification_status.eq.selfie_submitted,and(id_document_uploaded.eq.true,verification_status.neq.verified)'),
       supabase.from('profile_reports').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     ])
     setStats({
@@ -198,6 +225,9 @@ export default function Admin({ staffUser }) {
   }
 
   const updateStatus = async (id, status) => {
+    const target = profiles.find(p => p.id === id)
+    if (status === 'active' && target && needsSelfieVerification(target)
+      && !window.confirm('This profile is not selfie-verified yet. Make it live anyway?')) return
     const { error } = await supabase.from('profiles').update({ profile_status: status }).eq('id', id)
     if (error) {
       alert('Update failed: ' + error.message)
@@ -245,15 +275,16 @@ export default function Admin({ staffUser }) {
   }
 
   // ===== VERIFICATION — profiles.verification_status already existed
-  // (completeness.js already reads it) par admin ke paas isko badalne ka
-  // koi button nahi tha. Yeh BharatMatrimony jaise trust-badge review jaisa
-  // hai, bina kisi naye column ke.
+  // (completeness.js already reads it). Ab selfie request / verify bhi
+  // isi se hota hai — Verify karte hi profile live (active) ho jaati hai.
   const setVerificationStatus = async (id, status) => {
-    const { error } = await supabase.from('profiles').update({ verification_status: status }).eq('id', id)
+    const target = profiles.find(p => p.id === id)
+    const patch = verificationPatch(status, target?.profile_status)
+    const { error } = await supabase.from('profiles').update(patch).eq('id', id)
     if (error) { alert('Update failed: ' + error.message); return }
     await logAuditEntry('verification_status_change', id, { new_status: status })
-    setProfiles(prev => prev.map(p => p.id === id ? { ...p, verification_status: status } : p))
-    if (selected?.id === id) setSelected(prev => ({ ...prev, verification_status: status }))
+    setProfiles(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p))
+    if (selected?.id === id) setSelected(prev => ({ ...prev, ...patch }))
     loadStats()
   }
 
@@ -295,8 +326,11 @@ export default function Admin({ staffUser }) {
 
   const bulkUpdateStatus = async (status) => {
     if (selectedIds.size === 0) return
-    setBulkWorking(true)
     const ids = [...selectedIds]
+    const unverified = profiles.filter(p => ids.includes(p.id) && needsSelfieVerification(p)).length
+    if (status === 'active' && unverified > 0
+      && !window.confirm(`${unverified} selected profile(s) are not selfie-verified yet. Make them live anyway?`)) return
+    setBulkWorking(true)
     const { error } = await supabase.from('profiles').update({ profile_status: status }).in('id', ids)
     if (error) {
       alert('Bulk update failed: ' + error.message)
@@ -583,6 +617,8 @@ export default function Admin({ staffUser }) {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <div className={"badge badge-" + p.profile_status} style={{ fontSize: 10 }}>{p.profile_status}</div>
+                    {p.verification_status === 'verified' && <div className="badge" style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>✓ Verified</div>}
+                    {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb' }}>Selfie received</div>}
                     {p.is_premium && <div className="badge" style={{ fontSize: 10, background: '#fef3c7', color: '#b45309' }}>👑 Premium</div>}
                     <div style={{ fontSize: 10, color: '#8e8e8e', fontFamily: 'monospace' }}>{p.profile_code}</div>
                   </div>
@@ -632,25 +668,34 @@ export default function Admin({ staffUser }) {
                       )}
                     </div>
 
-                    {/* Verification — profiles.verification_status + id_document_uploaded, already in DB */}
-                    {p.id_document_uploaded && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: 12 }}>
+                    {/* Verification — selfie request / compare / verify (profiles.verification_status) */}
+                    <div style={{ marginBottom: 14, fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         {p.verification_status === 'verified'
                           ? <ShieldCheck size={14} color="#16a34a" />
                           : <ShieldAlert size={14} color="#2563eb" />}
                         <span style={{ color: '#8e8e8e' }}>
-                          ID document {p.verification_status === 'verified' ? 'verified' : p.verification_status === 'rejected' ? 'rejected' : 'pending review'}
+                          {VERIFICATION_LABELS[p.verification_status] || 'Not verified'}
+                          {p.id_document_uploaded && p.verification_status !== 'verified' ? ' · ID document uploaded' : ''}
+                          {p.is_admin_managed && p.verification_status !== 'verified' ? ' · created by staff, no selfie needed' : ''}
                         </span>
+                        {p.verification_status !== 'verified' && !['selfie_requested', 'selfie_submitted'].includes(p.verification_status) && !p.is_admin_managed && (
+                          <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11 }}
+                            onClick={() => setVerificationStatus(p.id, 'selfie_requested')}>📷 Request Selfie</button>
+                        )}
                         {p.verification_status !== 'verified' && (
                           <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11, color: '#16a34a', borderColor: '#16a34a' }}
-                            onClick={e => { e.stopPropagation(); setVerificationStatus(p.id, 'verified') }}>✓ Verify</button>
+                            onClick={() => setVerificationStatus(p.id, 'verified')}>✓ Verify &amp; Make Live</button>
                         )}
-                        {p.verification_status !== 'rejected' && (
+                        {(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) && (
                           <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11, color: '#dc2626', borderColor: '#dc2626' }}
-                            onClick={e => { e.stopPropagation(); setVerificationStatus(p.id, 'rejected') }}>✕ Reject</button>
+                            onClick={() => setVerificationStatus(p.id, 'rejected')}>✕ Reject</button>
                         )}
                       </div>
-                    )}
+                      {p.selfie_path && p.verification_status !== 'verified' && (
+                        <SelfieCompare selfiePath={p.selfie_path} photoPath={photos[p.id]} />
+                      )}
+                    </div>
 
                     {/* Notes / follow-up — naya chhota profile_notes table */}
                     <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
@@ -1135,11 +1180,30 @@ function FeedbackForm({ requestId, onSave }) {
   )
 }
 
+// Selfie (verification ke liye) vs profile ki uploaded photo — side by side
+function SelfieCompare({ selfiePath, photoPath }) {
+  const box = { width: 120, height: 150, borderRadius: 10, overflow: 'hidden', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+  return (
+    <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+      {[['Verification selfie', selfiePath], ['Profile photo', photoPath]].map(([label, path]) => (
+        <div key={label} style={{ textAlign: 'center' }}>
+          <div style={box}>
+            {path ? <SignedImage path={path} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 11, color: '#8e8e8e' }}>No photo</span>}
+          </div>
+          <div style={{ fontSize: 10, color: '#8e8e8e', marginTop: 4 }}>{label}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ===== VERIFICATION QUEUE — profiles.verification_status + id_document_uploaded
-// already existed in the DB; yeh view sirf unko surface karta hai, jaise
-// BharatMatrimony ka trust-badge review workflow.
+// already existed in the DB. Ab selfie flow bhi yahin: naye self-signups ko
+// selfie request karo, aayi hui selfie ko photo se compare karke Verify karo
+// (Verify = verified badge + profile live).
 function VerificationQueueView({ staffUser, onBack }) {
   const [profiles, setProfiles] = useState([])
+  const [photoByProfile, setPhotoByProfile] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { load() }, [])
@@ -1148,56 +1212,79 @@ function VerificationQueueView({ staffUser, onBack }) {
     setLoading(true)
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, profile_code, age, city, verification_status, id_document_uploaded, created_at')
-      .eq('id_document_uploaded', true)
+      .select('id, full_name, profile_code, age, city, profile_status, verification_status, id_document_uploaded, is_admin_managed, selfie_path, selfie_requested_at, selfie_submitted_at, created_at')
       .neq('verification_status', 'verified')
+      .neq('profile_status', 'blocked')
+      .or('verification_status.in.(selfie_submitted,selfie_requested),id_document_uploaded.eq.true,and(profile_status.eq.pending,is_admin_managed.eq.false)')
       .order('created_at', { ascending: true })
     if (error) console.error(error.message)
-    setProfiles(data || [])
+    const list = data || []
+    setProfiles(list)
+    if (list.length > 0) {
+      const { data: ph } = await supabase.from('photos').select('profile_id, storage_path').in('profile_id', list.map(p => p.id)).eq('is_primary', true)
+      const map = {}
+      ;(ph || []).forEach(x => { map[x.profile_id] = x.storage_path })
+      setPhotoByProfile(map)
+    }
     setLoading(false)
   }
 
-  const act = async (id, status) => {
-    const { error } = await supabase.from('profiles').update({ verification_status: status }).eq('id', id)
+  const act = async (p, status) => {
+    const { error } = await supabase.from('profiles').update(verificationPatch(status, p.profile_status)).eq('id', p.id)
     if (error) { alert(error.message); return }
     await supabase.from('audit_logs').insert({
       actor_user_id: staffUser.user_id, actor_role: staffUser.role,
-      action: 'verification_status_change', entity_type: 'profile', entity_id: id, metadata: { new_status: status },
+      action: 'verification_status_change', entity_type: 'profile', entity_id: p.id, metadata: { new_status: status },
     }).then(()=>{}, ()=>{})
     load()
   }
+
+  const sections = [
+    { key: 'review', title: 'Selfie received — compare & verify', items: profiles.filter(p => p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'selfie_requested')) },
+    { key: 'request', title: 'New sign-ups — request a selfie', items: profiles.filter(p => !p.is_admin_managed && ['not_started', 'rejected'].includes(p.verification_status || 'not_started') && !p.id_document_uploaded) },
+    { key: 'waiting', title: 'Waiting for the user\'s selfie', items: profiles.filter(p => p.verification_status === 'selfie_requested') },
+  ]
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Verification Queue</h2>
-      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles that uploaded an ID document and are waiting on review</div>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Self-signup profiles go live only after their selfie is matched with their photo and verified</div>
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
       ) : profiles.length === 0 ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Nothing waiting on verification right now.</div>
-      ) : (
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {profiles.map(p => (
-            <div key={p.id} className="list-row">
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <div>
-                  <div style={{fontSize:14,fontWeight:600}}>{p.full_name}</div>
-                  <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+      ) : sections.filter(sec => sec.items.length > 0).map(sec => (
+        <div key={sec.key} style={{marginBottom:24}}>
+          <div style={{fontSize:12,fontWeight:600,color:'#8e8e8e',marginBottom:8}}>{sec.title} ({sec.items.length})</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {sec.items.map(p => (
+              <div key={p.id} className="list-row">
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:600}}>{p.full_name}</div>
+                    <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+                  </div>
+                  <div className="badge" style={{fontSize:10, background:'#eff6ff', color:'#2563eb'}}>
+                    {p.id_document_uploaded && p.verification_status !== 'selfie_submitted' ? 'ID document uploaded' : (VERIFICATION_LABELS[p.verification_status] || 'Not verified')}
+                  </div>
                 </div>
-                <div className="badge" style={{fontSize:10, background:'#eff6ff', color:'#2563eb'}}>
-                  {p.verification_status === 'rejected' ? 'Previously rejected' : 'Pending review'}
+                {p.selfie_path && sec.key === 'review' && <SelfieCompare selfiePath={p.selfie_path} photoPath={photoByProfile[p.id]} />}
+                <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
+                  {sec.key === 'request' && (
+                    <button className="btn btn-black btn-sm" onClick={()=>act(p,'selfie_requested')}>📷 Request Selfie</button>
+                  )}
+                  <button className={'btn btn-sm ' + (sec.key === 'review' ? 'btn-black' : 'btn-outline')} onClick={()=>act(p,'verified')}>✓ Verify &amp; Make Live</button>
+                  {sec.key === 'review' && (
+                    <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}} onClick={()=>act(p,'rejected')}>✕ Reject</button>
+                  )}
                 </div>
               </div>
-              <div style={{display:'flex',gap:8,marginTop:10}}>
-                <button className="btn btn-black btn-sm" onClick={()=>act(p.id,'verified')}>✓ Verify</button>
-                <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}} onClick={()=>act(p.id,'rejected')}>✕ Reject</button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      )}
+      ))}
     </div>
   )
 }

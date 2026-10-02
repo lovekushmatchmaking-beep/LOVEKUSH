@@ -34,6 +34,7 @@ import MultiSelectChips from '../components/MultiSelectChips'
 import DualRangeSlider from '../components/DualRangeSlider'
 import CheckboxDropdown from '../components/CheckboxDropdown'
 import { TrinityLogo } from '../components/BrandLogo'
+import { compressImage } from '../utils/compressImage'
 
 const DASHBOARD_TABS = ['home', 'matches', 'matchsearch', 'activity', 'requests', 'profile', 'searchid',
   'editphotos', 'editprofile', 'accountsettings', 'privacy', 'help', 'biodata', 'disliked']
@@ -113,8 +114,10 @@ export default function Dashboard({ user }) {
       // hard-filters (age preference, religion) + soft-scoring client
       // pe hoti hai (matching.js — GAS system jaisi hi philosophy:
       // dono taraf ki preferences check hoti hain).
+      // Matching tabhi shuru hoti hai jab profile live (active) ho — self-signup
+      // profiles selfie verification ke baad hi active hoti hain.
       const oppositeGender = p.gender === 'Male' ? 'Female' : 'Male'
-      const { data: candidates } = await supabase
+      const { data: candidates } = p.profile_status !== 'active' ? { data: [] } : await supabase
         .from('profiles_public_view')
         .select('*')
         .neq('user_id', user.id)
@@ -312,6 +315,9 @@ export default function Dashboard({ user }) {
                         {profile.profile_status==='active' ? <CircleCheck size={12} /> : <Clock size={12} />}
                         {profile.profile_status==='active' ? 'Active' : 'In review'}
                       </span>
+                      {profile.verification_status==='verified' && (
+                        <span className="chip chip-success" title="Verified by LOVEKUSH"><ShieldCheck size={12} /> Verified</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -495,11 +501,8 @@ export default function Dashboard({ user }) {
                   )}
                 </div>
 
-                {profile.profile_status !== 'active' && (
-                  <div className="notice" style={{display:'flex',gap:10,alignItems:'center'}}>
-                    <ShieldCheck size={18} style={{color:'var(--primary)',flexShrink:0}} />
-                    <span><strong>Under review</strong> · we'll notify you once it's live</span>
-                  </div>
+                {(profile.profile_status !== 'active' || ['selfie_requested','rejected'].includes(profile.verification_status)) && (
+                  <VerificationNotice profile={profile} userId={user.id} onUpdated={setProfile} onToast={showToast} />
                 )}
               </>
             )}
@@ -528,7 +531,11 @@ export default function Dashboard({ user }) {
               <span style={{flex:1}}>What are you looking for?</span>
               <SlidersHorizontal size={18} />
             </div>
-            {matches.length === 0 ? (
+            {profile.profile_status !== 'active' ? (
+              <EmptyState icon={ShieldCheck} title="Matches unlock after verification"
+                text="Once our team verifies your profile, it goes live and your matches appear here"
+                action={<button className="btn btn-soft btn-sm" onClick={()=>setActiveTab('home')}>See verification status</button>} />
+            ) : matches.length === 0 ? (
               <EmptyState icon={Heart} title="No matches yet" text="A complete profile gets better matches"
                 action={<button className="btn btn-soft btn-sm" onClick={()=>setActiveTab('editprofile')}><Pencil size={14} /> Complete profile</button>} />
             ) : (
@@ -735,6 +742,63 @@ function FactRow({ k, v }) {
 // Match card — score ke saath "Why this match?" expand karke poora
 // breakdown dikhata hai (Strong Matches ✓ / Needs Discussion △) — fake
 // percentage nahi, actual matching.js se aaya hua real explanation.
+// Home tab par verification status — admin ne selfie maangi ho to yahin se
+// front camera selfie upload hoti hai (profiles.selfie_path), phir admin
+// use uploaded photo se match karke Verify karta hai → profile live.
+function VerificationNotice({ profile, userId, onUpdated, onToast }) {
+  const [uploading, setUploading] = useState(false)
+  const status = profile.verification_status
+
+  const uploadSelfie = async (file) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) { onToast('Please choose a photo'); return }
+    setUploading(true)
+    try {
+      const compressed = await compressImage(file)
+      const path = userId + '/selfie-' + Date.now() + '.jpg'
+      const { error: upErr } = await supabase.storage.from('lovekush-photos').upload(path, compressed, { contentType: 'image/jpeg' })
+      if (upErr) throw new Error('Upload failed: ' + upErr.message)
+      const { data, error } = await supabase.from('profiles')
+        .update({ selfie_path: path, selfie_submitted_at: new Date().toISOString(), verification_status: 'selfie_submitted' })
+        .eq('id', profile.id).select().single()
+      if (error) throw new Error('Could not save selfie: ' + error.message)
+      onUpdated(data)
+      onToast('Selfie sent for verification')
+    } catch (e) {
+      alert(e.message)
+    }
+    setUploading(false)
+  }
+
+  if (status === 'selfie_requested' || status === 'rejected') {
+    return (
+      <div className="notice" style={{display:'flex',flexDirection:'column',gap:10}}>
+        <div style={{display:'flex',gap:10,alignItems:'center'}}>
+          <Camera size={18} style={{color:'var(--primary)',flexShrink:0}} />
+          <span>
+            <strong>{status === 'rejected' ? 'Please send a new selfie' : 'Selfie needed for your Verified badge'}</strong>
+            {' · '}we'll match it with your uploaded photo, then your profile goes live
+          </span>
+        </div>
+        <label className="btn btn-primary btn-sm" style={{alignSelf:'flex-start',cursor:uploading?'default':'pointer',opacity:uploading?0.6:1}}>
+          <Camera size={14} /> {uploading ? 'Uploading...' : 'Take selfie'}
+          <input type="file" accept="image/*" capture="user" hidden disabled={uploading}
+            onChange={e => { uploadSelfie(e.target.files?.[0]); e.target.value = '' }} />
+        </label>
+      </div>
+    )
+  }
+
+  return (
+    <div className="notice" style={{display:'flex',gap:10,alignItems:'center'}}>
+      <ShieldCheck size={18} style={{color:'var(--primary)',flexShrink:0}} />
+      {status === 'selfie_submitted'
+        ? <span><strong>Selfie received</strong> · we're matching it with your photo. Matches start once you're verified</span>
+        : <span><strong>Under review</strong> · we'll ask for a quick selfie to verify you, then your profile goes live</span>}
+    </div>
+  )
+}
+
 function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, onView, onToast }) {
   // "You match X/Y preferences" — existing matching.js strengths/needsDiscussion
   // se hi nikala, koi naya scoring logic nahi. Strength = matched, needsDiscussion
@@ -769,6 +833,9 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
             )}
             {totalCount > 0 && (
               <span className="chip chip-primary" title="Preferences matched"><CircleCheck size={11} /> {matchedCount}/{totalCount}</span>
+            )}
+            {m.verification_status === 'verified' && (
+              <span className="chip chip-success" title="Verified by LOVEKUSH"><ShieldCheck size={11} /> Verified</span>
             )}
             {profileManagedByLabel(m.profile_for) && (
               <span className="chip chip-muted" title={'Profile created for: ' + m.profile_for}><UserRound size={11} /> {profileManagedByLabel(m.profile_for)}</span>
