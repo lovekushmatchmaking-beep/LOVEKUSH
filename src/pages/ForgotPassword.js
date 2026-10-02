@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { FormLabel } from '../components/ui'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabase'
+import { BrandLockup } from '../components/BrandLogo'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -27,7 +28,7 @@ export default function ForgotPassword() {
   return (
     <div style={{minHeight:'100vh',background:'#fff'}}>
       <nav className="navbar">
-        <Link to="/" className="nav-brand">LOVEKUSH</Link>
+        <Link to="/" style={{ textDecoration: 'none' }}><BrandLockup size={28} /></Link>
         <Link to="/login" className="btn btn-black" style={{fontSize:12,padding:'8px 16px'}}>Login</Link>
       </nav>
 

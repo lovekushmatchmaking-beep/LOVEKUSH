@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Lock } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
+import { BrandLockup } from '../components/BrandLogo'
 
 // Yeh page KISI KO BHI (bina login ke) khulti hai jab woh secure share
 // link kholega. Data seedha "get_shared_profile" Postgres function se
@@ -63,7 +64,7 @@ export default function SharedProfile() {
     <div style={{minHeight:'100vh',background:'#fff'}}>
       <div style={{maxWidth:480,margin:'0 auto',padding:'40px 20px'}}>
         <div style={{textAlign:'center',marginBottom:30}}>
-          <div style={{fontFamily:'serif',fontSize:22,letterSpacing:'0.3em'}}>LOVEKUSH</div>
+          <BrandLockup size={30} />
           <div style={{fontSize:10,opacity:0.5,letterSpacing:'0.15em',marginTop:4}}>GLOBAL MATCHMAKING SERVICES</div>
         </div>
 

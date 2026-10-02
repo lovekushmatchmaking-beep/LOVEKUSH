@@ -5,12 +5,13 @@ import {
 } from 'lucide-react'
 import SignedImage from './SignedImage'
 import { SUPPORT_EMAIL } from './ui'
+import { BrandLockup } from './BrandLogo'
 
 // Top bar — brand left, Notifications (bell) + hamburger right.
 export function TopBar({ onBell, bellDot, onMenu }) {
   return (
     <nav className="navbar">
-      <span className="nav-brand">LOVEKUSH</span>
+      <BrandLockup size={28} />
       <div className="nav-right">
         <button className="icon-btn" onClick={onBell} aria-label="Notifications">
           <Bell size={22} />

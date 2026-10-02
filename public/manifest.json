@@ -3,7 +3,7 @@
   "name": "Lovekush Global Matchmaking",
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff",
+  "theme_color": "#D81B60",
+  "background_color": "#F7F3EA",
   "icons": []
 }
