@@ -858,14 +858,14 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 /* ================= Brand: splash + wordmark ================= */
 .splash {
   position: fixed; inset: 0; z-index: 9999;
-  background: var(--ivory);
+  background: #fff;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   transition: opacity 0.45s var(--ease);
 }
 .splash.leaving { opacity: 0; pointer-events: none; }
 @keyframes logoIn { from { opacity: 0; transform: scale(0.86); } to { opacity: 1; transform: none; } }
 @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
-.splash-logo { animation: logoIn 0.8s var(--ease) both, breathe 2.4s ease-in-out 0.8s infinite; filter: drop-shadow(0 10px 24px rgba(216,27,96,0.18)); }
+.splash-logo { animation: logoIn 0.7s var(--ease) both; }
 .splash-foot {
   position: absolute; left: 0; right: 0; bottom: calc(40px + env(safe-area-inset-bottom));
   display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -878,34 +878,9 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 .brand-lockup svg { display: block; }
 .logo-breathe { animation: breathe 2.4s ease-in-out infinite; }
 
-/* Landing hero — static, brand-gradient glow */
-.landing-hero {
-  position: relative; overflow: hidden;
-  min-height: calc(100vh - 60px); min-height: calc(100svh - 60px);
-  display: flex; align-items: center; justify-content: center;
-  background: var(--ivory); padding: 40px 20px 56px; text-align: center;
-}
-.landing-hero-glow {
-  position: absolute; width: 560px; height: 560px; max-width: 140vw; max-height: 140vw;
-  border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -62%);
-  background: radial-gradient(circle, rgba(225,48,108,0.16) 0%, rgba(106,27,154,0.08) 40%, rgba(246,193,119,0) 70%);
-  pointer-events: none;
-}
-.landing-hero-inner { position: relative; display: flex; flex-direction: column; align-items: center; animation: fadeUp 0.8s var(--ease) both; }
-.landing-logo { animation: logoIn 0.8s var(--ease) both; filter: drop-shadow(0 12px 28px rgba(216,27,96,0.2)); }
-.landing-quote {
-  font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 400;
-  font-size: clamp(19px, 3.4vw, 26px); color: var(--ink); opacity: 0.85; margin: 22px 0 30px;
-}
-.feature-list { display: flex; flex-direction: column; gap: 10px; }
-.feature-item {
-  display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px;
-  background: var(--white, #fff); border: 1px solid var(--border); border-radius: 20px;
-  box-shadow: var(--shadow-sm); transition: transform .2s var(--ease), box-shadow .2s var(--ease);
-}
-.feature-item:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.feature-icon {
-  flex: 0 0 auto; width: 42px; height: 42px; border-radius: 14px; color: #fff;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--brand-gradient); box-shadow: 0 6px 14px rgba(216,27,96,0.22);
-}
+
+/* Auth screens — Instagram jaisa: beech mein logo, sirf zaroori fields */
+.auth-screen { min-height: 100vh; min-height: 100svh; background: #fff; display: flex; flex-direction: column; }
+.auth-page { flex: 1; width: 100%; max-width: 380px; display: flex; flex-direction: column; justify-content: center; padding-top: 32px; padding-bottom: 24px; }
+.auth-brand { display: flex; flex-direction: column; align-items: center; margin-bottom: 32px; }
+.auth-foot { border-top: 1px solid var(--border); padding: 18px 20px calc(18px + env(safe-area-inset-bottom)); text-align: center; font-size: 14px; color: var(--gray3); }

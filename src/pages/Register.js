@@ -3,7 +3,7 @@ import { ArrowRight, ChevronLeft } from 'lucide-react'
 import { FormLabel } from '../components/ui'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { BrandLockup } from '../components/BrandLogo'
+import { AuthBrand } from '../components/BrandLogo'
 
 export default function Register() {
   const navigate = useNavigate()
@@ -89,56 +89,30 @@ export default function Register() {
   }
 
   return (
-    <div style={{minHeight:'100vh',background:'#fff'}}>
-      <nav className="navbar">
-        <Link to="/" style={{ textDecoration: 'none' }}><BrandLockup size={28} /></Link>
-        <Link to="/login" className="btn btn-outline" style={{fontSize:12,padding:'8px 16px'}}>Login</Link>
-      </nav>
+    <div className="auth-screen">
 
-      <div className="page-container">
+      <div className="page-container auth-page">
         <div style={{textAlign:'center',marginBottom:32}}>
-          <svg width="40" height="40" viewBox="0 0 60 60" fill="none" style={{margin:'0 auto 12px',display:'block'}}>
-            <g stroke="black" strokeWidth="2.2" strokeLinecap="round" fill="none">
-              <path d="M30 6C36 6,44 14,44 22C44 29,38 34,33 37C40 39,51 46,51 55C51 59,44 62,37 58C33 55,31 51,30 47C29 51,27 55,23 58C16 62,9 59,9 55C9 46,20 39,27 37C22 34,16 29,16 22C16 14,24 6,30 6Z"/>
-              <circle cx="30" cy="37" r="2.5" fill="black"/>
-            </g>
-          </svg>
-          <h1 className="page-title">{step === 'details' ? 'Create Account' : 'Verify Your Email'}</h1>
-          <p className="page-subtitle">
-            {step === 'details'
-              ? 'Begin your journey to finding a life partner'
-              : `Hamne ${form.email} par ek verification code bheja hai`}
-          </p>
+          <AuthBrand />
+          {step === 'otp' && <>
+            <h1 className="page-title">Verify Your Email</h1>
+            <p className="page-subtitle">{`Hamne ${form.email} par ek verification code bheja hai`}</p>
+          </>}
         </div>
 
         {step === 'details' ? (
           <>
-            <div className="notice">
-              <strong>This service is for serious marriage seekers only.</strong> All profiles are reviewed by our team before activation.
-            </div>
-
             <form onSubmit={handleRegister}>
-              <div className="form-group">
-                <FormLabel>Email Address</FormLabel>
-                <input className="form-input" type="email" placeholder="your@email.com"
-                  value={form.email} onChange={e=>set('email',e.target.value)} required />
-              </div>
-
-              <div className="form-group">
-                <FormLabel>Password</FormLabel>
-                <input className="form-input" type="password" placeholder="Minimum 6 characters"
-                  value={form.password} onChange={e=>set('password',e.target.value)} required />
-              </div>
-
-              <div className="form-group">
-                <FormLabel>Confirm Password</FormLabel>
-                <input className="form-input" type="password" placeholder="Repeat password"
-                  value={form.confirm} onChange={e=>set('confirm',e.target.value)} required />
-              </div>
+              <input className="form-input" type="email" placeholder="Email address" aria-label="Email address" autoComplete="email"
+                value={form.email} onChange={e=>set('email',e.target.value)} required style={{marginBottom:10}} />
+              <input className="form-input" type="password" placeholder="Password (min 6 characters)" aria-label="Password" autoComplete="new-password"
+                value={form.password} onChange={e=>set('password',e.target.value)} required style={{marginBottom:10}} />
+              <input className="form-input" type="password" placeholder="Confirm password" aria-label="Confirm password" autoComplete="new-password"
+                value={form.confirm} onChange={e=>set('confirm',e.target.value)} required style={{marginBottom:14}} />
 
               {error && <div className="form-error" style={{marginBottom:12}}>{error}</div>}
 
-              <div style={{marginBottom:16,fontSize:12,color:'#8e8e8e',lineHeight:1.6}}>
+              <div style={{marginBottom:16,fontSize:12,color:'#8e8e8e',lineHeight:1.6,textAlign:'center'}}>
                 By registering, you agree to our{' '}
                 <span style={{color:'var(--primary)',cursor:'pointer',textDecoration:'underline'}}>Terms of Service</span>
                 {' '}and{' '}
@@ -146,16 +120,9 @@ export default function Register() {
               </div>
 
               <button className="btn btn-black btn-full btn-lg" type="submit" disabled={loading}>
-                {loading ? 'Sending code...' : 'Continue'} <ArrowRight size={18} />
+                {loading ? 'Sending code...' : 'Sign up'}
               </button>
             </form>
-
-            <div className="divider">or</div>
-
-            <div style={{textAlign:'center',fontSize:14,color:'#8e8e8e'}}>
-              Already registered?{' '}
-              <Link to="/login" style={{color:'var(--primary)',fontWeight:500,textDecoration:'none'}}>Login here</Link>
-            </div>
           </>
         ) : (
           <form onSubmit={handleVerifyOtp}>
@@ -182,6 +149,10 @@ export default function Register() {
             </div>
           </form>
         )}
+      </div>
+      <div className="auth-foot">
+        Have an account?{' '}
+        <Link to="/login" style={{color:'var(--primary)',fontWeight:600,textDecoration:'none'}}>Log in</Link>
       </div>
     </div>
   )

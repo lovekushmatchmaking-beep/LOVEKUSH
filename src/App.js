@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import { SplashScreen } from './components/BrandLogo'
 import { supabase } from './supabase'
-import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -32,7 +31,7 @@ export default function App() {
   })
   useEffect(() => {
     if (splash !== 'on') return
-    const t = setTimeout(() => setSplash('min-done'), 1600)
+    const t = setTimeout(() => setSplash('min-done'), 1200)
     return () => clearTimeout(t)
   }, [splash])
   useEffect(() => {
@@ -84,7 +83,8 @@ export default function App() {
     {splash === 'leaving' && <SplashScreen leaving />}
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Landing user={user} />} />
+        {/* Instagram jaisa: logged in ho to seedha account, warna seedha login */}
+        <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
         <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
         <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
         <Route path="/forgot-password" element={!user ? <ForgotPassword /> : <Navigate to="/dashboard" />} />
