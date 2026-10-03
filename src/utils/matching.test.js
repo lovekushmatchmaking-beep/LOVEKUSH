@@ -5,10 +5,14 @@ const base = { marital_status: 'Never Married', religion: 'Hindu', age: 28 }
 const boy = (x = {}) => ({ ...base, gender: 'Male', ...x })
 const girl = (x = {}) => ({ ...base, gender: 'Female', ...x })
 
-test('same gotra is excluded, placeholders are not', () => {
-  expect(passesHardFilters(boy({ gotra: 'Kashyap' }), girl({ gotra: 'Kashyap' }))).toBe(false)
-  expect(passesHardFilters(boy({ gotra: 'Kashyap' }), girl({ gotra: 'Bharadwaj' }))).toBe(true)
-  expect(passesHardFilters(boy({ gotra: "Don't wish to specify" }), girl({ gotra: "Don't wish to specify" }))).toBe(true)
+test('same gotra is a warning, not an exclusion; placeholders are ignored', () => {
+  expect(passesHardFilters(boy({ gotra: 'Kashyap' }), girl({ gotra: 'Kashyap' }))).toBe(true)
+  const r = computeMatchScore(boy({ gotra: 'Kashyap' }), girl({ gotra: 'Kashyap' }))
+  expect(r.needsDiscussion.some(s => s.includes('Same Gotra'))).toBe(true)
+  const r2 = computeMatchScore(boy({ gotra: 'Kashyap' }), girl({ gotra: 'Bharadwaj' }))
+  expect(r2.needsDiscussion.some(s => s.includes('Same Gotra'))).toBe(false)
+  const r3 = computeMatchScore(boy({ gotra: "Don't wish to specify" }), girl({ gotra: "Don't wish to specify" }))
+  expect(r3.needsDiscussion.some(s => s.includes('Same Gotra'))).toBe(false)
 })
 
 test('horoscope required hides low-guna matches only when both charts are known', () => {

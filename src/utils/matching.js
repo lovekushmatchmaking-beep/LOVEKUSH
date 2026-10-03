@@ -67,12 +67,6 @@ export function passesHardFilters(me, other) {
   if (other.partner_country_preference && other.partner_country_preference !== 'Open to All' &&
       me.country && me.country !== other.partner_country_preference) return false
 
-  // Same Gotra — Hindu/Jain parampara mein same gotra mein shaadi nahi
-  // hoti, isliye yeh hard filter hai (pehle sirf warning tha). Placeholder
-  // values ("Don't wish to specify", "Others / Not in list"...) pe rule
-  // apply nahi hota — dekho isRealGotra in astrology.js.
-  if (sameGotra(me.gotra, other.gotra)) return false
-
   // Horoscope Match Required = Yes — dono ki Rashi/Nakshatra pata ho aur
   // Guna Milan 18 se kam ho to match nahi dikhta. Data missing ho to
   // exclude nahi karte (computeMatchScore "kundli maangein" bolta hai).
@@ -132,9 +126,13 @@ export function computeMatchScore(me, other) {
     }
   }
 
-  // Gotra — same gotra ab hard filter hai (passesHardFilters). Yahan
-  // sirf maternal gotra check: kai parivar maa ka gotra bhi avoid karte
-  // hain, par yeh universal nahi, isliye sirf warning.
+  // Gotra — same gotra traditionally avoided hota hai, par kuch families
+  // kar bhi lete hain, isliye yeh hard filter nahi hai — sirf warning
+  // (Aryan ne confirm kiya: exclude mat karo, flag karo). Maternal gotra
+  // bhi kai parivar check karte hain, par yeh universal nahi.
+  if (sameGotra(me.gotra, other.gotra)) {
+    needsDiscussion.push('⚠ Same Gotra (' + me.gotra + ') — verify with family before proceeding')
+  }
   if (sameGotra(me.mother_gotra, other.gotra) || sameGotra(other.mother_gotra, me.gotra)) {
     needsDiscussion.push("⚠ One partner's gotra matches the other's mother's gotra — check family tradition")
   }
