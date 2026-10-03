@@ -14,7 +14,7 @@ import { Eye, Heart, Star, Inbox, Send, HeartHandshake, UserRound } from 'lucide
 
 const ACTIVE_ACTIONS = ['like', 'super_like']
 
-export default function ActivityTab({ myActions, receivedActions, matches, profileViewsCount, onViewProfile }) {
+export default function ActivityTab({ myActions, receivedActions, matches, profileViewsCount, onViewProfile, onLikeBack }) {
   const [tab, setTab] = useState('Received')
 
   const sentActions = (myActions || []).filter(a => ACTIVE_ACTIONS.includes(a.action))
@@ -91,6 +91,14 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
                 sub={r.actorProfile ? `${r.actorProfile.age || ''} yrs · ${r.actorProfile.city || ''}` : ''}
                 photoPath={r.actorPhotoPath}
                 badge={r.action === 'super_like' ? <Star size={18} style={{color:'var(--gold)',fill:'var(--gold)'}} aria-label="Super like" /> : <Heart size={18} style={{color:'var(--primary)',fill:'var(--primary)'}} aria-label="Like" />}
+                // Pehle received interest dekhne ke liye profile kholna
+                // zaroori tha phir wahan se like karna. Ab seedha yahin se
+                // "Like back" — jisko already like kar chuka hai use nahi dikhta.
+                action={!sentIds.has(r.actor_profile_id) && onLikeBack ? (
+                  <button className="btn btn-primary btn-sm" onClick={(e)=>{ e.stopPropagation(); onLikeBack(r.actor_profile_id) }}>
+                    <Heart size={13} /> Like back
+                  </button>
+                ) : null}
                 onClick={() => r.actorProfile && onViewProfile({ ...r.actorProfile, primaryPhotoPath: r.actorPhotoPath })} />
             ))}
           </div>
@@ -134,7 +142,7 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
   )
 }
 
-function ActivityRow({ name, sub, photoPath, badge, onClick }) {
+function ActivityRow({ name, sub, photoPath, badge, action, onClick }) {
   return (
     <div className={'list-row' + (onClick ? ' clickable' : '')} style={{display:'flex',gap:12,alignItems:'center'}}
       onClick={onClick}>
@@ -148,7 +156,7 @@ function ActivityRow({ name, sub, photoPath, badge, onClick }) {
         <div style={{fontWeight:600,fontSize:15}}>{name}</div>
         {sub && <div style={{fontSize:12,color:'var(--gray3)'}}>{sub}</div>}
       </div>
-      <div style={{flexShrink:0,display:'flex'}}>{badge}</div>
+      <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:10}}>{badge}{action}</div>
     </div>
   )
 }

@@ -8,7 +8,7 @@ import {
   ChevronLeft, Lock, UserRound, Images, Heart, Star, X, CircleCheck, TriangleAlert, Crown,
   Phone, CalendarDays, Send, Briefcase, Users, Camera, Clock, ShieldCheck,
 } from 'lucide-react'
-import { ProfileActionsMenu } from '../components/ui'
+import { ProfileActionsMenu, SUPPORT_EMAIL } from '../components/ui'
 import { iconForLabel } from '../components/fieldIcons'
 
 const TABS = ['About', 'Photos', 'Career', 'Education', 'Family', 'Horoscope', 'Looking For']
@@ -18,7 +18,7 @@ const TABS = ['About', 'Photos', 'Career', 'Education', 'Family', 'Horoscope', '
 // kisi section pe scroll/click ho, woh sticky bar ke peeche chhupe nahi.
 const TAB_BAR_OFFSET = 112 // sticky navbar (56) + pill tab bar
 
-export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId, myAction, introSent, onSetAction, onSendIntro, photoAccess, onRequestPhoto, onBack, onToast }) {
+export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId, myAction, introSent, onSetAction, onBlockProfile, onSendIntro, photoAccess, onRequestPhoto, onBack, onToast }) {
   // Photo privacy — har member ki photo by default hidden; sirf owner ke
   // "Request Photo" approve karne par dikhti hai (photo_requests table,
   // RLS bhi yahi enforce karta hai). Approve ho gayi to premium blur nahi.
@@ -183,7 +183,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
               <Images size={14} /> {clampedHeroIndex+1}/{heroPhotos.length}
             </div>
           )}
-          <ProfileActionsMenu light profile={m} reporterProfileId={viewerProfileId} onBlock={()=>{ onSetAction('dislike'); onBack() }} onToast={onToast} />
+          <ProfileActionsMenu light profile={m} reporterProfileId={viewerProfileId} onBlock={()=>{ onBlockProfile(); onBack() }} onToast={onToast} />
         </div>
         <div style={{position:'absolute',bottom:44,left:20,right:20,color:'#fff'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -241,10 +241,9 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
           {!viewerIsPremium && (
             <div style={{background:'var(--gold-soft)',border:'1px solid #f0e2bd',borderRadius:'var(--radius)',padding:'12px 14px',marginBottom:14}}>
               <div style={{fontSize:12,fontWeight:600,color:'var(--gold)',marginBottom:6,display:'flex',alignItems:'center',gap:6}}><Crown size={14} /> Premium unlocks</div>
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
-                <span style={{color:'var(--gray3)'}}>Photo (unblurred)</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
-              </div>
+              {/* PEHLE: "Photo (unblurred)" bhi premium ke peeche thi — ab photos
+                  Request Photo + owner approval se dikhti hain (privacy-rules.md),
+                  premium se koi lena dena nahi, isliye ye row hata di. */}
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
                 <span style={{color:'var(--gray3)'}}>Company Name</span>
                 <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
@@ -253,7 +252,12 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
                 <span style={{color:'var(--gray3)'}}>College Name</span>
                 <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
               </div>
-              <button className="btn btn-sm" style={{marginTop:8,width:'100%',background:'var(--gold)',color:'#fff'}}><Crown size={14} /> Go Premium</button>
+              {/* PEHLE: button kuch nahi karta tha. Ab LOVEKUSH support ko
+                  seedha contact karta hai (jaisa Help/Report flow). */}
+              <a className="btn btn-sm" style={{marginTop:8,width:'100%',background:'var(--gold)',color:'#fff',textDecoration:'none'}}
+                href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Interested in LOVEKUSH Premium')}`}>
+                <Crown size={14} /> Go Premium
+              </a>
             </div>
           )}
 

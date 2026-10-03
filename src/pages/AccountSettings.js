@@ -188,9 +188,18 @@ function HideDeleteView({ profile, user, onProfileUpdate, onDeleted, showToast }
       await supabase.from('match_actions').delete().eq('target_profile_id', profile.id)
       await supabase.from('introductions').delete().eq('from_profile', profile.id)
       await supabase.from('introductions').delete().eq('to_profile', profile.id)
+      // profile_requests, profile_views, profile_reports, profile_notes,
+      // profile_id_metadata, profile_blocks, share_links, caste_suggestions
+      // aur subscriptions sab ON DELETE CASCADE hain (20261003 migration),
+      // isliye profile delete hote hi apne aap saaf ho jaate hain.
       const { error: delErr } = await supabase.from('profiles').delete().eq('id', profile.id)
       if (delErr) throw delErr
 
+      // NOTE: isse sirf profile ka data delete hota hai — Supabase Auth
+      // account (login email/password) client se delete nahi ho sakta,
+      // usko admin.deleteUser() chahiye jo service-role key maangta hai
+      // (ek server/edge function ke bina abhi possible nahi). User isi
+      // email se dobara naya profile bana sakta hai.
       await supabase.auth.signOut()
       onDeleted()
     } catch (err) {
