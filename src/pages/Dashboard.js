@@ -38,7 +38,7 @@ import { TrinityLogo } from '../components/BrandLogo'
 import { compressImage } from '../utils/compressImage'
 
 const DASHBOARD_TABS = ['home', 'matches', 'matchsearch', 'activity', 'requests', 'profile', 'searchid',
-  'editphotos', 'editprofile', 'accountsettings', 'privacy', 'help', 'biodata', 'disliked']
+  'editphotos', 'editprofile', 'accountsettings', 'privacy', 'help', 'biodata', 'disliked', 'visits']
 
 const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
@@ -70,6 +70,7 @@ export default function Dashboard({ user }) {
   }
   const [matches, setMatches] = useState([])
   const [myActions, setMyActions] = useState([]) // match_actions rows where actor = me
+  const [myBlocks, setMyBlocks] = useState([]) // profile_blocks rows I created (for "Blocked Profiles" list)
   const [myIntroductions, setMyIntroductions] = useState([]) // introductions (Talk/Meeting requests) involving me
   const [myPhotoRequests, setMyPhotoRequests] = useState([]) // photo_requests (Request Photo) involving me — sent + received
   const [viewingMatchId, setViewingMatchId] = useState(null) // set when a match card is tapped, opens ProfileView
@@ -121,6 +122,18 @@ export default function Dashboard({ user }) {
       setMyActions(myActionsList)
       const dislikedIds = new Set(myActionsList.filter(a => a.action === 'dislike').map(a => a.target_profile_id))
 
+      // Block — dono taraf se poori tarah chhupana (Pass/dislike se alag:
+      // wo sirf meri taraf se, reversible). RLS dono profiles (blocker +
+      // blocked) ko apna hi block row padhne deta hai, isliye ek hi query
+      // se dono direction mil jaati hain.
+      const { data: blockRows } = await supabase
+        .from('profile_blocks')
+        .select('*')
+        .or(`blocker_profile_id.eq.${p.id},blocked_profile_id.eq.${p.id}`)
+      const blockList = blockRows || []
+      setMyBlocks(blockList.filter(b => b.blocker_profile_id === p.id))
+      const blockedEitherWay = new Set(blockList.flatMap(b => [b.blocker_profile_id, b.blocked_profile_id]).filter(id => id !== p.id))
+
       // Photo privacy — dusre member ki photo sirf tab dikhti hai jab usne
       // meri "Request Photo" approve ki ho. Pehle requests load karte hain
       // taaki neeche matches/activity ke photo paths isi se gate ho sakein.
@@ -132,7 +145,7 @@ export default function Dashboard({ user }) {
         .or(`requester_profile_id.eq.${p.id},owner_profile_id.eq.${p.id}`)
       if (photoReqErr) console.error('photo_requests load failed:', photoReqErr.message)
       const photoReqList = photoReqs || []
-      setMyPhotoRequests(photoReqList)
+      setMyPhotoRequests(photoReqList.filter(r => !blockedEitherWay.has(r.requester_profile_id === p.id ? r.owner_profile_id : r.requester_profile_id)))
       const approvedOwnerIds = new Set(photoReqList
         .filter(r => r.requester_profile_id === p.id && r.status === 'approved')
         .map(r => r.owner_profile_id))
@@ -145,15 +158,21 @@ export default function Dashboard({ user }) {
       // dono taraf ki preferences check hoti hain).
       // Matching tabhi shuru hoti hai jab profile live (active) ho — self-signup
       // profiles selfie verification ke baad hi active hoti hain.
+      // NOTE: candidate pool abhi bhi client-side hi filter/score hota hai
+      // (profile count chhota hai). `order` + raised limit ek mitigation
+      // hai taaki 100 se zyada profiles hone par bhi purane/random 100
+      // tak simit na rahe — asli fix (bada scale aane par) hard filters
+      // ko query mein hi push karna hoga (ek Postgres function/RPC se).
       const oppositeGender = p.gender === 'Male' ? 'Female' : 'Male'
       const { data: candidates } = p.profile_status !== 'active' ? { data: [] } : await supabase
         .from('profiles_public_view')
         .select('*')
         .neq('user_id', user.id)
         .eq('gender', oppositeGender)
-        .limit(100)
+        .order('created_at', { ascending: false })
+        .limit(500)
 
-      const visibleCandidates = (candidates || []).filter(c => !dislikedIds.has(c.id))
+      const visibleCandidates = (candidates || []).filter(c => !dislikedIds.has(c.id) && !blockedEitherWay.has(c.id))
 
       if (visibleCandidates.length > 0) {
         const ranked = rankMatches(p, visibleCandidates)
@@ -180,7 +199,7 @@ export default function Dashboard({ user }) {
         .from('introductions')
         .select('*')
         .or(`from_profile.eq.${p.id},to_profile.eq.${p.id}`)
-      setMyIntroductions(intros || [])
+      setMyIntroductions((intros || []).filter(i => !blockedEitherWay.has(i.from_profile === p.id ? i.to_profile : i.from_profile)))
 
       // Activity tab — dusre logo ne mujhe like/super-like kiya (Received),
       // resolve actor ki basic info (naam+photo) profiles_public_view se,
@@ -190,7 +209,7 @@ export default function Dashboard({ user }) {
         .select('*')
         .eq('target_profile_id', p.id)
         .in('action', ['like', 'super_like'])
-      const receivedList = received || []
+      const receivedList = (received || []).filter(r => !blockedEitherWay.has(r.actor_profile_id))
       if (receivedList.length > 0) {
         const actorIds = receivedList.map(r => r.actor_profile_id)
         const { data: actorProfiles } = await supabase
@@ -246,6 +265,26 @@ export default function Dashboard({ user }) {
       .eq('actor_profile_id', profile.id).eq('target_profile_id', targetProfileId)
     if (error) { alert('Could not undo: ' + error.message); return }
     setMyActions(prev => prev.filter(a => a.target_profile_id !== targetProfileId))
+  }
+
+  // ===== BLOCK — dono taraf se poori tarah chhupana (Pass se alag). Profile
+  // card ke "Block" menu item se, undo "Blocked Profiles" list se. =====
+  const blockProfile = async (targetProfileId) => {
+    const { data, error } = await supabase.from('profile_blocks')
+      .insert({ blocker_profile_id: profile.id, blocked_profile_id: targetProfileId })
+      .select().single()
+    if (error) { alert('Could not block: ' + error.message); return }
+    setMyBlocks(prev => [...prev, data])
+    setMatches(prev => prev.filter(m => m.id !== targetProfileId))
+    setReceivedActions(prev => prev.filter(r => r.actor_profile_id !== targetProfileId))
+    setMyIntroductions(prev => prev.filter(i => i.from_profile !== targetProfileId && i.to_profile !== targetProfileId))
+  }
+
+  const unblockProfile = async (targetProfileId) => {
+    const { error } = await supabase.from('profile_blocks').delete()
+      .eq('blocker_profile_id', profile.id).eq('blocked_profile_id', targetProfileId)
+    if (error) { alert('Could not unblock: ' + error.message); return }
+    setMyBlocks(prev => prev.filter(b => b.blocked_profile_id !== targetProfileId))
   }
 
   // ===== TALK / MEETING REQUEST (routed to a Relationship Manager, no in-app chat) =====
@@ -576,6 +615,7 @@ export default function Dashboard({ user }) {
                 myAction={myActions.find(a => a.target_profile_id === m.id)?.action || null}
                 introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
                 onSetAction={(action)=>setMatchAction(m.id, action)}
+                onBlockProfile={()=>blockProfile(m.id)}
                 onSendIntro={(type)=>sendIntroductionRequest(m.id, type)}
                 photoAccess={photoAccessFor(m.id)} onRequestPhoto={()=>sendPhotoRequest(m.id)}
                 onToast={showToast} onBack={()=>setViewingMatchId(null)} />
@@ -602,6 +642,7 @@ export default function Dashboard({ user }) {
                     myAction={myActions.find(a => a.target_profile_id === m.id)?.action || null}
                     introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
                     onSetAction={(action)=>setMatchAction(m.id, action)}
+                    onBlockProfile={()=>blockProfile(m.id)}
                     onSendIntro={(type)=>sendIntroductionRequest(m.id, type)}
                     photoAccess={photoAccessFor(m.id)} onRequestPhoto={()=>sendPhotoRequest(m.id)}
                     onToast={showToast}
@@ -627,6 +668,7 @@ export default function Dashboard({ user }) {
               myAction={myActions.find(a => a.target_profile_id === activityViewProfile.id)?.action || null}
               introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === activityViewProfile.id)}
               onSetAction={(action)=>setMatchAction(activityViewProfile.id, action)}
+              onBlockProfile={()=>blockProfile(activityViewProfile.id)}
               onSendIntro={(type)=>sendIntroductionRequest(activityViewProfile.id, type)}
               photoAccess={photoAccessFor(activityViewProfile.id)} onRequestPhoto={()=>sendPhotoRequest(activityViewProfile.id)}
               onToast={showToast} onBack={()=>setActivityViewProfile(null)} />
@@ -637,6 +679,7 @@ export default function Dashboard({ user }) {
               matches={matches}
               profileViewsCount={profileViewsCount}
               onViewProfile={(p)=>setActivityViewProfile(p)}
+              onLikeBack={(id)=>setMatchAction(id, 'like')}
             />
           )
         )}
@@ -667,7 +710,7 @@ export default function Dashboard({ user }) {
               {[
                 {icon:Images, n:photos.length, l:'Photos', tab:'editphotos'},
                 {icon:Heart, n:myActions.filter(a=>a.action!=='dislike').length, l:'Liked', tab:'activity'},
-                {icon:Eye, n:profileViewsCount, l:'Visits', tab:'activity'},
+                {icon:Eye, n:profileViewsCount, l:'Visits', tab:'visits'},
               ].map(({icon:Icon,n,l,tab})=>(
                 <button key={l} className="stat-card" onClick={()=>setActiveTab(tab)} style={{textAlign:'center',cursor:'pointer',font:'inherit',padding:'14px 6px'}}>
                   <Icon size={18} className="stat-icon" />
@@ -710,6 +753,7 @@ export default function Dashboard({ user }) {
               myAction={myActions.find(a => a.target_profile_id === searchViewProfile.id)?.action || null}
               introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === searchViewProfile.id)}
               onSetAction={(action)=>setMatchAction(searchViewProfile.id, action)}
+              onBlockProfile={()=>blockProfile(searchViewProfile.id)}
               onSendIntro={(type)=>sendIntroductionRequest(searchViewProfile.id, type)}
               photoAccess={photoAccessFor(searchViewProfile.id)} onRequestPhoto={()=>sendPhotoRequest(searchViewProfile.id)}
               onToast={showToast} onBack={()=>setSearchViewProfile(null)} />
@@ -776,8 +820,14 @@ export default function Dashboard({ user }) {
 
         {/* DISLIKED PROFILES TAB */}
         {activeTab === 'disliked' && profile && (
-          <DislikedProfilesView myProfile={profile} dislikedActions={myActions.filter(a=>a.action==='dislike')}
+          <DislikedProfilesView myProfile={profile} blockedRows={myBlocks} dislikedActions={myActions.filter(a=>a.action==='dislike')}
+            onUnblock={unblockProfile}
             onUndo={async (id)=>{ await undoDislike(id); loadProfile() }} onBack={()=>setActiveTab('profile')} />
+        )}
+
+        {/* WHO VIEWED ME — Visits stat tile se */}
+        {activeTab === 'visits' && profile && (
+          <WhoViewedMeView myProfileId={profile.id} onBack={()=>setActiveTab('profile')} />
         )}
       </div>
 
@@ -861,7 +911,7 @@ function VerificationNotice({ profile, userId, onUpdated, onToast }) {
   )
 }
 
-function MatchCard({ match: m, viewerProfileId, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, photoAccess, onRequestPhoto, onView, onToast }) {
+function MatchCard({ match: m, viewerProfileId, viewerIsPremium, myAction, introSent, onSetAction, onBlockProfile, onSendIntro, photoAccess, onRequestPhoto, onView, onToast }) {
   // "You match X/Y preferences" — existing matching.js strengths/needsDiscussion
   // se hi nikala, koi naya scoring logic nahi. Strength = matched, needsDiscussion
   // = evaluated but not matched; total = dono ka sum.
@@ -902,7 +952,7 @@ function MatchCard({ match: m, viewerProfileId, viewerIsPremium, myAction, intro
             <PhotoRequestChip status={photoAccess} onRequest={onRequestPhoto} />
           </div>
         </div>
-        <ProfileActionsMenu profile={m} reporterProfileId={viewerProfileId} onBlock={()=>onSetAction('dislike')} onToast={onToast} />
+        <ProfileActionsMenu profile={m} reporterProfileId={viewerProfileId} onBlock={onBlockProfile} onToast={onToast} />
       </div>
 
       <div className="action-row" style={{padding:'4px 14px 16px'}}>
@@ -933,12 +983,15 @@ function PhotoRequestChip({ status, onRequest }) {
 // ===== REQUESTS TAB — Talk/Meeting requests (Sent + Received), routed to a
 // Relationship Manager instead of in-app chat =====
 // ===== DISLIKED PROFILES — undo a Dislike so the profile can reappear in matches =====
-function DislikedProfilesView({ myProfile, dislikedActions, onUndo, onBack }) {
+// Block (profile_blocks, dono taraf se poori tarah chhupa — "Blocked")
+// aur Pass (match_actions dislike, sirf meri taraf se match list se
+// hataya — "Passed") do alag cheezein hain, isliye do alag sections.
+function DislikedProfilesView({ myProfile, blockedRows, dislikedActions, onUnblock, onUndo, onBack }) {
   const [profilesById, setProfilesById] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const ids = dislikedActions.map(a => a.target_profile_id)
+    const ids = [...blockedRows.map(b => b.blocked_profile_id), ...dislikedActions.map(a => a.target_profile_id)]
     if (ids.length === 0) { setLoading(false); return }
     supabase.from('profiles_public_view').select('id, full_name, city').in('id', ids).then(({ data }) => {
       const map = {}
@@ -948,25 +1001,99 @@ function DislikedProfilesView({ myProfile, dislikedActions, onUndo, onBack }) {
     })
   }, [])
 
+  const nameFor = (id) => {
+    const p = profilesById[id]
+    return p ? maskName(p.full_name) + (p.city ? ' · ' + p.city : '') : 'Profile'
+  }
+
   return (
     <div>
       <PageHeader title="Blocked Profiles" onBack={onBack} />
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'var(--gray3)',fontSize:13}}>Loading...</div>
-      ) : dislikedActions.length === 0 ? (
+      ) : blockedRows.length === 0 && dislikedActions.length === 0 ? (
         <EmptyState icon={Ban} title="Nothing here" text="Profiles you block or pass on show up here" />
       ) : (
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {dislikedActions.map(a => {
-            const p = profilesById[a.target_profile_id]
-            return (
-              <div key={a.target_profile_id} className="list-row" style={{display:'flex',gap:12,alignItems:'center'}}>
-                <div className="avatar" style={{width:40,height:40}}><UserRound size={18} /></div>
-                <span style={{flex:1,fontSize:14,fontWeight:500}}>{p ? maskName(p.full_name) + (p.city ? ' · ' + p.city : '') : 'Profile'}</span>
-                <button className="btn btn-soft btn-sm" onClick={()=>onUndo(a.target_profile_id)}><Undo2 size={14} /> Unblock</button>
+        <>
+          {blockedRows.length > 0 && (
+            <div style={{marginBottom:18}}>
+              <SectionLabel icon={Ban}>Blocked — can't see each other</SectionLabel>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {blockedRows.map(b => (
+                  <div key={b.blocked_profile_id} className="list-row" style={{display:'flex',gap:12,alignItems:'center'}}>
+                    <div className="avatar" style={{width:40,height:40}}><UserRound size={18} /></div>
+                    <span style={{flex:1,fontSize:14,fontWeight:500}}>{nameFor(b.blocked_profile_id)}</span>
+                    <button className="btn btn-soft btn-sm" onClick={()=>onUnblock(b.blocked_profile_id)}><Undo2 size={14} /> Unblock</button>
+                  </div>
+                ))}
               </div>
-            )
-          })}
+            </div>
+          )}
+          {dislikedActions.length > 0 && (
+            <div>
+              <SectionLabel icon={X}>Passed</SectionLabel>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {dislikedActions.map(a => (
+                  <div key={a.target_profile_id} className="list-row" style={{display:'flex',gap:12,alignItems:'center'}}>
+                    <div className="avatar" style={{width:40,height:40}}><UserRound size={18} /></div>
+                    <span style={{flex:1,fontSize:14,fontWeight:500}}>{nameFor(a.target_profile_id)}</span>
+                    <button className="btn btn-soft btn-sm" onClick={()=>onUndo(a.target_profile_id)}><Undo2 size={14} /> Undo</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ===== WHO VIEWED ME — profile_views table already records every visit
+// (ProfileView.js); RLS already lets the profile owner read these rows,
+// so this is purely a UI addition — no schema change. =====
+function WhoViewedMeView({ myProfileId, onBack }) {
+  const [rows, setRows] = useState(null) // null = loading
+
+  useEffect(() => {
+    (async () => {
+      const { data: views } = await supabase.from('profile_views')
+        .select('viewer_profile_id, viewed_at')
+        .eq('profile_id', myProfileId)
+        .order('viewed_at', { ascending: false })
+        .limit(50)
+      const list = views || []
+      if (list.length === 0) { setRows([]); return }
+      const ids = list.map(v => v.viewer_profile_id)
+      const { data: viewers } = await supabase.from('profiles_public_view').select('*').in('id', ids)
+      const viewerById = {}
+      ;(viewers || []).forEach(v => { viewerById[v.id] = v })
+      setRows(list.map(v => ({ ...v, viewer: viewerById[v.viewer_profile_id] || null })))
+    })()
+  }, [myProfileId])
+
+  return (
+    <div>
+      <PageHeader title="Who Viewed Me" onBack={onBack} />
+      {rows === null ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'var(--gray3)',fontSize:13}}>Loading...</div>
+      ) : rows.length === 0 ? (
+        <EmptyState icon={Eye} title="No visits yet" text="Members who open your profile show up here" />
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {rows.map(r => (
+            <div key={r.viewer_profile_id} className="list-row" style={{display:'flex',gap:12,alignItems:'center'}}>
+              {/* Photo privacy — jaisa Activity/Matches mein, photo sirf approved photo_requests se dikhti hai; yahan hamesha locked rehti hai (koi photoAccess context nahi) */}
+              <div className="avatar" style={{width:48,height:48}}><UserRound size={20} /></div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:600,fontSize:15}}>{maskName(r.viewer?.full_name) || 'Profile'}</div>
+                <div style={{fontSize:12,color:'var(--gray3)'}}>
+                  {r.viewer ? `${r.viewer.age || ''} yrs · ${r.viewer.city || ''}` : ''}
+                </div>
+              </div>
+              <div style={{fontSize:11,color:'var(--gray3)',flexShrink:0}}>{new Date(r.viewed_at).toLocaleDateString('en-IN')}</div>
+            </div>
+          ))}
         </div>
       )}
     </div>

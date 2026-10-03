@@ -2160,6 +2160,45 @@ export const PARTNER_INCOME_STEPS = {
   USD: [0, 10000, 20000, 30000, 40000, 50000, 75000, 100000, 150000],
 }
 
+// Reverse-ish of formatIncomeShort — ek INCOME_RANGES/USD_INCOME_RANGES
+// wala slab string ("₹1–2L", "₹90L–₹1Cr", "Below ₹1L", "₹1Cr+",
+// "$1,500–3,000", "Below $1,500/year", "$120,000+") ko ek representative
+// number (midpoint, open-ended slabs ke liye slab ki floor value) mein
+// convert karta hai — matching.js partner income preference (numeric
+// range) ke against is number ko compare karta hai. "Prefer not to
+// specify" ya unparseable string -> null (matching.js is category ko
+// skip kar deta hai).
+export function parseIncomeRangeMidpoint(str, currency) {
+  if (!str || /prefer not to specify/i.test(str)) return null
+  if (currency === 'USD') {
+    const s = str.replace(/\/year/i, '').replace(/\$/g, '').replace(/,/g, '')
+    const below = s.match(/Below\s*([\d.]+)/i)
+    if (below) return Number(below[1]) / 2
+    const plus = s.match(/^([\d.]+)\+/)
+    if (plus) return Number(plus[1])
+    const range = s.match(/([\d.]+)\s*[–-]\s*([\d.]+)/)
+    if (range) return (Number(range[1]) + Number(range[2])) / 2
+    return null
+  }
+  // INR — "L" = lakh (1,00,000), "Cr" = crore (1,00,00,000)
+  const toNumber = (numStr, unit) => {
+    const n = parseFloat(numStr)
+    if (unit === 'Cr') return n * 10000000
+    if (unit === 'L') return n * 100000
+    return n
+  }
+  const below = str.match(/Below\s*₹?([\d.]+)\s*(L|Cr)/i)
+  if (below) return toNumber(below[1], below[2]) / 2
+  const plus = str.match(/₹?([\d.]+)\s*(L|Cr)\+/i)
+  if (plus) return toNumber(plus[1], plus[2])
+  const range = str.match(/₹?([\d.]+)\s*(L|Cr)?\s*[–-]\s*₹?([\d.]+)\s*(L|Cr)/i)
+  if (range) {
+    const unit = range[2] || range[4]
+    return (toNumber(range[1], unit) + toNumber(range[3], range[4])) / 2
+  }
+  return null
+}
+
 // 500000 -> "₹5L", 10000000 -> "₹1Cr", 75000 -> "$75k". Max value pe "+".
 export function formatIncomeShort(v, currency) {
   const n = Number(v) || 0

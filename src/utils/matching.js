@@ -3,7 +3,7 @@
 // alag-alag. Har match apna "kyun recommend hua" explanation deta hai —
 // fake percentage nahi, actual logic se nikla hua.
 
-import { parseHeightToInches } from '../constants/profileOptions'
+import { parseHeightToInches, parseIncomeRangeMidpoint } from '../constants/profileOptions'
 
 // ===================== HARD REQUIREMENTS =====================
 // "me" = jo dekh raha hai, "other" = jo dikh raha hai. Dono taraf ki
@@ -46,6 +46,21 @@ export function passesHardFilters(me, other) {
   const otherSpecificCommunities = (other.partner_community_ids || []).filter(c => !NON_SPECIFIC.includes(c))
   if (meSpecificCommunities.length > 0 && !meSpecificCommunities.includes(other.community)) return false
   if (otherSpecificCommunities.length > 0 && !otherSpecificCommunities.includes(me.community)) return false
+
+  // Education level preference — dono taraf se. Search screen par user
+  // jo education levels chunta hai wo ab tak sirf save hote the, matching
+  // mein kabhi use nahi hote the. Khaali list = sab acceptable (jaisa
+  // MatchSearch.js ka hint text kehta hai).
+  if ((me.partner_education_level_preferences || []).length > 0 && other.education &&
+      !me.partner_education_level_preferences.includes(other.education)) return false
+  if ((other.partner_education_level_preferences || []).length > 0 && me.education &&
+      !other.partner_education_level_preferences.includes(me.education)) return false
+
+  // Country preference — dono taraf se. "Open to All" = koi restriction nahi.
+  if (me.partner_country_preference && me.partner_country_preference !== 'Open to All' &&
+      other.country && other.country !== me.partner_country_preference) return false
+  if (other.partner_country_preference && other.partner_country_preference !== 'Open to All' &&
+      me.country && me.country !== other.partner_country_preference) return false
 
   // Marital Status compatibility — Never-Married sirf Never-Married se,
   // Divorced/Widowed aapas mein. Yeh Indian matrimonial mein standard
@@ -143,12 +158,26 @@ export function computeMatchScore(me, other) {
     }
   }
 
-  // Income (basic presence-based signal — real income-range comparison
-  // ke liye INCOME_RANGES ko ordered-scale banana hoga, abhi simple
-  // compatibility check). Occupation field removed from the app.
-  if (me.annual_income && other.partner_notes !== undefined) {
-    possible += WEIGHTS.incomeOccupation
-    earned += WEIGHTS.incomeOccupation
+  // Income — doosre ki annual_income ko mere partner_income_min/max range
+  // se compare karte hain (parseIncomeRangeMidpoint se slab string ko
+  // number banate hain). Alag currency ho to galat compare karne se
+  // achha hai category hi skip kar dein (koi FX conversion nahi hai).
+  // PEHLE: `other.partner_notes !== undefined` lagbhag hamesha true tha,
+  // isliye har match ko ye poore 12 points free mil jaate the.
+  if (me.partner_income_min != null && me.partner_income_max != null &&
+      other.annual_income && other.annual_income_currency === me.partner_income_currency) {
+    const otherIncome = parseIncomeRangeMidpoint(other.annual_income, other.annual_income_currency)
+    if (otherIncome != null) {
+      possible += WEIGHTS.incomeOccupation
+      const min = Number(me.partner_income_min), max = Number(me.partner_income_max)
+      if (otherIncome >= min && otherIncome <= max) {
+        earned += WEIGHTS.incomeOccupation
+        strengths.push('Income within your preferred range')
+      } else {
+        earned += WEIGHTS.incomeOccupation * 0.3
+        needsDiscussion.push('Income outside your preferred range')
+      }
+    }
   }
 
   // Location

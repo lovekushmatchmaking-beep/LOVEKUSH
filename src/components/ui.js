@@ -144,7 +144,7 @@ export function ProfileActionsMenu({ profile, reporterProfileId, onBlock, onToas
     onToast && onToast('Profile ID copied — please send it to our team')
   }
   const block = () => {
-    if (window.confirm(`Block ${maskName(profile.full_name) || 'this profile'}? They won't appear in your matches.`)) onBlock()
+    if (window.confirm(`Block ${maskName(profile.full_name) || 'this profile'}? You won't see each other, and neither of you can send requests. You can unblock anytime from Blocked Profiles.`)) onBlock()
   }
   return (
     <PopoverMenu light={light} items={[
