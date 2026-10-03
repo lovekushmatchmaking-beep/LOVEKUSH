@@ -4,12 +4,13 @@ import {
   Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote,
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
-  UserRound, Plus, Wrench, UserCog,
+  UserRound, Plus, Wrench, UserCog, Eye,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
 import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/profileOptions'
 import CreateProfile from './CreateProfile'
+import BiodataView from './BiodataView'
 import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
 import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel } from '../utils/adminStats'
@@ -95,14 +96,44 @@ export default function Admin({ staffUser }) {
   // wapas jaana (har "← Back" button, form save/cancel) navigate(-1) karta
   // hai — matlab phone/browser back button ab in-app back jaise hi kaam
   // karta hai, real navigation stack ke saath.
+  // ===== SECTION NAVIGATION — same history-stack idea extended to the
+  // top-level nav (Profiles/Dashboard/Queues/Tools/Account). Pehle section
+  // switch sirf local state tha (koi history push nahi), isliye agar admin
+  // Dashboard tab par (list view hi hai) phone ka back button dabaye to
+  // seedha /admin se bahar nikal jaata tha. Ab section bhi ?section= query
+  // param mein rehta hai (profiles = default, param omit), isliye har
+  // section switch bhi ek history entry push karta hai aur back button
+  // pichhle section/view par hi wapas le jaata hai.
   const [searchParams, setSearchParams] = useSearchParams()
   const view = searchParams.get('view') || 'list'
+  const section = searchParams.get('section') || 'profiles' // main nav: profiles | dashboard | queues | tools | account
   const setView = (v) => {
     if (v === 'list') navigate(-1) // undoes the push below — matches hardware back
-    else setSearchParams({ view: v })
+    else setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('view', v)
+      return next
+    })
   }
-  const [section, setSection] = useState('profiles') // main nav: profiles | dashboard | queues | tools | account
+  // Section switch while already on the list (the common case: tapping
+  // another bottom-nav/sidebar tab) — pushes one new history entry.
+  const setSectionOnly = (s) => setSearchParams(prev => {
+    const next = new URLSearchParams(prev)
+    if (s === 'profiles') next.delete('section'); else next.set('section', s)
+    next.delete('view')
+    return next
+  })
+  // Combined section+view jump (e.g. a Dashboard stat tile opening a queue
+  // directly) — one push, so one back-press returns to exactly where the
+  // admin started instead of landing on the wrong tab.
+  const goToSectionView = (s, v) => setSearchParams(prev => {
+    const next = new URLSearchParams(prev)
+    if (s === 'profiles') next.delete('section'); else next.set('section', s)
+    next.set('view', v)
+    return next
+  })
   const [editingProfile, setEditingProfile] = useState(null)
+  const [viewingProfile, setViewingProfile] = useState(null) // read-only "Full Profile" view — separate from Edit, no accidental changes
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
   const [matchResults, setMatchResults] = useState([])
   const [matchesLoading, setMatchesLoading] = useState(false)
@@ -115,11 +146,31 @@ export default function Admin({ staffUser }) {
   // Search + Filters
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('') // debounced value that actually triggers query
-  const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({
+  const DEFAULT_FILTERS = {
     religion: '', community: '', city: '', gender: '',
     ageMin: '', ageMax: '', maritalStatus: '', education: '', assignedToMe: false,
+  }
+  // Filters panel ab apna last-used state (open/closed + jo filters chune
+  // the) localStorage mein yaad rakhta hai, taaki roz same filter (jaise
+  // "assigned to me") use karne waalon ko har baar panel expand + filter
+  // dobara select na karna pade. Sirf "remember last state" — koi naya
+  // saved-preset system nahi (scope-creep se bachne ke liye).
+  const [showFilters, setShowFilters] = useState(() => {
+    try { return localStorage.getItem('admin_filters_open') === '1' } catch { return false }
   })
+  const [filters, setFilters] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('admin_filters_state') || 'null')
+      return saved ? { ...DEFAULT_FILTERS, ...saved } : DEFAULT_FILTERS
+    } catch { return DEFAULT_FILTERS }
+  })
+
+  useEffect(() => {
+    try { localStorage.setItem('admin_filters_open', showFilters ? '1' : '0') } catch {}
+  }, [showFilters])
+  useEffect(() => {
+    try { localStorage.setItem('admin_filters_state', JSON.stringify(filters)) } catch {}
+  }, [filters])
 
   // Debounce search input (400ms) — DB pe har keystroke pe query nahi maarte
   useEffect(() => {
@@ -127,11 +178,15 @@ export default function Admin({ staffUser }) {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  // STATS COUNTER — manual refresh only (Aryan asked to remove the 30s
-  // auto-refresh, 2026-10-03). Still loads once when the list view opens.
+  // STATS COUNTER — loads once when the list view opens, then auto-refreshes
+  // every 1 hour (2026-10-03: Aryan had earlier asked for manual-only, then
+  // explicitly asked for 1-hour auto-refresh — this replaces that). Manual
+  // "Refresh" button next to it still works for an on-demand check.
   useEffect(() => {
     if (view !== 'list') return
     loadStats()
+    const t = setInterval(loadStats, 60 * 60 * 1000)
+    return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view])
 
@@ -269,7 +324,7 @@ export default function Admin({ staffUser }) {
   }
 
   const resetFilters = () => {
-    setFilters({ religion:'', community:'', city:'', gender:'', ageMin:'', ageMax:'', maritalStatus:'', education:'', assignedToMe:false })
+    setFilters(DEFAULT_FILTERS)
   }
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length
@@ -293,6 +348,11 @@ export default function Admin({ staffUser }) {
     const target = profiles.find(p => p.id === id)
     if (status === 'active' && target && needsSelfieVerification(target)
       && !window.confirm('This profile is not selfie-verified yet. Make it live anyway?')) return
+    // Block karne ka koi confirmation nahi tha — ek galti se click se kisi
+    // member ki profile turant block ho jaati thi. Active karne jaisa hi
+    // safety net ab Block par bhi (symmetric confirmations).
+    if (status === 'blocked' && target
+      && !window.confirm(`Block ${target.full_name || 'this profile'}? They will no longer be visible to other members.`)) return
     const { error } = await supabase.from('profiles').update({ profile_status: status }).eq('id', id)
     if (error) {
       alert('Update failed: ' + error.message)
@@ -410,6 +470,8 @@ export default function Admin({ staffUser }) {
     const unverified = profiles.filter(p => ids.includes(p.id) && needsSelfieVerification(p)).length
     if (status === 'active' && unverified > 0
       && !window.confirm(`${unverified} selected profile(s) are not selfie-verified yet. Make them live anyway?`)) return
+    if (status === 'blocked'
+      && !window.confirm(`Block ${ids.length} selected profile(s)? They will no longer be visible to other members.`)) return
     setBulkWorking(true)
     const { error } = await supabase.from('profiles').update({ profile_status: status }).in('id', ids)
     if (error) {
@@ -468,9 +530,9 @@ export default function Admin({ staffUser }) {
     { id: 'tools', label: 'Tools', Icon: Wrench },
     { id: 'account', label: 'Account', Icon: UserRound },
   ]
-  const sectionForView = { verificationQueue:'queues', reportsQueue:'queues', myQueue:'queues', duplicateLeads:'queues', casteSuggestions:'tools', coordinationRequests:'tools', shareLinks:'tools', createClient:'profiles', editProfile:'profiles', findMatches:'profiles' }
+  const sectionForView = { verificationQueue:'queues', reportsQueue:'queues', myQueue:'queues', duplicateLeads:'queues', casteSuggestions:'tools', coordinationRequests:'tools', shareLinks:'tools', createClient:'profiles', editProfile:'profiles', fullProfile:'profiles', findMatches:'profiles' }
   const effectiveSection = view === 'list' ? section : (sectionForView[view] || section)
-  const switchSection = (s) => { if (view !== 'list') navigate(-1); setSection(s) }
+  const switchSection = (s) => { if (view !== 'list') navigate(-1); setSectionOnly(s) }
 
   return (
     <div className="admin-shell">
@@ -529,6 +591,19 @@ export default function Admin({ staffUser }) {
             user={{ id: staffUser.user_id }}
             onSave={()=>{ setView('list'); setEditingProfile(null); runQuery(0) }}
             onCancel={()=>{ setView('list'); setEditingProfile(null) }}
+          />
+        </div>
+      )}
+
+      {/* Read-only full profile — reuses the member's own BiodataView (same
+          component users see for themselves), so "View" can never
+          accidentally change a field the way opening Edit-mode could. */}
+      {view === 'fullProfile' && viewingProfile && (
+        <div style={{maxWidth:800,margin:'0 auto',padding:'20px'}}>
+          <BiodataView
+            profile={viewingProfile}
+            photo={photos[viewingProfile.id] ? { storage_path: photos[viewingProfile.id] } : null}
+            onBack={()=>{ setView('list'); setViewingProfile(null) }}
           />
         </div>
       )}
@@ -874,6 +949,8 @@ export default function Admin({ staffUser }) {
                           onClick={e => { e.stopPropagation(); updateStatus(p.id, 'pending') }}><RotateCcw size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Set Pending</button>
                       )}
                       <button className="btn btn-outline btn-sm"
+                        onClick={e => { e.stopPropagation(); setViewingProfile(p); setView('fullProfile') }}><Eye size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />View Full Profile</button>
+                      <button className="btn btn-outline btn-sm"
                         onClick={e => { e.stopPropagation(); setEditingProfile(p); setView('editProfile') }}><Pencil size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Edit</button>
                       <button className="btn btn-outline btn-sm"
                         onClick={e => { e.stopPropagation(); findMatchesForProfile(p) }}><Search size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Find Matches</button>
@@ -917,8 +994,8 @@ export default function Admin({ staffUser }) {
             { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309', Icon: Clock },
             { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a', Icon: CheckCircle2 },
             { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626', Icon: ShieldX },
-            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert, onClick: () => { setSection('queues'); setView('verificationQueue') } },
-            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag, onClick: () => { setSection('queues'); setView('reportsQueue') } },
+            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert, onClick: () => goToSectionView('queues', 'verificationQueue') },
+            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag, onClick: () => goToSectionView('queues', 'reportsQueue') },
           ].map(s => (
             <div key={s.label} className="list-row" style={{ background: s.bg, padding: '16px 14px', cursor: s.onClick ? 'pointer' : 'default', transition: 'transform 0.15s, box-shadow 0.15s' }}
               onClick={s.onClick}
@@ -943,7 +1020,7 @@ export default function Admin({ staffUser }) {
           </button>
         </div>
         {showBreakdown && <StatsBreakdown refreshKey={statsUpdatedAt} />}
-        {showFunnel && <FunnelView refreshKey={statsUpdatedAt} onOpenDuplicates={() => { setSection('queues'); setView('duplicateLeads') }} />}
+        {showFunnel && <FunnelView refreshKey={statsUpdatedAt} onOpenDuplicates={() => goToSectionView('queues', 'duplicateLeads')} />}
       </div>
       )}
       {view === 'list' && section === 'queues' && (
@@ -961,9 +1038,9 @@ export default function Admin({ staffUser }) {
       <div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500, marginBottom: 20 }}>Tools</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
-          <AdminNavCard icon={ClipboardList} label="Caste Suggestions" onClick={()=>setView('casteSuggestions')} />
-          <AdminNavCard icon={Handshake} label="Coordination" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
-          <AdminNavCard icon={Link2} label="Share Links" onClick={()=>setView('shareLinks')} />
+          <AdminNavCard icon={ClipboardList} label="Caste Suggestions" subtitle="New castes/gotras members typed in" onClick={()=>setView('casteSuggestions')} />
+          <AdminNavCard icon={Handshake} label="Coordination" subtitle="Talk/meeting requests between members" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
+          <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" onClick={()=>setView('shareLinks')} />
         </div>
       </div>
       )}
@@ -1008,7 +1085,7 @@ export default function Admin({ staffUser }) {
 }
 
 // ===== NAV CARD — grid item for Queues/Tools sections (replaces old AdminDrawer)
-function AdminNavCard({ icon: Icon, label, badge, onClick }) {
+function AdminNavCard({ icon: Icon, label, subtitle, badge, onClick }) {
   return (
     <button className="list-row clickable" onClick={onClick}
       style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '24px 16px', textAlign: 'center', cursor: 'pointer', width: '100%' }}>
@@ -1016,6 +1093,7 @@ function AdminNavCard({ icon: Icon, label, badge, onClick }) {
         <Icon size={22} color="var(--gray3)" />
       </div>
       <span style={{ fontSize: 13, fontWeight: 500 }}>{label}</span>
+      {subtitle && <span style={{ fontSize: 11, color: 'var(--gray3)', marginTop: -6 }}>{subtitle}</span>}
       {!!badge && <span className="chip chip-primary">{badge}</span>}
     </button>
   )
