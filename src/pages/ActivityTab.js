@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { supabase } from '../supabase'
 import { PageHeader, EmptyState } from '../components/ui'
 import SignedImage from '../components/SignedImage'
 import { maskName } from '../utils/maskName'
@@ -23,7 +24,24 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
   const receivedIds = new Set((receivedActions || []).map(a => a.actor_profile_id))
   const acceptedIds = [...sentIds].filter(id => receivedIds.has(id))
 
-  const resolveFromMatches = (profileId) => (matches || []).find(m => m.id === profileId) || null
+  // Sent/Accepted rows pehle sirf current matches list se resolve hote the —
+  // jo profile us list mein nahi (filter badla, 100 ki limit), woh khaali
+  // "Profile" dikhta tha. Bache hue ids profiles_public_view se le aate hain
+  // (photo nahi — woh photo-request approval ke bina nahi dikhti).
+  const [extraProfiles, setExtraProfiles] = useState({})
+  const sentKey = sentActions.map(a => a.target_profile_id).join(',')
+  useEffect(() => {
+    const known = new Set((matches || []).map(m => m.id))
+    const missing = sentKey ? sentKey.split(',').filter(id => !known.has(id)) : []
+    if (missing.length === 0) return
+    supabase.from('profiles_public_view').select('*').in('id', missing).then(({ data }) => {
+      const map = {}
+      ;(data || []).forEach(p => { map[p.id] = p })
+      setExtraProfiles(map)
+    })
+  }, [sentKey, matches])
+
+  const resolveFromMatches = (profileId) => (matches || []).find(m => m.id === profileId) || extraProfiles[profileId] || null
 
   const sentRows = sentActions.map(a => {
     const p = resolveFromMatches(a.target_profile_id)
