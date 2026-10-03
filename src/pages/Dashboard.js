@@ -145,13 +145,19 @@ export default function Dashboard({ user }) {
       // dono taraf ki preferences check hoti hain).
       // Matching tabhi shuru hoti hai jab profile live (active) ho — self-signup
       // profiles selfie verification ke baad hi active hoti hain.
+      // NOTE: candidate pool abhi bhi client-side hi filter/score hota hai
+      // (profile count chhota hai). `order` + raised limit ek mitigation
+      // hai taaki 100 se zyada profiles hone par bhi purane/random 100
+      // tak simit na rahe — asli fix (bada scale aane par) hard filters
+      // ko query mein hi push karna hoga (ek Postgres function/RPC se).
       const oppositeGender = p.gender === 'Male' ? 'Female' : 'Male'
       const { data: candidates } = p.profile_status !== 'active' ? { data: [] } : await supabase
         .from('profiles_public_view')
         .select('*')
         .neq('user_id', user.id)
         .eq('gender', oppositeGender)
-        .limit(100)
+        .order('created_at', { ascending: false })
+        .limit(500)
 
       const visibleCandidates = (candidates || []).filter(c => !dislikedIds.has(c.id))
 
