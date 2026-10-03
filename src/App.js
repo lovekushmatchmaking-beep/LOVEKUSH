@@ -11,6 +11,7 @@ import CreateProfile from './pages/CreateProfile'
 import Dashboard from './pages/Dashboard'
 import Admin from './pages/Admin'
 import SharedProfile from './pages/SharedProfile'
+import SharedMatches from './pages/SharedMatches'
 import './App.css'
 
 // PEHLE: "/admin" route bina kisi real check ke Admin component render
@@ -109,6 +110,7 @@ export default function App() {
           }
         />
         {/* Public — koi login nahi chahiye, family member seedha khol sakta hai */}
+        <Route path="/share/m/:token" element={<SharedMatches />} />
         <Route path="/share/:token" element={<SharedProfile />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

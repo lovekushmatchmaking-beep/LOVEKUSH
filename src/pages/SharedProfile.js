@@ -30,6 +30,7 @@ export default function SharedProfile() {
       setError('This link is invalid.')
     } else {
       setProfile(data[0])
+      document.title = `${data[0].masked_name || 'Profile'} — LOVEKUSH`
     }
     setLoading(false)
   }
@@ -55,6 +56,7 @@ export default function SharedProfile() {
     ['Religion', profile.religion],
     ['Community', profile.community],
     ['Education', profile.education],
+    ['Profession', profile.occupation],
     ['Annual Income', profile.annual_income],
     ['Diet', profile.diet],
     ['Complexion', profile.complexion],
