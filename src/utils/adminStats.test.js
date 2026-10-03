@@ -1,4 +1,4 @@
-import { breakdown, filterProfiles } from './adminStats'
+import { breakdown, filterProfiles, computeFunnel } from './adminStats'
 
 const P = [
   { gender: 'Male', age: 27, height: '5\'9" (175 cm)', religion: 'Hindu', profile_status: 'active', created_at: '2026-10-02T10:00:00Z' },
@@ -30,4 +30,20 @@ test('filters by gender, status and joined window', () => {
   expect(filterProfiles(P, { status: 'pending' }, now)).toHaveLength(1)
   expect(filterProfiles(P, { joined: '7d' }, now)).toHaveLength(1)
   expect(filterProfiles(P, { joined: '90d', gender: 'Male' }, now)).toHaveLength(2)
+})
+
+test('funnel computes stage-over-stage conversion %, first stage has none', () => {
+  const stages = computeFunnel({ registered: 100, active: 80, matched: 40, meetingRequested: 10, meetingDone: 5 })
+  expect(stages.map(s => [s.key, s.count, s.conversionPct])).toEqual([
+    ['registered', 100, null],
+    ['active', 80, 80],
+    ['matched', 40, 50],
+    ['meetingRequested', 10, 25],
+    ['meetingDone', 5, 50],
+  ])
+})
+
+test('funnel handles a zero stage without dividing by zero', () => {
+  const stages = computeFunnel({ registered: 0, active: 0, matched: 0, meetingRequested: 0, meetingDone: 0 })
+  expect(stages.every(s => s.conversionPct === null || s.conversionPct === 0)).toBe(true)
 })
