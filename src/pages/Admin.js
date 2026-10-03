@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote,
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
@@ -87,7 +87,19 @@ export default function Admin({ staffUser }) {
   const [newNote, setNewNote] = useState('')
   const [newNoteFollowUp, setNewNoteFollowUp] = useState('')
   const [newNoteOutcome, setNewNoteOutcome] = useState('')
-  const [view, setView] = useState('list') // 'list' | 'createClient' | 'findMatches' | 'editProfile' | 'shareLinks' | 'verificationQueue' | 'reportsQueue' | 'myQueue'
+  // ===== VIEW NAVIGATION — Aryan ne complain kiya ki drawer/queue ke andar
+  // jaane ke baad phone ka "back" button kaam nahi karta (view sirf local
+  // state tha, URL/history se juda nahi). Ab view ko ?view= query param mein
+  // rakhte hain: andar jaana ek history entry push karta hai, "list" par
+  // wapas jaana (har "← Back" button, form save/cancel) navigate(-1) karta
+  // hai — matlab phone/browser back button ab in-app back jaise hi kaam
+  // karta hai, real navigation stack ke saath.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const view = searchParams.get('view') || 'list'
+  const setView = (v) => {
+    if (v === 'list') navigate(-1) // undoes the push below — matches hardware back
+    else setSearchParams({ view: v })
+  }
   const [menuOpen, setMenuOpen] = useState(false) // drawer nav — secondary admin sections (was a crowded button row)
   const [editingProfile, setEditingProfile] = useState(null)
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
@@ -544,28 +556,31 @@ export default function Admin({ staffUser }) {
             <Plus size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Create Client Profile
           </button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 20 }}>
+        {/* Stat tiles — Aryan ko pehla screen bahut lamba/"messy" laga, isliye
+            tiles ko compact kiya (chhota padding/font, 3-up grid on mobile)
+            taaki profile list tak scroll kam karna pade. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(102px,1fr))', gap: 8, marginBottom: 16 }}>
           {[
-            { label: 'Total Users', val: stats.total, bg: '#f5f5f5', fg: '#555', Icon: Users },
+            { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555', Icon: Users },
             { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#4f46e5', Icon: Users },
             { label: 'Female', val: stats.female, bg: '#fdf2f8', fg: '#db2777', Icon: Users },
-            { label: 'New (7 days)', val: stats.newWeek, sub: `Today: ${stats.newToday}`, bg: '#ecfeff', fg: '#0891b2', Icon: UserPlus },
+            { label: 'New (7d)', val: stats.newWeek, sub: `Today ${stats.newToday}`, bg: '#ecfeff', fg: '#0891b2', Icon: UserPlus },
             { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309', Icon: Clock },
             { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a', Icon: CheckCircle2 },
             { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626', Icon: ShieldX },
-            { label: 'Needs Verification', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert, onClick: () => setView('verificationQueue') },
-            { label: 'Open Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag, onClick: () => setView('reportsQueue') },
+            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert, onClick: () => setView('verificationQueue') },
+            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag, onClick: () => setView('reportsQueue') },
           ].map(s => (
-            <div key={s.label} style={{ background: s.bg, borderRadius: 'var(--radius)', padding: '14px 16px', transition: 'transform 0.15s, box-shadow 0.15s', cursor: s.onClick ? 'pointer' : 'default' }}
+            <div key={s.label} style={{ background: s.bg, borderRadius: 'var(--radius-sm)', padding: '8px 10px', transition: 'transform 0.15s, box-shadow 0.15s', cursor: s.onClick ? 'pointer' : 'default' }}
               onClick={s.onClick}
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)' }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                <div style={{ fontFamily:'var(--font-display)', fontSize: 28, fontWeight:500 }}>{s.val}</div>
-                <s.Icon size={16} color={s.fg} style={{ opacity: 0.7 }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontFamily:'var(--font-display)', fontSize: 20, fontWeight:500 }}>{s.val}</div>
+                <s.Icon size={13} color={s.fg} style={{ opacity: 0.7 }} />
               </div>
-              <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{s.label}</div>
-              {s.sub && <div style={{ fontSize: 11, color: s.fg, marginTop: 2 }}>{s.sub}</div>}
+              <div style={{ fontSize: 9, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{s.label}</div>
+              {s.sub && <div style={{ fontSize: 9.5, color: s.fg, marginTop: 1 }}>{s.sub}</div>}
             </div>
           ))}
         </div>
@@ -657,14 +672,14 @@ export default function Admin({ staffUser }) {
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <div className="pill-tabs">
+          <div className="pill-tabs" style={{ flex: '1 1 auto', minWidth: 0 }}>
             {['all', 'pending', 'active', 'blocked'].map(t => (
               <button key={t} className={'pill-tab ' + (activeTab === t ? 'active' : '')} onClick={() => setActiveTab(t)}>
                 {t}
               </button>
             ))}
           </div>
-          <button className="btn btn-black btn-sm" style={{ marginLeft: 'auto' }} onClick={() => runQuery(0)}>
+          <button className="btn btn-black btn-sm" style={{ flex: '0 0 auto' }} onClick={() => runQuery(0)}>
             {loading ? 'Loading...' : <><RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Refresh</>}
           </button>
         </div>
@@ -716,11 +731,17 @@ export default function Admin({ staffUser }) {
                     <div style={{ fontSize: 12, color: '#8e8e8e' }}>{p.age}y · {p.city} · {p.religion}</div>
                   </div>
                   {selected?.id !== p.id && <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} />}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                    <div className={"badge badge-" + p.profile_status} style={{ fontSize: 10 }}>{p.profile_status}</div>
-                    {p.verification_status === 'verified' && <div className="badge" style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>✓ Verified</div>}
-                    {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb' }}>Selfie received</div>}
-                    {p.is_premium && <div className="badge" style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Crown size={10} />Premium</div>}
+                  {/* Ek hi row mein wrap karo — pehle "active" + "✓ Verified" + "Premium"
+                      alag-alag lines mein stack hoke card ko lamba bana rahe the. "active"
+                      ka matlab hi verified hai (is app ke flow mein), isliye Verified badge
+                      ab sirf tab dikhta hai jab status active nahi hai — ek kam badge, kam clutter. */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 4 }}>
+                      <div className={"badge badge-" + p.profile_status} style={{ fontSize: 10 }}>{p.profile_status}</div>
+                      {p.verification_status === 'verified' && p.profile_status !== 'active' && <div className="badge" style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>✓ Verified</div>}
+                      {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb' }}>Selfie received</div>}
+                      {p.is_premium && <div className="badge" style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Crown size={10} />Premium</div>}
+                    </div>
                     <div style={{ fontSize: 10, color: '#8e8e8e', fontFamily: 'monospace' }}>{p.profile_code}</div>
                   </div>
                 </div>
