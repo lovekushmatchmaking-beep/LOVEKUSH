@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote, ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock } from 'lucide-react'
+import {
+  Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote,
+  ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
+  ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
+  UserRound, Plus,
+} from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
 import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/profileOptions'
@@ -83,6 +88,7 @@ export default function Admin({ staffUser }) {
   const [newNoteFollowUp, setNewNoteFollowUp] = useState('')
   const [newNoteOutcome, setNewNoteOutcome] = useState('')
   const [view, setView] = useState('list') // 'list' | 'createClient' | 'findMatches' | 'editProfile' | 'shareLinks' | 'verificationQueue' | 'reportsQueue' | 'myQueue'
+  const [menuOpen, setMenuOpen] = useState(false) // drawer nav — secondary admin sections (was a crowded button row)
   const [editingProfile, setEditingProfile] = useState(null)
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
   const [matchResults, setMatchResults] = useState([])
@@ -435,15 +441,29 @@ export default function Admin({ staffUser }) {
     navigate('/')
   }
 
+  const needsAttention = (stats.needsVerification || 0) + (stats.openReports || 0)
+
   return (
     <div style={{ minHeight: '100vh', background: '#fff' }}>
       <nav className="navbar">
-        <span style={{ fontFamily:'var(--font-display)', fontSize: 15, fontWeight:500, letterSpacing: '0.35em' }}>ADMIN</span>
+        <span style={{ fontFamily:'var(--font-display)', fontSize: 15, fontWeight:500, letterSpacing: '0.35em', background: 'var(--brand-gradient)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>ADMIN</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 11, color: '#8e8e8e' }}>{staffUser.role === 'admin' ? 'Admin' : 'Relationship Manager'}</span>
-          <button className="btn btn-outline" style={{ fontSize: 11, padding: '6px 14px' }} onClick={logout}>Logout</button>
+          <span className="chip chip-muted" style={{ textTransform: 'none' }}>{staffUser.role === 'admin' ? 'Admin' : 'Relationship Manager'}</span>
+          <button className="icon-btn" onClick={() => setMenuOpen(true)} aria-label="Menu" style={{ position: 'relative' }}>
+            <Menu size={22} />
+            {needsAttention > 0 && <span className="nav-dot" style={{ top: 6, right: 6 }} />}
+          </button>
         </div>
       </nav>
+
+      <AdminDrawer
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        staffUser={staffUser}
+        stats={stats}
+        onNavigate={(v) => setView(v)}
+        onLogout={logout}
+      />
 
       {view === 'createClient' && (
         <div>
@@ -515,15 +535,14 @@ export default function Admin({ staffUser }) {
 
       {view === 'list' && (
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView('myQueue')}>🗂 My Queue</button>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView('duplicateLeads')}>🧬 Duplicate Leads</button>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView('verificationQueue')}>🛡 Verification{stats.needsVerification > 0 ? ` (${stats.needsVerification})` : ''}</button>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView('reportsQueue')}>🚩 Reports{stats.openReports > 0 ? ` (${stats.openReports})` : ''}</button>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView('casteSuggestions')}>📋 Caste Suggestions</button>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView('coordinationRequests')}>🤝 Coordination Requests</button>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView('shareLinks')}>🔗 My Share Links</button>
-          <button className="btn btn-black btn-sm" onClick={()=>setView('createClient')}>+ Create Client Profile</button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Profiles</div>
+            <div style={{ fontSize: 12, color: '#8e8e8e' }}>Open the menu for queues, reports &amp; share links</div>
+          </div>
+          <button className="btn btn-black btn-sm" onClick={()=>setView('createClient')}>
+            <Plus size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Create Client Profile
+          </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 20 }}>
           {[
@@ -583,7 +602,7 @@ export default function Admin({ staffUser }) {
             onClick={() => setShowFilters(!showFilters)}
             style={{ position: 'relative' }}
           >
-            ⚙ Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+            <SlidersHorizontal size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
           </button>
         </div>
 
@@ -646,7 +665,7 @@ export default function Admin({ staffUser }) {
             ))}
           </div>
           <button className="btn btn-black btn-sm" style={{ marginLeft: 'auto' }} onClick={() => runQuery(0)}>
-            {loading ? 'Loading...' : '↺ Refresh'}
+            {loading ? 'Loading...' : <><RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Refresh</>}
           </button>
         </div>
 
@@ -666,8 +685,8 @@ export default function Admin({ staffUser }) {
             {selectedIds.size > 0 && (
               <>
                 <span>{selectedIds.size} selected</span>
-                <button className="btn btn-black btn-sm" disabled={bulkWorking} onClick={() => bulkUpdateStatus('active')}>✓ Approve Selected</button>
-                <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }} disabled={bulkWorking} onClick={() => bulkUpdateStatus('blocked')}>✕ Block Selected</button>
+                <button className="btn btn-black btn-sm" disabled={bulkWorking} onClick={() => bulkUpdateStatus('active')}><CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve Selected</button>
+                <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }} disabled={bulkWorking} onClick={() => bulkUpdateStatus('blocked')}><ShieldX size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block Selected</button>
               </>
             )}
           </div>
@@ -689,7 +708,7 @@ export default function Admin({ staffUser }) {
                   <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#f0f0f0', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {photos[p.id]
                       ? <SignedImage path={photos[p.id]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <span style={{ fontSize: 18 }}>👤</span>
+                      : <UserRound size={18} color="#bbb" />
                     }
                   </div>
                   <div style={{ flex: 1 }}>
@@ -701,7 +720,7 @@ export default function Admin({ staffUser }) {
                     <div className={"badge badge-" + p.profile_status} style={{ fontSize: 10 }}>{p.profile_status}</div>
                     {p.verification_status === 'verified' && <div className="badge" style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>✓ Verified</div>}
                     {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb' }}>Selfie received</div>}
-                    {p.is_premium && <div className="badge" style={{ fontSize: 10, background: '#fef3c7', color: '#b45309' }}>👑 Premium</div>}
+                    {p.is_premium && <div className="badge" style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Crown size={10} />Premium</div>}
                     <div style={{ fontSize: 10, color: '#8e8e8e', fontFamily: 'monospace' }}>{p.profile_code}</div>
                   </div>
                 </div>
@@ -769,15 +788,15 @@ export default function Admin({ staffUser }) {
                         </span>
                         {p.verification_status !== 'verified' && !['selfie_requested', 'selfie_submitted'].includes(p.verification_status) && !p.is_admin_managed && (
                           <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11 }}
-                            onClick={() => setVerificationStatus(p.id, 'selfie_requested')}>📷 Request Selfie</button>
+                            onClick={() => setVerificationStatus(p.id, 'selfie_requested')}><Camera size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Request Selfie</button>
                         )}
                         {p.verification_status !== 'verified' && (
                           <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11, color: '#16a34a', borderColor: '#16a34a' }}
-                            onClick={() => setVerificationStatus(p.id, 'verified')}>✓ Verify &amp; Make Live</button>
+                            onClick={() => setVerificationStatus(p.id, 'verified')}><ShieldCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Verify &amp; Make Live</button>
                         )}
                         {(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) && (
                           <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11, color: '#dc2626', borderColor: '#dc2626' }}
-                            onClick={() => setVerificationStatus(p.id, 'rejected')}>✕ Reject</button>
+                            onClick={() => setVerificationStatus(p.id, 'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
                         )}
                       </div>
                       {p.selfie_path && p.verification_status !== 'verified' && (
@@ -833,24 +852,24 @@ export default function Admin({ staffUser }) {
                     )}
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {p.profile_status !== 'active' && (
-                        <button className="btn btn-black btn-sm" onClick={e => { e.stopPropagation(); updateStatus(p.id, 'active') }}>✓ Approve</button>
+                        <button className="btn btn-black btn-sm" onClick={e => { e.stopPropagation(); updateStatus(p.id, 'active') }}><CheckCircle2 size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve</button>
                       )}
                       {p.profile_status !== 'blocked' && (
                         <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }}
-                          onClick={e => { e.stopPropagation(); updateStatus(p.id, 'blocked') }}>✕ Block</button>
+                          onClick={e => { e.stopPropagation(); updateStatus(p.id, 'blocked') }}><ShieldX size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block</button>
                       )}
                       {p.profile_status !== 'pending' && (
                         <button className="btn btn-outline btn-sm"
-                          onClick={e => { e.stopPropagation(); updateStatus(p.id, 'pending') }}>↩ Set Pending</button>
+                          onClick={e => { e.stopPropagation(); updateStatus(p.id, 'pending') }}><RotateCcw size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Set Pending</button>
                       )}
                       <button className="btn btn-outline btn-sm"
-                        onClick={e => { e.stopPropagation(); setEditingProfile(p); setView('editProfile') }}>✎ Edit</button>
+                        onClick={e => { e.stopPropagation(); setEditingProfile(p); setView('editProfile') }}><Pencil size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Edit</button>
                       <button className="btn btn-outline btn-sm"
-                        onClick={e => { e.stopPropagation(); findMatchesForProfile(p) }}>🔍 Find Matches</button>
+                        onClick={e => { e.stopPropagation(); findMatchesForProfile(p) }}><Search size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Find Matches</button>
                       <button className="btn btn-outline btn-sm"
                         style={p.is_premium ? { color: '#b45309', borderColor: '#b45309' } : {}}
                         onClick={e => { e.stopPropagation(); togglePremium(p.id, p.is_premium) }}>
-                        {p.is_premium ? '👑 Remove Premium' : '👑 Make Premium'}
+                        <><Crown size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />{p.is_premium ? 'Remove Premium' : 'Make Premium'}</>
                       </button>
                     </div>
                   </div>
@@ -868,6 +887,53 @@ export default function Admin({ staffUser }) {
       </div>
       )}
     </div>
+  )
+}
+
+// ===== ADMIN NAV DRAWER — Aryan ne "messy" button row (My Queue / Duplicate
+// Leads / Verification / Reports / Caste Suggestions / Coordination
+// Requests / Share Links, sab ek saath wrap ho rahe the) ko hamburger ke
+// peeche drawer mein daalne ko kaha — same slide-in drawer pattern jo
+// user-facing app (AppChrome's SideDrawer) mein already hai, wahi
+// .drawer/.drawer-item CSS reuse karta hai taaki design language consistent rahe.
+function AdminDrawer({ open, onClose, staffUser, stats, onNavigate, onLogout }) {
+  const go = (v) => { onClose(); onNavigate(v) }
+  const items = [
+    { icon: ListChecks, label: 'My Queue', onClick: () => go('myQueue') },
+    { icon: Copy, label: 'Duplicate Leads', onClick: () => go('duplicateLeads') },
+    { icon: ShieldAlert, label: 'Verification Queue', badge: stats.needsVerification, onClick: () => go('verificationQueue') },
+    { icon: Flag, label: 'Reports Queue', badge: stats.openReports, onClick: () => go('reportsQueue') },
+    { sep: true },
+    { icon: ClipboardList, label: 'Caste Suggestions', onClick: () => go('casteSuggestions') },
+    { icon: Handshake, label: 'Coordination Requests', onClick: () => go('coordinationRequests') },
+    { icon: Link2, label: 'My Share Links', onClick: () => go('shareLinks') },
+    { sep: true },
+    { icon: LogOut, label: 'Logout', onClick: () => { onClose(); onLogout() }, danger: true },
+  ]
+
+  return (
+    <>
+      <div className={'drawer-overlay' + (open ? ' open' : '')} onClick={onClose} aria-hidden="true" />
+      <aside className={'drawer' + (open ? ' open' : '')} aria-hidden={!open} aria-label="Admin menu">
+        <div className="drawer-head">
+          <div className="avatar" style={{ width: 44, height: 44 }}>
+            <UserRound size={20} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>{staffUser.role === 'admin' ? 'Admin' : 'Relationship Manager'}</div>
+            <div style={{ fontSize: 11, color: '#8e8e8e' }}>Lovekush staff panel</div>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Close menu"><X size={22} /></button>
+        </div>
+        {items.map((it, i) => it.sep ? <div key={i} className="drawer-sep" /> : (
+          <button key={it.label} className={'drawer-item' + (it.danger ? ' danger' : '')} onClick={it.onClick} tabIndex={open ? 0 : -1}>
+            <span className="drawer-item-icon"><it.icon size={19} /></span>
+            <span style={{ flex: 1 }}>{it.label}</span>
+            {!!it.badge && <span className="chip chip-primary">{it.badge}</span>}
+          </button>
+        ))}
+      </aside>
+    </>
   )
 }
 
@@ -1241,7 +1307,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
                   <div style={{width:48,height:48,borderRadius:'50%',background:'#f0f0f0',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
                     {r.photoPath
                       ? <SignedImage path={r.photoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
-                      : <span style={{fontSize:18}}>👤</span>}
+                      : <UserRound size={18} color="#bbb" />}
                   </div>
                   <div style={{flex:1,cursor:'pointer'}} onClick={()=>setExpandedId(isExpanded?null:other.id)}>
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -1369,7 +1435,7 @@ function ShareLinksView({ staffUserId, onBack }) {
                   </div>
                 </div>
                 <div style={{display:'flex',gap:8,marginTop:10}}>
-                  <button className="btn btn-outline btn-sm" onClick={()=>copyLink(l.token)}>📋 Copy Link</button>
+                  <button className="btn btn-outline btn-sm" onClick={()=>copyLink(l.token)}><Copy size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Copy Link</button>
                   {!l.revoked && !isExpired && (
                     <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
                       onClick={()=>handleRevoke(l.id)}>✕ Revoke</button>
@@ -1449,7 +1515,7 @@ function CasteSuggestionsView({ onBack }) {
                 <button className="btn btn-outline btn-sm" style={{color:'#16a34a',borderColor:'#16a34a'}}
                   onClick={()=>handleAction(s.id, 'approved')}>✅ Approve</button>
                 <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
-                  onClick={()=>handleAction(s.id, 'rejected')}>✕ Reject</button>
+                  onClick={()=>handleAction(s.id, 'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
               </div>
             </div>
           ))}
@@ -1754,11 +1820,11 @@ function VerificationQueueView({ staffUser, onBack }) {
                 {p.selfie_path && sec.key === 'review' && <SelfieCompare selfiePath={p.selfie_path} photoPath={photoByProfile[p.id]} />}
                 <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
                   {sec.key === 'request' && (
-                    <button className="btn btn-black btn-sm" onClick={()=>act(p,'selfie_requested')}>📷 Request Selfie</button>
+                    <button className="btn btn-black btn-sm" onClick={()=>act(p,'selfie_requested')}><Camera size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Request Selfie</button>
                   )}
-                  <button className={'btn btn-sm ' + (sec.key === 'review' ? 'btn-black' : 'btn-outline')} onClick={()=>act(p,'verified')}>✓ Verify &amp; Make Live</button>
+                  <button className={'btn btn-sm ' + (sec.key === 'review' ? 'btn-black' : 'btn-outline')} onClick={()=>act(p,'verified')}><ShieldCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Verify &amp; Make Live</button>
                   {sec.key === 'review' && (
-                    <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}} onClick={()=>act(p,'rejected')}>✕ Reject</button>
+                    <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}} onClick={()=>act(p,'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
                   )}
                 </div>
               </div>
@@ -1834,7 +1900,7 @@ function ReportsQueueView({ staffUser, onBack }) {
                 <div style={{fontSize:10,color:'#bbb',marginTop:4}}>{new Date(r.created_at).toLocaleDateString('en-IN')}</div>
                 <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
                   <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
-                    onClick={()=>resolve(r.id, 'resolved', r.reported_profile_id, true)}>✕ Block Reported Profile</button>
+                    onClick={()=>resolve(r.id, 'resolved', r.reported_profile_id, true)}><ShieldX size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block Reported Profile</button>
                   <button className="btn btn-outline btn-sm"
                     onClick={()=>resolve(r.id, 'dismissed', r.reported_profile_id, false)}>Dismiss</button>
                 </div>
