@@ -7,8 +7,8 @@ import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/pr
 import CreateProfile from './CreateProfile'
 import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
-import { buildWaMeLink, buildMailtoLink } from '../utils/shareProfile'
-import { generateShareLink, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
+import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
+import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
 
 // SEARCH DESIGN NOTE: yeh search ab DATABASE se query karta hai (Supabase
 // .ilike()/.eq()/.gte() ke saath), poore profiles table ko browser mein
@@ -771,6 +771,36 @@ export default function Admin({ staffUser }) {
 function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
   const [expandedId, setExpandedId] = useState(null)
   const [linkFor, setLinkFor] = useState({}) // otherId -> { url, generating, error }
+  // Kai matches ek saath ek hi link mein bhejne ke liye (jaise ek client
+  // ke liye 5-6 chune hue profiles) — checkbox se chuno, ek link banao.
+  const [picked, setPicked] = useState([])
+  const [bundle, setBundle] = useState(null) // { url, generating, error, copied }
+
+  const togglePicked = (id) => {
+    setBundle(null)
+    setPicked(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const handleGenerateBundle = async () => {
+    setBundle({ generating: true })
+    try {
+      const b = await generateShareBundle(picked, staffUserId)
+      setBundle({ url: b.url })
+    } catch (err) {
+      setBundle({ error: err.message })
+    }
+  }
+
+  const bundleMsg = bundle?.url
+    ? `Hi! LOVEKUSH has handpicked ${picked.length} ${picked.length === 1 ? 'match' : 'matches'} for you. View them here (link valid for 7 days):\n\n${bundle.url}`
+    : ''
+  const bundleWaLink = bundle?.url
+    ? (buildWaMeLink(profile.client_phone, bundleMsg) || buildWaChooserLink(bundleMsg))
+    : null
+
+  const copyBundle = async () => {
+    try { await navigator.clipboard.writeText(bundle.url); setBundle(b => ({ ...b, copied: true })) } catch {}
+  }
 
   const handleGenerateLink = async (otherProfileId) => {
     setLinkFor(prev => ({ ...prev, [otherProfileId]: { generating: true } }))
@@ -793,6 +823,35 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
         {profile.profile_code} • Using existing matching algorithm
       </div>
 
+      {picked.length > 0 && (
+        <div style={{position:'sticky',top:0,zIndex:5,background:'#fff8e1',borderRadius:12,padding:14,marginBottom:14}}>
+          <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>
+            {picked.length} selected — share all in one link
+            {profile.client_phone
+              ? <span style={{fontWeight:400,color:'#8e8e8e'}}> · goes straight to client's WhatsApp ({profile.client_phone})</span>
+              : <span style={{fontWeight:400,color:'#8e8e8e'}}> · no client phone saved, WhatsApp will ask which chat</span>}
+          </div>
+          {!bundle?.url ? (
+            <button className="btn btn-black btn-sm" disabled={bundle?.generating} onClick={handleGenerateBundle}>
+              {bundle?.generating ? 'Generating...' : `🔗 Create one link for ${picked.length} matches`}
+            </button>
+          ) : (
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+              <a href={bundleWaLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm">📱 Send via WhatsApp</a>
+              {navigator.share && (
+                <button className="btn btn-outline btn-sm"
+                  onClick={()=>nativeShare({ title:'Matches from LOVEKUSH', text: bundleMsg.replace(bundle.url, '').trim(), url: bundle.url })}>
+                  Share…
+                </button>
+              )}
+              <button className="btn btn-outline btn-sm" onClick={copyBundle}>{bundle.copied ? '✓ Copied' : 'Copy link'}</button>
+              <span style={{fontSize:11,color:'#16a34a'}}>Link ready, expires in 7 days</span>
+            </div>
+          )}
+          {bundle?.error && <div style={{fontSize:11,color:'#dc2626',marginTop:6}}>{bundle.error}</div>}
+        </div>
+      )}
+
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Finding matches...</div>
       ) : results.length === 0 ? (
@@ -806,12 +865,14 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
             const isExpanded = expandedId === other.id
             const linkState = linkFor[other.id]
             const shareMsg = linkState?.url ? `Hi! Found a match for you on LOVEKUSH:\n\n${linkState.url}` : ''
-            const waLink = linkState?.url ? buildWaMeLink(profile.client_phone, shareMsg) : null
+            const waLink = linkState?.url ? (buildWaMeLink(profile.client_phone, shareMsg) || buildWaChooserLink(shareMsg)) : null
             const mailLink = linkState?.url ? buildMailtoLink(profile.client_email, 'A match for you — LOVEKUSH', `Hi,\n\nWe found a match for you. View secure profile:\n${linkState.url}\n\n(This link expires in 7 days)\n\nRegards,\nLOVEKUSH Global Matchmaking Services`) : null
 
             return (
               <div key={other.id} className="list-row">
                 <div style={{display:'flex',gap:12,alignItems:'center'}}>
+                  <input type="checkbox" checked={picked.includes(other.id)} onChange={()=>togglePicked(other.id)}
+                    title="Select to share several matches in one link" style={{width:18,height:18,flexShrink:0}} />
                   <div style={{width:48,height:48,borderRadius:'50%',background:'#f0f0f0',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
                     {r.photoPath
                       ? <SignedImage path={r.photoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
@@ -859,10 +920,9 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
                         ✓ Link ready (expires in 7 days, one-click revoke available in "My Share Links")
                       </div>
                       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                        {waLink ? (
-                          <a href={waLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm">📱 Send via WhatsApp</a>
-                        ) : (
-                          <span style={{fontSize:11,color:'#8e8e8e'}}>Add client phone to enable WhatsApp send</span>
+                        <a href={waLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm">📱 Send via WhatsApp</a>
+                        {!profile.client_phone && (
+                          <span style={{fontSize:11,color:'#8e8e8e',alignSelf:'center'}}>No client phone saved, WhatsApp will ask which chat</span>
                         )}
                         {mailLink && <a href={mailLink} className="btn btn-outline btn-sm">✉ Send via Email</a>}
                       </div>

@@ -51,6 +51,8 @@ import { compressImage } from '../utils/compressImage'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import SignupComplete from './SignupComplete'
+import BiodataAutofill from '../components/BiodataAutofill'
+import { APPLY_ORDER } from '../utils/biodataParser'
 import { BrandLockup } from '../components/BrandLogo'
 
 // Single-choice fields render as a native <select> dropdown — keeps the
@@ -210,6 +212,19 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     }
     return next
   })
+
+  // Biodata (PDF/photo) se mile fields — wahi set()/setCommunity() se jaate
+  // hain jo user ke haath se chunne par chalte hain, taaki saare side-effects
+  // (currency sync, degree reset, sensitive-community privacy) waise hi lagein.
+  const applyBiodata = (values) => {
+    const keys = [...APPLY_ORDER.filter(k => k in values), ...Object.keys(values).filter(k => !APPLY_ORDER.includes(k))]
+    keys.forEach(k => {
+      if (k === 'gender' && PROFILE_FOR_GENDER[form.profile_for]) return
+      if (k === 'community') setCommunity(values[k])
+      else set(k, values[k])
+    })
+    showToast('Details filled from biodata — please check each screen')
+  }
 
   const setCommunity = (v) => setForm(p=>({
     ...p,
@@ -951,6 +966,10 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             <div style={{fontSize:11,color:'var(--gray3)',marginBottom:6}}>{personalQ+1} / {PERSONAL_QUESTIONS.length}</div>
             <h2 className="page-title">{questionLabel(q.label, form)}{q.required?' *':''}</h2>
             {q.hint && <p className="page-subtitle">{q.hint}</p>}
+
+            {personalQ===0 && (
+              <BiodataAutofill onApply={applyBiodata} includeContact={!!adminMode} />
+            )}
 
             {personalQ===0 && adminMode && (
               <div style={{background:'#fff8e1',borderRadius:12,padding:14,marginBottom:20}}>

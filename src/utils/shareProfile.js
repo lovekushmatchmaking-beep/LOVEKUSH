@@ -30,3 +30,8 @@ export function buildMailtoLink(email, subject, message) {
   if (!email) return null
   return 'mailto:' + email + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(message)
 }
+
+// Number pata na ho to WhatsApp khud contact chunne deta hai.
+export function buildWaChooserLink(message) {
+  return 'https://wa.me/?text=' + encodeURIComponent(message)
+}

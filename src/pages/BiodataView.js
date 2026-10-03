@@ -1,7 +1,9 @@
 import React, { useRef, useState } from 'react'
-import { ChevronLeft, Share2, Download } from 'lucide-react'
+import { ChevronLeft, Share2, Download, Link2 } from 'lucide-react'
 import SignedImage from '../components/SignedImage'
 import { generateBiodataPdf } from '../utils/generateBiodataPdf'
+import { generateShareLink, nativeShare } from '../utils/shareLinks'
+import { buildWaChooserLink } from '../utils/shareProfile'
 
 // Redesigned single visual biodata template (Jeevansathi-style formal
 // biodata) with a real one-tap PDF download + native share, replacing the
@@ -37,6 +39,7 @@ export default function BiodataView({ profile: p, photo, onBack }) {
   const nodeRef = useRef(null)
   const [busy, setBusy] = useState('') // '' | 'download' | 'share'
   const [toast, setToast] = useState('')
+  const [shareLink, setShareLink] = useState(null) // { url, text } jab share sheet na khul paaye
   const photoDataUrl = useDataUrlForPhoto(photo)
 
   const rows = (pairs) => pairs.filter(([, v]) => v).map(([k, v]) => (
@@ -79,6 +82,25 @@ export default function BiodataView({ profile: p, photo, onBack }) {
     }
   }
 
+  // PDF ke alawa ek secure link bhi — WhatsApp mein paste karne par profile
+  // card (masked naam, umar, city, education) ka preview dikhta hai, photo
+  // ya contact nahi. 7 din valid, Admin revoke kar sakta hai.
+  const handleShareLink = async () => {
+    setBusy('link')
+    try {
+      const link = await generateShareLink(p.id, p.user_id)
+      const text = `My profile on LOVEKUSH (${p.profile_code})`
+      const shared = await nativeShare({ title: 'LOVEKUSH Profile', text, url: link.url })
+      // Share sheet na khule (desktop, ya browser ne await ke baad block
+      // kiya) to link yahin dikhate hain — WhatsApp/Copy button ke saath.
+      if (!shared) setShareLink({ url: link.url, text })
+    } catch (e) {
+      setToast('Link banane me dikkat hui, dobara try karein.')
+    } finally {
+      setBusy('')
+    }
+  }
+
   return (
     <div>
       <div className="no-print" style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
@@ -86,10 +108,25 @@ export default function BiodataView({ profile: p, photo, onBack }) {
         <button className="btn btn-outline" style={{ flex: 1 }} onClick={handleShare} disabled={!!busy}>
           <Share2 size={16} /> {busy === 'share' ? 'Generating...' : 'Share'}
         </button>
+        {p.user_id && (
+          <button className="btn btn-outline" style={{ flex: 1 }} onClick={handleShareLink} disabled={!!busy}>
+            <Link2 size={16} /> {busy === 'link' ? 'Creating...' : 'Link'}
+          </button>
+        )}
         <button className="btn btn-black" style={{ flex: 1 }} onClick={handleDownload} disabled={!!busy}>
           <Download size={16} /> {busy === 'download' ? 'Generating...' : 'PDF'}
         </button>
       </div>
+
+      {shareLink && (
+        <div className="notice no-print" style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 12, wordBreak: 'break-all' }}>{shareLink.url}</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <a className="btn btn-black btn-sm" href={buildWaChooserLink(`${shareLink.text}:\n${shareLink.url}`)} target="_blank" rel="noreferrer">Send via WhatsApp</a>
+            <button className="btn btn-outline btn-sm" onClick={() => navigator.clipboard?.writeText(shareLink.url).then(() => setToast('Link copied'))}>Copy link</button>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="notice no-print" style={{ marginBottom: 16 }}>{toast}</div>
