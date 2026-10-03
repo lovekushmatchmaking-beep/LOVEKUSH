@@ -271,6 +271,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
           <FactCard fields={[
             ['Height', m.height], ['Weight', m.weight], ['Complexion', m.complexion], ['Body Type', m.body_type],
             ['Marital Status', m.marital_status], ['Nationality', m.nationality], ['Sub-Caste', m.sub_caste],
+            ['Lives In', m.country], ['Residency Status', m.country && m.country !== 'India' ? m.residency_status : null],
             ['Mother Tongue', m.mother_tongue],
           ]} />
 
@@ -370,10 +371,14 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
         <div ref={setSectionRef('Horoscope')} data-tab="Horoscope" style={{scrollMarginTop:TAB_BAR_OFFSET}}>
           <FactCard fields={[
+            ['Rashi (Moon Sign)', m.rashi],
+            ['Nakshatra', m.nakshatra ? m.nakshatra + (m.nakshatra_pada ? ' (Pada ' + m.nakshatra_pada + ')' : '') : null],
             ['Manglik', m.manglik], ['Kundli Available', m.kundli_available],
+            ['Horoscope Match Required', m.horoscope_match_required],
             ['Date of Birth', m.age ? m.age + ' years' : null],
-            ['Religion', m.religion], ['Gotra', m.gotra], ['Community / Caste', m.community],
+            ['Religion', m.religion], ['Gotra', m.gotra], ["Mother's Gotra", m.mother_gotra], ['Community / Caste', m.community],
           ]} />
+          <GunaMilanCard guna={m.matchGuna} />
         </div>
 
         <div ref={setSectionRef('Looking For')} data-tab="Looking For" style={{scrollMarginTop:TAB_BAR_OFFSET}}>
@@ -435,6 +440,32 @@ function FactCard({ title, fields }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// Guna Milan (Ashtakoot) breakdown — sirf jab dono ki Rashi/Nakshatra ho
+// (matching.js ka computeMatchScore isko `guna` ke roop mein deta hai).
+function GunaMilanCard({ guna }) {
+  if (!guna) return null
+  const color = guna.total >= 25 ? 'var(--success)' : guna.total >= 18 ? 'var(--warning)' : 'var(--danger)'
+  return (
+    <div className="card" style={{marginBottom:12}}>
+      <SectionLabel style={{marginBottom:8}}>Guna Milan</SectionLabel>
+      <div style={{display:'flex',alignItems:'baseline',gap:8,marginBottom:10}}>
+        <span style={{fontSize:24,fontWeight:700,color}}>{guna.total}</span>
+        <span style={{fontSize:13,color:'var(--gray3)'}}>/ 36 · {guna.verdict}</span>
+      </div>
+      {guna.koots.map(k => (
+        <div key={k.key} className="fact-row">
+          <span className="fact-key">{k.name} <span style={{color:'var(--gray3)',fontSize:11}}>({k.detail})</span></span>
+          <span className="fact-val">{k.points} / {k.max}</span>
+        </div>
+      ))}
+      {guna.doshas.length > 0 && (
+        <div style={{fontSize:12,color:'var(--gray3)',marginTop:8}}>{guna.doshas.join(' · ')}</div>
+      )}
+      <div style={{fontSize:11,color:'var(--gray3)',marginTop:8}}>Rashi/Nakshatra se calculated. Final decision ke liye family astrologer se kundli milaayein.</div>
     </div>
   )
 }

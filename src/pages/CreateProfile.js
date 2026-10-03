@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, generateProfileCode } from '../supabase'
+import { RASHIS, NAKSHATRAS, nakshatrasForRashi, rashisForNakshatra } from '../utils/astrology'
 
 import {
   EDUCATIONS,
@@ -163,6 +164,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     marital_status:'Never Married', nationality:'India',
     physical_disability:'No', disability_details:'',
     sub_caste:'', gotra:'', gotra_other:'', manglik:'', kundli_available:'',
+    rashi:'', nakshatra:'',
     native_place:'', relocation_preference:'',
     education:'Graduation', degree:'', degree_other:'', college_name:'',
     employment_type:'',
@@ -200,6 +202,11 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         next.partner_income_min = PARTNER_INCOME_BOUNDS[curr].min
         next.partner_income_max = PARTNER_INCOME_BOUNDS[curr].max
       }
+      // Signup mein residence nahi poochte, isliye Country of Residence
+      // nationality ke saath chalti hai (pehle hamesha 'India' reh jaati
+      // thi, jisse Partner Country Preference filter galat chalta). NRI
+      // baad mein Edit Profile se badal sakte hain.
+      next.country = v
     }
     return next
   })
@@ -410,7 +417,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
-      title: 'Gotra & Manglik',
+      title: 'Gotra, Manglik & Horoscope',
       render: () => (
         <div className="form-row">
           {(form.religion === 'Hindu' || form.religion === 'Jain') && (
@@ -433,6 +440,25 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           <div className="form-group">
             <FormLabel>Manglik</FormLabel>
             <ChipSelect options={MANGLIK_OPTIONS} value={form.manglik} onChange={v=>set('manglik',v)} includeEmpty />
+          </div>
+          <div className="form-group">
+            <FormLabel>Rashi (Moon Sign)</FormLabel>
+            <select className="form-select" value={form.rashi} onChange={e=>{
+              const r = e.target.value
+              set('rashi', r)
+              if (r && form.nakshatra && !rashisForNakshatra(form.nakshatra).includes(r)) set('nakshatra', '')
+            }}>
+              <option value="">Don't know</option>
+              {RASHIS.map(r=><option key={r}>{r}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <FormLabel>Nakshatra (Birth Star)</FormLabel>
+            <select className="form-select" value={form.nakshatra} onChange={e=>set('nakshatra',e.target.value)}>
+              <option value="">Don't know</option>
+              {(form.rashi ? nakshatrasForRashi(form.rashi) : NAKSHATRAS).map(n=><option key={n}>{n}</option>)}
+            </select>
+            <div className="form-hint">Optional — kundli pe likha hota hai. Isse Guna Milan (36 gun) apne aap nikalta hai.</div>
           </div>
         </div>
       ),
@@ -802,6 +828,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           community: finalCommunity,
           mother_tongue: finalMotherTongue,
           gotra: finalGotra,
+          ...((form.rashi || form.nakshatra) ? { astro_source: 'self', astro_updated_at: new Date().toISOString() } : {}),
           degree: finalDegree,
           father_profession: finalFatherProfession,
           mother_profession: finalMotherProfession,

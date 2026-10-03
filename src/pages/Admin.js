@@ -631,6 +631,7 @@ export default function Admin({ staffUser }) {
                         ['Community', p.community],
                         ['Sub-Caste / Gotra', [p.sub_caste, p.gotra].filter(Boolean).join(' / ') || null],
                         ['Manglik', p.manglik],
+                        ['Rashi / Nakshatra', [p.rashi, p.nakshatra].filter(Boolean).join(' / ') || null],
                         ['Education', p.education],
                         ['Income', p.annual_income],
                         ['Family Type', p.family_type],

@@ -2108,6 +2108,13 @@ export const MANGLIK_OPTIONS = ['Manglik', 'Non-Manglik', "Don't Know"]
 
 export const KUNDLI_AVAILABLE = ['Yes', 'No', 'Will arrange if needed']
 
+// India ke bahar rehne wale members (Country of Residence != India) ke
+// liye — Indian matrimony mein NRI profiles ka standard sawaal.
+export const RESIDENCY_STATUSES = [
+  'Citizen', 'Permanent Resident / Green Card', 'Work Permit / Work Visa',
+  'Student Visa', 'Dependent Visa', 'Temporary / Visitor Visa', 'Applied for PR',
+]
+
 export const RELOCATION_PREFERENCES = ['Not willing to relocate', 'Open to relocation within my country', 'Open to relocation abroad', 'Flexible']
 
 export const EMPLOYMENT_TYPES = ['Government', 'Private Sector', 'Business / Self-Employed', 'Not Working', 'Student', 'Retired']

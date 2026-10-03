@@ -141,6 +141,7 @@ export default function BiodataView({ profile: p, photo, onBack }) {
         {rows([
           ['Religion', p.religion], ['Community', p.community], ['Sub-Caste', p.sub_caste],
           ['Gotra', p.gotra], ['Manglik', p.manglik],
+          ['Rashi', p.rashi], ['Nakshatra', p.nakshatra],
         ])}
 
         <div className="section-label" style={{ marginTop: 14, marginBottom: 6 }}>Education & Career</div>
