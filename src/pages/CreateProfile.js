@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { FormLabel } from '../components/ui'
 import { iconForLabel } from '../components/fieldIcons'
 import {
@@ -8,6 +8,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { supabase, generateProfileCode } from '../supabase'
 import { RASHIS, NAKSHATRAS, nakshatrasForRashi, rashisForNakshatra } from '../utils/astrology'
+import { normalizePhone } from '../utils/shareProfile'
 
 import {
   EDUCATIONS,
@@ -82,9 +83,20 @@ const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 // Pehla sawaal "Who is this profile for?" hai, uske baad poora naam (First,
 // Middle, Last) ek hi screen pe. Son/Daughter/Brother/Sister chunne par
 // gender apne aap set ho jaata hai, isliye gender wali screen skip hoti hai.
-const PERSONAL_QUESTIONS = [
+// Phone/WhatsApp question — self-signup profiles pehle yeh kabhi poochti
+// nahi thi (sirf adminMode mein collect hota tha), isliye Coordination
+// Requests mein self-signup users ke liye Call/WhatsApp button hi nahi
+// dikhta tha (client_phone null). Admin apni banayi profile mein already
+// ek dedicated "Client Contact" box se number bharta hai (step 0 ke upar),
+// isliye wahi value yahan reuse hoti hai aur admin ke liye yeh question
+// skip ho jaata hai — dobara nahi poochta.
+const buildPersonalQuestions = (adminMode) => [
   { key:'profile_for', label:'Who is this profile for?', type:'chips', required:true, options:PROFILE_FOR_OPTIONS },
   { key:'first_name', label:'What is your name?', type:'name', required:true },
+  { key:'client_phone', label:'What is your phone / WhatsApp number?', type:'text', required:true,
+    placeholder:'9876543210',
+    hint:'Used only by our matchmaking team to coordinate with you — never shown on your public profile.',
+    skip: () => !!adminMode },
   { key:'date_of_birth', label:'When were you born?', type:'date', required:true },
   { key:'gender', label:'What is your gender?', type:'chips', required:true, options:['Male','Female'],
     skip: f=>!!PROFILE_FOR_GENDER[f.profile_for] },
@@ -137,6 +149,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   const [photoFiles, setPhotoFiles] = useState(Array(2).fill(null))
   const fileRefs = useRef(Array(2).fill(null).map(()=>React.createRef()))
   const [toast, setToast] = useState('')
+
+  const PERSONAL_QUESTIONS = useMemo(() => buildPersonalQuestions(adminMode), [adminMode])
 
   const [form, setForm] = useState({
     client_phone:'', client_email:'', alternate_email:'',
@@ -280,6 +294,9 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     const q = PERSONAL_QUESTIONS[personalQ]
     if (q.type==='name' && (!form.first_name.trim() || !form.last_name.trim())) { showToast('Please enter first name and last name'); return }
     if (q.required && !form[q.key]) { showToast('Please answer this question'); return }
+    if (q.key==='client_phone' && form.client_phone && !normalizePhone(form.client_phone)) {
+      showToast('Please enter a valid phone number (10 digits, or with country code)'); return
+    }
     if (q.key==='date_of_birth' && form.date_of_birth) {
       const check = validateAge(form.date_of_birth, form.gender)
       if (!check.valid) { showToast(check.message); return }
