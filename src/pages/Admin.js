@@ -9,6 +9,7 @@ import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
 import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown } from '../utils/adminStats'
 import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
+import { ContactButtons, ProfileContact } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
 
 // SEARCH DESIGN NOTE: yeh search ab DATABASE se query karta hai (Supabase
@@ -331,6 +332,19 @@ export default function Admin({ staffUser }) {
     loadNotesFor(profileId)
   }
 
+  // Call/WhatsApp tap karte hi profile khulti hai aur note box mein call-log
+  // ki shuruaat aa jaati hai — baat khatam karke bas result likh ke + Add.
+  const startContactLog = (p, kind) => {
+    if (selected?.id !== p.id) setSelected(p)
+    setNewNote(prev => (selected?.id === p.id && prev.trim()) ? prev
+      : (kind === 'call' ? '📞 Called: ' : '💬 WhatsApp: '))
+  }
+
+  const updateClientPhone = (id, phone) => {
+    setProfiles(prev => prev.map(p => p.id === id ? { ...p, client_phone: phone } : p))
+    if (selected?.id === id) setSelected(prev => ({ ...prev, client_phone: phone }))
+  }
+
   // ===== BULK ACTIONS — pending queue bade hone par ek-ek profile expand
   // karke action lena slow ho jaata hai; checkbox select + ek-saath apply.
   const toggleSelect = (id) => {
@@ -651,6 +665,7 @@ export default function Admin({ staffUser }) {
                     <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{p.full_name}</div>
                     <div style={{ fontSize: 12, color: '#8e8e8e' }}>{p.age}y · {p.city} · {p.religion}</div>
                   </div>
+                  {selected?.id !== p.id && <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} />}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <div className={"badge badge-" + p.profile_status} style={{ fontSize: 10 }}>{p.profile_status}</div>
                     {p.verification_status === 'verified' && <div className="badge" style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>✓ Verified</div>}
@@ -684,6 +699,11 @@ export default function Admin({ staffUser }) {
                       ))}
                     </div>
                     {p.about_me && <div style={{ fontSize: 13, color: '#555', background: '#f9f9f9', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>{p.about_me}</div>}
+
+                    {/* Quick contact — client_phone par seedha Call / WhatsApp */}
+                    <ProfileContact key={p.id + (p.client_phone || '')} profile={p}
+                      onSaved={phone => updateClientPhone(p.id, phone)}
+                      onAction={kind => startContactLog(p, kind)} />
 
                     {/* RM assignment — profiles.managed_by_staff_id, already in DB */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 12 }}>
@@ -896,6 +916,20 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
     if (error) { setPhoneError('Could not save: ' + error.message); return }
     setClientPhone(phoneDraft.trim()); setPhoneDraft(''); setPhoneError('')
   }
+
+  // Match wali profiles ke number (public view mein phone nahi hota) —
+  // staff RLS se profiles table se laate hain, taaki unki family ko bhi
+  // seedha call/WhatsApp ho sake.
+  const [phonesById, setPhonesById] = useState({})
+  useEffect(() => {
+    const ids = results.map(r => r.profile.id)
+    if (ids.length === 0) return
+    supabase.from('profiles').select('id, client_phone').in('id', ids).then(({ data }) => {
+      const map = {}
+      ;(data || []).forEach(x => { if (x.client_phone) map[x.id] = x.client_phone })
+      setPhonesById(map)
+    })
+  }, [results])
   const [bundle, setBundle] = useState(null) // { url, generating, error, copied }
 
   const togglePicked = (id) => {
@@ -944,6 +978,12 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>
         {profile.profile_code} • Using existing matching algorithm
       </div>
+      {clientPhone && (
+        <div style={{display:'flex',alignItems:'center',gap:8,marginTop:-12,marginBottom:16,fontSize:12}}>
+          <span style={{color:'#8e8e8e',fontFamily:'monospace'}}>{clientPhone}</span>
+          <ContactButtons phone={clientPhone} size="md" />
+        </div>
+      )}
 
       {!clientPhone && (
         <div style={{background:'#f9f9f9',borderRadius:12,padding:12,marginBottom:14}}>
@@ -1023,6 +1063,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
                     </div>
                     <div style={{fontSize:11,color:'#8e8e8e'}}>{other.age}y • {other.city} • {other.profile_code}</div>
                   </div>
+                  <ContactButtons phone={phonesById[other.id]} />
                 </div>
 
                 {isExpanded && (
@@ -1249,7 +1290,7 @@ function CoordinationRequestsView({ onBack }) {
       setRequests(rows)
       const ids = [...new Set(rows.flatMap(r => [r.from_profile, r.to_profile]))]
       if (ids.length > 0) {
-        const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code').in('id', ids)
+        const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
         const map = {}
         ;(profs || []).forEach(p => { map[p.id] = p })
         setProfilesById(map)
@@ -1321,6 +1362,13 @@ function CoordinationRequestsView({ onBack }) {
                     <div style={{fontSize:10,color:'#bbb',marginTop:2}}>
                       {new Date(r.created_at).toLocaleDateString('en-IN')}
                     </div>
+                    {/* Dono families ko seedha call/WhatsApp — coordination yahin se */}
+                    {[from, to].filter(x => x?.client_phone).map(x => (
+                      <div key={x.id} style={{display:'flex',alignItems:'center',gap:8,marginTop:6,fontSize:12}}>
+                        <span style={{color:'#8e8e8e',minWidth:90}}>{x.full_name}</span>
+                        <ContactButtons phone={x.client_phone} />
+                      </div>
+                    ))}
                   </div>
                   <div className={"badge badge-" + (r.status==='closed'?'blocked':r.status==='contacted'?'active':'pending')} style={{fontSize:10}}>
                     {r.status}
@@ -1576,9 +1624,9 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
     const nowIso = new Date().toISOString()
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
     const [followUpsRes, assignedRes, newRes] = await Promise.all([
-      supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code)').lte('follow_up_at', nowIso).order('follow_up_at', { ascending: true }).limit(20),
-      supabase.from('profiles').select('id, full_name, profile_code, age, city, profile_status').eq('managed_by_staff_id', staffUser.user_id).eq('profile_status', 'pending').limit(20),
-      supabase.from('profiles').select('id, full_name, profile_code, age, city, created_at').eq('profile_status', 'pending').gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(20),
+      supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code, client_phone)').lte('follow_up_at', nowIso).order('follow_up_at', { ascending: true }).limit(20),
+      supabase.from('profiles').select('id, full_name, profile_code, age, city, profile_status, client_phone').eq('managed_by_staff_id', staffUser.user_id).eq('profile_status', 'pending').limit(20),
+      supabase.from('profiles').select('id, full_name, profile_code, age, city, created_at, client_phone').eq('profile_status', 'pending').gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(20),
     ])
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
@@ -1614,7 +1662,10 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
           <Section icon={Clock} title="Follow-ups due" items={overdueFollowUps} empty="Nothing due."
             renderItem={n => (
               <div key={n.id} className="list-row clickable" onClick={()=>n.profiles && onOpenProfile(n.profiles)}>
-                <div style={{fontSize:13,fontWeight:600}}>{n.profiles?.full_name || 'Profile'}</div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                  <div style={{fontSize:13,fontWeight:600}}>{n.profiles?.full_name || 'Profile'}</div>
+                  <ContactButtons phone={n.profiles?.client_phone} />
+                </div>
                 <div style={{fontSize:12,color:'#555',marginTop:2}}>{n.note}</div>
                 <div style={{fontSize:10,color:'#bbb',marginTop:4}}>Due {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</div>
               </div>
@@ -1622,15 +1673,25 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
           <Section icon={ListChecks} title="Your pending profiles" items={assignedPending} empty="No pending profiles assigned to you."
             renderItem={p => (
               <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
-                <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
-                <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
+                    <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+                  </div>
+                  <ContactButtons phone={p.client_phone} />
+                </div>
               </div>
             )} />
           <Section icon={Users} title="New submissions this week" items={newSubmissions} empty="No new submissions this week."
             renderItem={p => (
               <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
-                <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
-                <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
+                    <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+                  </div>
+                  <ContactButtons phone={p.client_phone} />
+                </div>
               </div>
             )} />
         </>

@@ -19,11 +19,34 @@ export function buildMaskedShareText(profile) {
   return lines.join('\n')
 }
 
-export function buildWaMeLink(phone, message) {
+// Phone number ko international digits mein badalta hai (wa.me/tel: dono
+// isi format ko samajhte hain). 10 digit = Indian mobile (+91 lagta hai),
+// "0" se shuru 11 digit = trunk-prefix wala Indian number, baaki sab ko
+// country code ke saath maan lete hain. Galat/adhoora number → null.
+export function normalizePhone(phone) {
   if (!phone) return null
-  const digits = String(phone).replace(/\D/g, '')
-  const withCountryCode = digits.length === 10 ? '91' + digits : digits
-  return 'https://wa.me/' + withCountryCode + '?text=' + encodeURIComponent(message)
+  let digits = String(phone).replace(/\D/g, '')
+  if (digits.startsWith('00')) digits = digits.slice(2)
+  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1)
+  if (digits.length === 10) digits = '91' + digits
+  return digits.length >= 11 && digits.length <= 15 ? digits : null
+}
+
+export function buildWaMeLink(phone, message) {
+  const digits = normalizePhone(phone)
+  if (!digits) return null
+  return 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message)
+}
+
+// Admin quick actions — profile ke number par seedha call / WhatsApp chat.
+export function buildTelLink(phone) {
+  const digits = normalizePhone(phone)
+  return digits ? 'tel:+' + digits : null
+}
+
+export function buildWaChatLink(phone) {
+  const digits = normalizePhone(phone)
+  return digits ? 'https://wa.me/' + digits : null
 }
 
 export function buildMailtoLink(email, subject, message) {
