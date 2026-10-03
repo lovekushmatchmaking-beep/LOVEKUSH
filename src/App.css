@@ -829,6 +829,69 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   margin-bottom: 14px;
 }
 
+/* ================= Admin shell layout ================= */
+.admin-shell { display: flex; min-height: 100vh; background: var(--bg); }
+
+.admin-sidebar {
+  display: none; width: 220px; background: var(--white);
+  border-right: 1px solid var(--border); padding: 20px 10px;
+  flex-direction: column; gap: 2px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.admin-sidebar-brand { padding: 4px 14px 24px; font-weight: 700; font-size: 15px; color: var(--ink); }
+
+.admin-sidebar-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border: none; background: transparent;
+  border-radius: var(--radius-sm); font-family: var(--font-body);
+  font-size: 14px; color: var(--gray3); cursor: pointer;
+  transition: all 0.2s var(--ease); width: 100%; text-align: left;
+}
+.admin-sidebar-item:hover { background: var(--gray1); color: var(--ink); }
+.admin-sidebar-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.admin-sidebar-item.danger { color: var(--danger); }
+.admin-sidebar-item.danger:hover { background: var(--danger-soft); }
+
+.admin-main { flex: 1; min-width: 0; padding-bottom: 80px; }
+.admin-page { max-width: 800px; margin: 0 auto; padding: 20px 16px; }
+
+.admin-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; background: var(--white);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 20;
+}
+.admin-topbar h1 { font-size: 17px; font-weight: 700; margin: 0; }
+
+.admin-bottom-nav { z-index: 30; }
+
+/* Stat tile grid */
+.admin-stat-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  margin-bottom: 20px;
+}
+.admin-stat-tile {
+  background: var(--white); border-radius: var(--radius);
+  padding: 16px 12px; text-align: center;
+  border: 1px solid var(--border);
+}
+.admin-stat-tile .stat-num { font-size: 22px; font-weight: 700; color: var(--ink); }
+.admin-stat-tile .stat-label { font-size: 11px; color: var(--gray3); margin-top: 2px; }
+
+/* Queue / tool nav cards */
+.admin-nav-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .admin-sidebar { display: flex; }
+  .admin-bottom-nav { display: none !important; }
+  .admin-topbar { display: none !important; }
+  .admin-main { padding-bottom: 0; }
+  .admin-nav-grid { grid-template-columns: repeat(3, 1fr); }
+  .admin-stat-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
