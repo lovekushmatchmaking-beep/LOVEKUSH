@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { FormLabel } from '../components/ui'
 import { iconForLabel } from '../components/fieldIcons'
 import {
@@ -212,6 +212,27 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     }
     return next
   })
+
+  // ===== DUPLICATE LEAD CHECK — admin yahi number/email se pehle ek
+  // profile bana chuka ho sakta hai; type karte hi (debounced) check karke
+  // dikha dete hain, taaki galti se dobara entry na bane. Blocking nahi —
+  // sirf warning, Aryan decide kare.
+  const [dupMatches, setDupMatches] = useState([])
+  useEffect(() => {
+    if (!adminMode) return
+    const phone = form.client_phone, email = form.client_email
+    if (!phone && !email) { setDupMatches([]); return }
+    const t = setTimeout(async () => {
+      let q = supabase.from('profiles').select('id, full_name, profile_code, profile_status, created_at')
+      const parts = []
+      if (phone && phone.replace(/\D/g, '').length >= 10) parts.push(`client_phone.ilike.%${phone.replace(/\D/g, '').slice(-10)}%`)
+      if (email && email.includes('@')) parts.push(`client_email.ilike.${email.trim()}`)
+      if (parts.length === 0) { setDupMatches([]); return }
+      const { data } = await q.or(parts.join(',')).limit(5)
+      setDupMatches(data || [])
+    }, 500)
+    return () => clearTimeout(t)
+  }, [adminMode, form.client_phone, form.client_email])
 
   // Biodata (PDF/photo) se mile fields — wahi set()/setCommunity() se jaate
   // hain jo user ke haath se chunne par chalte hain, taaki saare side-effects
@@ -986,6 +1007,16 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                       onChange={e=>set('client_email',e.target.value)} />
                   </div>
                 </div>
+                {dupMatches.length > 0 && (
+                  <div style={{marginTop:10,background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:'10px 12px'}}>
+                    <div style={{fontSize:12,fontWeight:600,color:'#dc2626',marginBottom:4}}>⚠ Already registered — possible duplicate</div>
+                    {dupMatches.map(m => (
+                      <div key={m.id} style={{fontSize:12,color:'#555'}}>
+                        {m.full_name} · {m.profile_code} · {m.profile_status} · {new Date(m.created_at).toLocaleDateString('en-IN')}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote, ListChecks, UserPlus, BarChart3, RefreshCw } from 'lucide-react'
+import { Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote, ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
 import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/profileOptions'
 import CreateProfile from './CreateProfile'
 import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
-import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown } from '../utils/adminStats'
+import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel } from '../utils/adminStats'
+import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
 import { ContactButtons, ProfileContact } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
@@ -46,6 +47,22 @@ const verificationPatch = (status, currentProfileStatus) => {
 // Self-signup + abhi verified nahi — direct Approve se pehle confirm
 const needsSelfieVerification = (p) => !p.is_admin_managed && p.verification_status !== 'verified'
 
+// ===== CALL LOG OUTCOME — profile_notes.call_outcome (free-text note ke
+// saath optional structured tag), taaki "kal kitni calls lagi, kitni
+// answer hui" jaisa jaldi dikh sake, bina har note padhe.
+const CALL_OUTCOME_LABELS = {
+  answered: '✅ Answered',
+  no_answer: '📵 No answer',
+  call_back: '⏳ Asked to call back',
+  not_interested: '🙅 Not interested',
+}
+const CALL_OUTCOME_COLORS = {
+  answered: { bg: '#f0fdf4', fg: '#16a34a' },
+  no_answer: { bg: '#f5f5f5', fg: '#8e8e8e' },
+  call_back: { bg: '#fff8e1', fg: '#b45309' },
+  not_interested: { bg: '#fef2f2', fg: '#dc2626' },
+}
+
 export default function Admin({ staffUser }) {
   const navigate = useNavigate()
   const [profiles, setProfiles] = useState([])
@@ -58,11 +75,13 @@ export default function Admin({ staffUser }) {
   const [statsUpdatedAt, setStatsUpdatedAt] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [showBreakdown, setShowBreakdown] = useState(false)
+  const [showFunnel, setShowFunnel] = useState(false)
   const [selected, setSelected] = useState(null)
   const [idMetadata, setIdMetadata] = useState({}) // profile_id -> {created_at, source, created_by} — admin-only, staff_users RLS gated
-  const [notesByProfile, setNotesByProfile] = useState({}) // profile_id -> [{id, note, follow_up_at, created_at, staff_user_id}]
+  const [notesByProfile, setNotesByProfile] = useState({}) // profile_id -> [{id, note, follow_up_at, call_outcome, created_at, staff_user_id}]
   const [newNote, setNewNote] = useState('')
   const [newNoteFollowUp, setNewNoteFollowUp] = useState('')
+  const [newNoteOutcome, setNewNoteOutcome] = useState('')
   const [view, setView] = useState('list') // 'list' | 'createClient' | 'findMatches' | 'editProfile' | 'shareLinks' | 'verificationQueue' | 'reportsQueue' | 'myQueue'
   const [editingProfile, setEditingProfile] = useState(null)
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
@@ -319,21 +338,23 @@ export default function Admin({ staffUser }) {
   }
 
   const addNote = async (profileId) => {
-    if (!newNote.trim()) return
+    if (!newNote.trim() && !newNoteOutcome) return
     const { error } = await supabase.from('profile_notes').insert({
       profile_id: profileId,
       staff_user_id: staffUser.user_id,
-      note: newNote.trim(),
+      note: newNote.trim() || CALL_OUTCOME_LABELS[newNoteOutcome],
       follow_up_at: newNoteFollowUp || null,
+      call_outcome: newNoteOutcome || null,
     })
     if (error) { alert('Could not save note: ' + error.message); return }
     setNewNote('')
     setNewNoteFollowUp('')
+    setNewNoteOutcome('')
     loadNotesFor(profileId)
   }
 
   // Call/WhatsApp tap karte hi profile khulti hai aur note box mein call-log
-  // ki shuruaat aa jaati hai — baat khatam karke bas result likh ke + Add.
+  // ki shuruaat aa jaati hai — baat khatam karke outcome chip daba ke + Add.
   const startContactLog = (p, kind) => {
     if (selected?.id !== p.id) setSelected(p)
     setNewNote(prev => (selected?.id === p.id && prev.trim()) ? prev
@@ -477,6 +498,11 @@ export default function Admin({ staffUser }) {
           onOpenProfile={(p)=>{ setView('list'); setSelected(p) }} />
       )}
 
+      {view === 'duplicateLeads' && (
+        <DuplicateLeadsView onBack={()=>setView('list')}
+          onOpenProfile={(p)=>{ setView('list'); setSelected(p) }} />
+      )}
+
       {view === 'findMatches' && matchesFor && (
         <FindMatchesView
           profile={matchesFor}
@@ -491,6 +517,7 @@ export default function Admin({ staffUser }) {
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
           <button className="btn btn-outline btn-sm" onClick={()=>setView('myQueue')}>🗂 My Queue</button>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('duplicateLeads')}>🧬 Duplicate Leads</button>
           <button className="btn btn-outline btn-sm" onClick={()=>setView('verificationQueue')}>🛡 Verification{stats.needsVerification > 0 ? ` (${stats.needsVerification})` : ''}</button>
           <button className="btn btn-outline btn-sm" onClick={()=>setView('reportsQueue')}>🚩 Reports{stats.openReports > 0 ? ` (${stats.openReports})` : ''}</button>
           <button className="btn btn-outline btn-sm" onClick={()=>setView('casteSuggestions')}>📋 Caste Suggestions</button>
@@ -532,8 +559,12 @@ export default function Admin({ staffUser }) {
           <button className="btn btn-outline btn-sm" onClick={() => setShowBreakdown(v => !v)}>
             <BarChart3 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showBreakdown ? 'Hide breakdown' : 'Breakdown (age, height, religion…)'}
           </button>
+          <button className="btn btn-outline btn-sm" onClick={() => setShowFunnel(v => !v)}>
+            <GitBranch size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showFunnel ? 'Hide funnel' : 'Conversion Funnel'}
+          </button>
         </div>
         {showBreakdown && <StatsBreakdown refreshKey={statsUpdatedAt} />}
+        {showFunnel && <FunnelView refreshKey={statsUpdatedAt} onOpenDuplicates={() => setView('duplicateLeads')} />}
 
         {/* SEARCH BAR */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
@@ -761,13 +792,30 @@ export default function Admin({ staffUser }) {
                       </div>
                       {(notesByProfile[p.id] || []).map(n => (
                         <div key={n.id} style={{ fontSize: 12, background: '#f9f9f9', padding: '8px 10px', borderRadius: 8, marginBottom: 6 }}>
-                          <div>{n.note}</div>
+                          {n.call_outcome && (
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, marginRight: 6,
+                              background: CALL_OUTCOME_COLORS[n.call_outcome]?.bg, color: CALL_OUTCOME_COLORS[n.call_outcome]?.fg }}>
+                              {CALL_OUTCOME_LABELS[n.call_outcome]}
+                            </span>
+                          )}
+                          <div style={{ display: 'inline' }}>{n.note}</div>
                           <div style={{ fontSize: 10, color: '#bbb', marginTop: 4 }}>
                             {new Date(n.created_at).toLocaleString('en-IN')}
                             {n.follow_up_at && <> · Follow up: {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</>}
                           </div>
                         </div>
                       ))}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                        {Object.entries(CALL_OUTCOME_LABELS).map(([key, label]) => (
+                          <button key={key} type="button"
+                            className="btn btn-outline btn-sm"
+                            style={{ padding: '2px 8px', fontSize: 11,
+                              ...((selected?.id === p.id && newNoteOutcome === key) ? { background: CALL_OUTCOME_COLORS[key].bg, color: CALL_OUTCOME_COLORS[key].fg, borderColor: CALL_OUTCOME_COLORS[key].fg } : {}) }}
+                            onClick={() => { if (selected?.id !== p.id) setSelected(p); setNewNoteOutcome(prev => (selected?.id === p.id && prev === key) ? '' : key) }}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                         <input className="form-input" placeholder="Add a note (call log, decision, etc.)" value={selected?.id === p.id ? newNote : ''}
                           onChange={e => setNewNote(e.target.value)} style={{ flex: '1 1 200px', fontSize: 12 }} />
@@ -889,6 +937,149 @@ function StatsBreakdown({ refreshKey }) {
             {rows.length === 0 && <div style={{ fontSize: 13, color: '#8e8e8e' }}>No profiles match these filters.</div>}
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// ===== CONVERSION FUNNEL — Registered → Active → Matched → Meeting
+// Requested → Meeting Done. Counts come from profiles.profile_status
+// (existing) plus introductions/match_actions (existing tables) — no new
+// lead/stage table. Small data volume today, so distinct-profile counts
+// are computed client-side like StatsBreakdown already does.
+function FunnelView({ refreshKey, onOpenDuplicates }) {
+  const [loading, setLoading] = useState(true)
+  const [counts, setCounts] = useState(null)
+  const [dupCount, setDupCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    ;(async () => {
+      const [profilesRes, introsRes, actionsRes] = await Promise.all([
+        supabase.from('profiles').select('id, profile_status, client_phone, client_email, created_at'),
+        supabase.from('introductions').select('from_profile, to_profile, status'),
+        supabase.from('match_actions').select('actor_profile_id, target_profile_id, action').in('action', ['like', 'super_like']),
+      ])
+      if (cancelled) return
+      const profiles = profilesRes.data || []
+      const intros = introsRes.data || []
+      const actions = actionsRes.data || []
+
+      const matched = new Set()
+      actions.forEach(a => { matched.add(a.actor_profile_id); matched.add(a.target_profile_id) })
+      const meetingRequested = new Set()
+      const meetingDone = new Set()
+      intros.forEach(i => {
+        meetingRequested.add(i.from_profile); meetingRequested.add(i.to_profile)
+        if (i.status === 'contacted' || i.status === 'closed') { meetingDone.add(i.from_profile); meetingDone.add(i.to_profile) }
+      })
+
+      setCounts({
+        registered: profiles.length,
+        active: profiles.filter(p => p.profile_status === 'active').length,
+        matched: matched.size,
+        meetingRequested: meetingRequested.size,
+        meetingDone: meetingDone.size,
+      })
+      setDupCount(findDuplicateLeads(profiles).length)
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [refreshKey])
+
+  const stages = counts ? computeFunnel(counts) : []
+  const maxCount = Math.max(1, ...stages.map(s => s.count))
+
+  return (
+    <div style={{ background: '#fafafa', border: '1px solid #ededed', borderRadius: 'var(--radius)', padding: 16, marginBottom: 20 }}>
+      {loading && <div style={{ fontSize: 13, color: '#8e8e8e' }}>Loading…</div>}
+      {!loading && (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {stages.map(s => (
+              <div key={s.key}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
+                  <span>{s.label}</span>
+                  <span style={{ color: '#8e8e8e' }}>
+                    {s.count}
+                    {s.conversionPct !== null && <span style={{ color: s.conversionPct >= 50 ? '#16a34a' : '#b45309' }}> · {s.conversionPct}% of previous</span>}
+                  </span>
+                </div>
+                <div style={{ height: 8, borderRadius: 4, background: '#eee', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${(s.count / maxCount) * 100}%`, background: '#2563eb' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: '#8e8e8e', marginTop: 14 }}>
+            "% of previous" = yeh stage ki count ÷ pichle stage ki count — har stage par kitna drop-off hua, yeh dikhata hai (funnel khud raw counts hai, yeh us par ratio hai).
+          </div>
+          {dupCount > 0 && (
+            <div style={{ marginTop: 10, fontSize: 12 }}>
+              <button className="btn btn-outline btn-sm" onClick={onOpenDuplicates}>🧬 {dupCount} possible duplicate lead{dupCount === 1 ? '' : 's'} found — review</button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ===== DUPLICATE LEADS — same client_phone/client_email par do profiles ban
+// jaayein (galti se do baar register, ya admin ne dobara bana diya) to
+// yahan dikh jaate hain. Existing profiles.client_phone/client_email se hi
+// — koi naya table nahi. Blocking nahi karte, sirf flag karte hain taaki
+// Aryan decide kare (merge/ek ko block/jaane do).
+function DuplicateLeadsView({ onBack, onOpenProfile }) {
+  const [loading, setLoading] = useState(true)
+  const [groups, setGroups] = useState([])
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    const { data } = await supabase.from('profiles')
+      .select('id, full_name, profile_code, age, city, profile_status, client_phone, client_email, created_at')
+    setGroups(findDuplicateLeads(data || []))
+    setLoading(false)
+  }
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Duplicate Leads</h2>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles sharing the same phone number or email — same person registered twice?</div>
+
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Checking...</div>
+      ) : groups.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No duplicate phone numbers or emails found. 🎉</div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          {groups.map(g => (
+            <div key={g.key} className="list-row">
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                <Copy size={14} color="#dc2626" />
+                <span style={{fontSize:12,fontWeight:600}}>Same {g.type === 'phone' ? 'phone number' : 'email'}:</span>
+                <span style={{fontSize:12,fontFamily:'monospace',color:'#8e8e8e'}}>{g.value}</span>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                {g.profiles.map(p => (
+                  <div key={p.id} className="list-row clickable" style={{background:'#f9f9f9'}} onClick={()=>onOpenProfile(p)}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:600}}>{p.full_name} <span className={"badge badge-" + p.profile_status} style={{fontSize:9,marginLeft:6}}>{p.profile_status}</span></div>
+                        <div style={{fontSize:11,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code} · registered {new Date(p.created_at).toLocaleDateString('en-IN')}</div>
+                      </div>
+                      <ContactButtons phone={p.client_phone} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -1274,6 +1465,7 @@ function CoordinationRequestsView({ onBack }) {
   const [requests, setRequests] = useState([])
   const [profilesById, setProfilesById] = useState({})
   const [loading, setLoading] = useState(true)
+  const [scheduleDraft, setScheduleDraft] = useState({}) // request id -> datetime-local string being edited
 
   useEffect(() => { load() }, [])
 
@@ -1315,6 +1507,30 @@ function CoordinationRequestsView({ onBack }) {
   const handleMarkViewed = async (id) => {
     try {
       const { error } = await supabase.from('introductions').update({ viewed_at: new Date().toISOString() }).eq('id', id)
+      if (error) throw error
+      load()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  // Call/meeting scheduling — introductions.scheduled_at, "Today's calls &
+  // meetings" (My Queue) ko yahin se data milta hai.
+  const handleSchedule = async (id, datetimeLocal) => {
+    if (!datetimeLocal) return
+    try {
+      const { error } = await supabase.from('introductions').update({ scheduled_at: new Date(datetimeLocal).toISOString() }).eq('id', id)
+      if (error) throw error
+      setScheduleDraft(prev => ({ ...prev, [id]: undefined }))
+      load()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const handleUnschedule = async (id) => {
+    try {
+      const { error } = await supabase.from('introductions').update({ scheduled_at: null }).eq('id', id)
       if (error) throw error
       load()
     } catch (err) {
@@ -1370,9 +1586,31 @@ function CoordinationRequestsView({ onBack }) {
                       </div>
                     ))}
                   </div>
-                  <div className={"badge badge-" + (r.status==='closed'?'blocked':r.status==='contacted'?'active':'pending')} style={{fontSize:10}}>
-                    {r.status}
+                  <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
+                    <div className={"badge badge-" + (r.status==='closed'?'blocked':r.status==='contacted'?'active':'pending')} style={{fontSize:10}}>
+                      {r.status}
+                    </div>
+                    {r.scheduled_at && (
+                      <div style={{fontSize:10,color:'#2563eb',display:'flex',alignItems:'center',gap:4}}>
+                        <CalendarClock size={11} /> {new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                      </div>
+                    )}
                   </div>
+                </div>
+                {/* Schedule a call/meeting time — My Queue ke "Today" section mein dikhta hai */}
+                <div style={{display:'flex',alignItems:'center',gap:6,marginTop:8,flexWrap:'wrap'}} onClick={e=>e.stopPropagation()}>
+                  <CalendarClock size={13} color="#8e8e8e" />
+                  <input type="datetime-local" className="form-input" style={{fontSize:12,padding:'4px 8px',width:190}}
+                    value={scheduleDraft[r.id] ?? ''}
+                    onChange={e=>setScheduleDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
+                  <button className="btn btn-outline btn-sm" style={{padding:'3px 10px',fontSize:11}}
+                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id])}>
+                    {r.scheduled_at ? 'Reschedule' : 'Schedule'}
+                  </button>
+                  {r.scheduled_at && (
+                    <button className="btn btn-outline btn-sm" style={{padding:'3px 10px',fontSize:11,color:'#dc2626',borderColor:'#dc2626'}}
+                      onClick={()=>handleUnschedule(r.id)}>Clear</button>
+                  )}
                 </div>
                 <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
                   {!r.viewed_at && (
@@ -1616,6 +1854,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
   const [overdueFollowUps, setOverdueFollowUps] = useState([])
   const [assignedPending, setAssignedPending] = useState([])
   const [newSubmissions, setNewSubmissions] = useState([])
+  const [upcomingMeetings, setUpcomingMeetings] = useState([])
 
   useEffect(() => { load() }, [])
 
@@ -1623,16 +1862,30 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
     setLoading(true)
     const nowIso = new Date().toISOString()
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
-    const [followUpsRes, assignedRes, newRes] = await Promise.all([
+    const weekFromNow = new Date(Date.now() + 7*24*60*60*1000).toISOString()
+    const [followUpsRes, assignedRes, newRes, meetingsRes] = await Promise.all([
       supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code, client_phone)').lte('follow_up_at', nowIso).order('follow_up_at', { ascending: true }).limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, profile_status, client_phone').eq('managed_by_staff_id', staffUser.user_id).eq('profile_status', 'pending').limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, created_at, client_phone').eq('profile_status', 'pending').gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(20),
+      // Scheduled calls/meetings (introductions.scheduled_at) due in the next 7 days, soonest first
+      supabase.from('introductions').select('*').gte('scheduled_at', nowIso).lte('scheduled_at', weekFromNow).order('scheduled_at', { ascending: true }).limit(20),
     ])
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
     setNewSubmissions(newRes.data || [])
+
+    const meetings = meetingsRes.data || []
+    const ids = [...new Set(meetings.flatMap(m => [m.from_profile, m.to_profile]))]
+    let profilesById = {}
+    if (ids.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
+      ;(profs || []).forEach(p => { profilesById[p.id] = p })
+    }
+    setUpcomingMeetings(meetings.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setLoading(false)
   }
+
+  const isToday = (iso) => new Date(iso).toDateString() === new Date().toDateString()
 
   const Section = ({ icon: Icon, title, items, renderItem, empty }) => (
     <div style={{ marginBottom: 24 }}>
@@ -1659,6 +1912,31 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
       ) : (
         <>
+          <Section icon={CalendarClock} title="Calls & meetings (next 7 days)" items={upcomingMeetings} empty="Nothing scheduled."
+            renderItem={m => (
+              <div key={m.id} className="list-row" style={isToday(m.scheduled_at) ? { borderColor: '#2563eb' } : {}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600}}>
+                      {m.fromProfile?.full_name || 'Unknown'} → {m.toProfile?.full_name || 'Unknown'}
+                      <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {m.request_type === 'meeting' ? 'Meeting' : 'Talk'}</span>
+                    </div>
+                    <div style={{fontSize:11,color: isToday(m.scheduled_at) ? '#2563eb' : '#8e8e8e',marginTop:2,fontWeight: isToday(m.scheduled_at) ? 600 : 400}}>
+                      {isToday(m.scheduled_at) ? 'Today' : new Date(m.scheduled_at).toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' })}
+                      {' · '}{new Date(m.scheduled_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}
+                    </div>
+                  </div>
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:8}}>
+                  {[m.fromProfile, m.toProfile].filter(x=>x?.client_phone).map(x => (
+                    <div key={x.id} style={{display:'flex',alignItems:'center',gap:8,fontSize:12}}>
+                      <span style={{color:'#8e8e8e',minWidth:90}}>{x.full_name}</span>
+                      <ContactButtons phone={x.client_phone} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )} />
           <Section icon={Clock} title="Follow-ups due" items={overdueFollowUps} empty="Nothing due."
             renderItem={n => (
               <div key={n.id} className="list-row clickable" onClick={()=>n.profiles && onOpenProfile(n.profiles)}>

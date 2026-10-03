@@ -61,6 +61,32 @@ export const DIMENSIONS = {
   profile_status: { label: 'Profile Status', bucket: field('profile_status') },
 }
 
+// ===== CONVERSION FUNNEL — "Lead → Match → Meeting" stages Aryan ne
+// maanga. Koi naya lead/stage table nahi — jo signals already database
+// mein hain (profiles.profile_status, introductions, match_actions) unhi
+// se counts banate hain. Conversion% = is stage ka count / pichle stage
+// ka count.
+export const FUNNEL_STAGE_LABELS = {
+  registered: 'Registered',
+  active: 'Active / Verified',
+  matched: 'Matched (sent or received interest)',
+  meetingRequested: 'Talk / Meeting Requested',
+  meetingDone: 'Meeting Done (Contacted / Closed)',
+}
+
+// counts: { registered, active, matched, meetingRequested, meetingDone } — plain numbers,
+// each one a count of DISTINCT profiles reaching that stage.
+export function computeFunnel(counts) {
+  const order = ['registered', 'active', 'matched', 'meetingRequested', 'meetingDone']
+  let prev = null
+  return order.map(key => {
+    const count = counts[key] || 0
+    const conversionPct = prev === null ? null : (prev === 0 ? 0 : Math.round((count / prev) * 100))
+    prev = count
+    return { key, label: FUNNEL_STAGE_LABELS[key], count, conversionPct }
+  })
+}
+
 const DAY = 24 * 60 * 60 * 1000
 export const JOINED_WITHIN = { all: null, today: 1, '7d': 7, '30d': 30, '90d': 90 }
 
