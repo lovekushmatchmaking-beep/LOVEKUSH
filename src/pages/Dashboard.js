@@ -78,6 +78,17 @@ export default function Dashboard({ user }) {
   const [activityViewProfile, setActivityViewProfile] = useState(null) // set when a row in Activity tab is tapped, opens ProfileView
   const [searchViewProfile, setSearchViewProfile] = useState(null) // set when a Search-by-Profile-ID result is opened
   const [drawerOpen, setDrawerOpen] = useState(false) // top-right hamburger → slide-in settings drawer
+  // Bell dot sirf naye (unseen) interests par — Notifications tab kholte hi
+  // "seen" ho jaate hain. Per-device localStorage, sirf UI convenience.
+  const [activitySeenAt, setActivitySeenAt] = useState(() => {
+    try { return Number(localStorage.getItem('lk_activity_seen_at')) || 0 } catch { return 0 }
+  })
+  useEffect(() => {
+    if (activeTab !== 'activity') return
+    const now = Date.now()
+    setActivitySeenAt(now)
+    try { localStorage.setItem('lk_activity_seen_at', String(now)) } catch {}
+  }, [activeTab])
   const [toast, setToast] = useState('')
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -322,7 +333,7 @@ export default function Dashboard({ user }) {
 
   return (
     <div style={{minHeight:'100vh',background:'var(--bg)',paddingBottom:96}}>
-      <TopBar onBell={()=>setActiveTab('activity')} bellDot={receivedActions.length>0 && activeTab!=='activity'}
+      <TopBar onBell={()=>setActiveTab('activity')} bellDot={activeTab!=='activity' && receivedActions.some(r => new Date(r.updated_at || r.created_at).getTime() > activitySeenAt)}
         onMenu={()=>setDrawerOpen(true)} />
       <SideDrawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} profile={profile}
         avatarPath={primaryPhoto?.storage_path} onNavigate={setActiveTab} onLogout={logout} />
@@ -587,7 +598,7 @@ export default function Dashboard({ user }) {
             ) : (
               <div style={{display:'flex',flexDirection:'column',gap:14}}>
                 {matches.map((m)=>(
-                  <MatchCard key={m.id} match={m} viewerIsPremium={!!profile.is_premium}
+                  <MatchCard key={m.id} match={m} viewerProfileId={profile.id} viewerIsPremium={!!profile.is_premium}
                     myAction={myActions.find(a => a.target_profile_id === m.id)?.action || null}
                     introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
                     onSetAction={(action)=>setMatchAction(m.id, action)}
@@ -850,7 +861,7 @@ function VerificationNotice({ profile, userId, onUpdated, onToast }) {
   )
 }
 
-function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, photoAccess, onRequestPhoto, onView, onToast }) {
+function MatchCard({ match: m, viewerProfileId, viewerIsPremium, myAction, introSent, onSetAction, onSendIntro, photoAccess, onRequestPhoto, onView, onToast }) {
   // "You match X/Y preferences" — existing matching.js strengths/needsDiscussion
   // se hi nikala, koi naya scoring logic nahi. Strength = matched, needsDiscussion
   // = evaluated but not matched; total = dono ka sum.
@@ -891,7 +902,7 @@ function MatchCard({ match: m, viewerIsPremium, myAction, introSent, onSetAction
             <PhotoRequestChip status={photoAccess} onRequest={onRequestPhoto} />
           </div>
         </div>
-        <ProfileActionsMenu profile={m} onBlock={()=>onSetAction('dislike')} onToast={onToast} />
+        <ProfileActionsMenu profile={m} reporterProfileId={viewerProfileId} onBlock={()=>onSetAction('dislike')} onToast={onToast} />
       </div>
 
       <div className="action-row" style={{padding:'4px 14px 16px'}}>

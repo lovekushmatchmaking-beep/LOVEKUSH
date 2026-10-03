@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, Ellipsis, Share2, Flag, Ban } from 'lucide-react'
 import { iconForLabel, textOf } from './fieldIcons'
 import { maskName } from '../utils/maskName'
+import { supabase } from '../supabase'
 
 // Shared, icon-first building blocks. Inline-styled pages purane hi rehte
 // hain — yeh sirf woh chhote pieces hain jo har page pe repeat hote the
@@ -107,7 +108,9 @@ async function copyText(text) {
 // Profile card ka three-dot menu: Share / Report / Block.
 // Block = existing "dislike" action (profile matches se hat jaata hai,
 // Drawer → Blocked profiles se undo ho sakta hai) — koi naya backend nahi.
-export function ProfileActionsMenu({ profile, onBlock, onToast, light }) {
+// Report seedha profile_reports table mein jaata hai (Admin → Reports Queue),
+// email sirf fallback hai agar insert fail ho.
+export function ProfileActionsMenu({ profile, reporterProfileId, onBlock, onToast, light }) {
   const code = profile.profile_code || ''
   const share = async () => {
     const text = `LOVEKUSH profile ${code}`.trim()
@@ -121,6 +124,18 @@ export function ProfileActionsMenu({ profile, onBlock, onToast, light }) {
   }
   const report = async () => {
     const subject = `Report profile ${code}`
+    if (reporterProfileId && profile.id) {
+      const reason = window.prompt(`Why are you reporting ${maskName(profile.full_name) || 'this profile'}? (fake profile, misbehaviour, wrong details...)`)
+      if (reason === null) return
+      const { error } = await supabase.from('profile_reports').insert({
+        reporter_profile_id: reporterProfileId,
+        reported_profile_id: profile.id,
+        reason: reason.trim() || 'No reason given',
+        status: 'pending',
+      })
+      if (!error) { onToast && onToast('Reported — our team will review it'); return }
+      console.error('profile_reports insert failed:', error.message)
+    }
     if (SUPPORT_EMAIL) {
       window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}`
       return

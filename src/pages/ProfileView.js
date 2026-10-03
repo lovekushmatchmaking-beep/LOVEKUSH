@@ -183,7 +183,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
               <Images size={14} /> {clampedHeroIndex+1}/{heroPhotos.length}
             </div>
           )}
-          <ProfileActionsMenu light profile={m} onBlock={()=>{ onSetAction('dislike'); onBack() }} onToast={onToast} />
+          <ProfileActionsMenu light profile={m} reporterProfileId={viewerProfileId} onBlock={()=>{ onSetAction('dislike'); onBack() }} onToast={onToast} />
         </div>
         <div style={{position:'absolute',bottom:44,left:20,right:20,color:'#fff'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
