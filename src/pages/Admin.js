@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote, ListChecks } from 'lucide-react'
+import { Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote, ListChecks, UserPlus, BarChart3 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
 import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/profileOptions'
 import CreateProfile from './CreateProfile'
 import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
+import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown } from '../utils/adminStats'
 import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
 import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
 
@@ -52,7 +53,9 @@ export default function Admin({ staffUser }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
-  const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0 })
+  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0 })
+  const [statsUpdatedAt, setStatsUpdatedAt] = useState(null)
+  const [showBreakdown, setShowBreakdown] = useState(false)
   const [selected, setSelected] = useState(null)
   const [idMetadata, setIdMetadata] = useState({}) // profile_id -> {created_at, source, created_by} — admin-only, staff_users RLS gated
   const [notesByProfile, setNotesByProfile] = useState({}) // profile_id -> [{id, note, follow_up_at, created_at, staff_user_id}]
@@ -84,9 +87,17 @@ export default function Admin({ staffUser }) {
     return () => clearTimeout(t)
   }, [searchInput])
 
+  // LIVE COUNTER — list view khula ho to har 30 sec + tab pe wapas aate hi
+  // counts refresh. Sirf head:true count queries hain (rows nahi aate), sasta hai.
   useEffect(() => {
+    if (view !== 'list') return
     loadStats()
-  }, [])
+    const t = setInterval(() => { if (!document.hidden) loadStats() }, 30000)
+    const onFocus = () => loadStats()
+    window.addEventListener('focus', onFocus)
+    return () => { clearInterval(t); window.removeEventListener('focus', onFocus) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view])
 
   useEffect(() => {
     runQuery(0)
@@ -109,6 +120,8 @@ export default function Admin({ staffUser }) {
   }, [selected])
 
   const loadStats = async () => {
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const counts = await Promise.all([
       supabase.from('profiles').select('*', { count: 'exact', head: true }),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('profile_status', 'pending'),
@@ -118,6 +131,10 @@ export default function Admin({ staffUser }) {
       supabase.from('profiles').select('*', { count: 'exact', head: true })
         .or('verification_status.eq.selfie_submitted,and(id_document_uploaded.eq.true,verification_status.neq.verified)'),
       supabase.from('profile_reports').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('gender', 'Male'),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('gender', 'Female'),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startOfToday.toISOString()),
     ])
     setStats({
       total: counts[0].count || 0,
@@ -126,7 +143,12 @@ export default function Admin({ staffUser }) {
       blocked: counts[3].count || 0,
       needsVerification: counts[4].count || 0,
       openReports: counts[5].count || 0,
+      male: counts[6].count || 0,
+      female: counts[7].count || 0,
+      newWeek: counts[8].count || 0,
+      newToday: counts[9].count || 0,
     })
+    setStatsUpdatedAt(new Date())
   }
 
   // Poora query builder — DB-level pe filter apply karta hai, client
@@ -463,9 +485,12 @@ export default function Admin({ staffUser }) {
           <button className="btn btn-outline btn-sm" onClick={()=>setView('shareLinks')}>🔗 My Share Links</button>
           <button className="btn btn-black btn-sm" onClick={()=>setView('createClient')}>+ Create Client Profile</button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 20 }}>
           {[
-            { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555', Icon: Users },
+            { label: 'Total Users', val: stats.total, bg: '#f5f5f5', fg: '#555', Icon: Users },
+            { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#4f46e5', Icon: Users },
+            { label: 'Female', val: stats.female, bg: '#fdf2f8', fg: '#db2777', Icon: Users },
+            { label: 'New (7 days)', val: stats.newWeek, sub: `Today: ${stats.newToday}`, bg: '#ecfeff', fg: '#0891b2', Icon: UserPlus },
             { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309', Icon: Clock },
             { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a', Icon: CheckCircle2 },
             { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626', Icon: ShieldX },
@@ -481,9 +506,20 @@ export default function Admin({ staffUser }) {
                 <s.Icon size={16} color={s.fg} style={{ opacity: 0.7 }} />
               </div>
               <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{s.label}</div>
+              {s.sub && <div style={{ fontSize: 11, color: s.fg, marginTop: 2 }}>{s.sub}</div>}
             </div>
           ))}
         </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, margin: '-10px 0 16px', flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 11, color: '#8e8e8e' }}>
+            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#16a34a', marginRight: 6 }} />
+            Live · updates every 30 sec{statsUpdatedAt ? ` · last ${statsUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
+          </div>
+          <button className="btn btn-outline btn-sm" onClick={() => setShowBreakdown(v => !v)}>
+            <BarChart3 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showBreakdown ? 'Hide breakdown' : 'Breakdown (age, height, religion…)'}
+          </button>
+        </div>
+        {showBreakdown && <StatsBreakdown refreshKey={statsUpdatedAt} />}
 
         {/* SEARCH BAR */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
@@ -762,6 +798,77 @@ export default function Admin({ staffUser }) {
           </div>
         )}
       </div>
+      )}
+    </div>
+  )
+}
+
+// ===== LIVE STATS BREAKDOWN — Aryan ke "jese marji chae dekh saku" ask ke
+// liye: defaults (Total/Male/Female/New) upar hamesha visible hain, yeh
+// expandable panel har dimension (age/height/religion/etc, adminStats.js
+// mein defined) pe on-demand filter/breakdown deta hai. Existing profiles
+// table se hi — koi naya column/table nahi.
+function StatsBreakdown({ refreshKey }) {
+  const [dim, setDim] = useState('age')
+  const [gender, setGender] = useState('')
+  const [status, setStatus] = useState('')
+  const [joined, setJoined] = useState('all')
+  const [profiles, setProfiles] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    supabase.from('profiles').select(STATS_COLUMNS).then(({ data, error }) => {
+      if (!error) setProfiles(data || [])
+      setLoading(false)
+    })
+    // refreshKey ticks every 30s with the stat tiles — keeps breakdown in sync
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
+
+  const filtered = profiles ? filterProfiles(profiles, { gender, status, joined }) : []
+  const rows = profiles ? breakdown(filtered, dim) : []
+  const maxTotal = Math.max(1, ...rows.map(r => r.total))
+
+  return (
+    <div style={{ background: '#fafafa', border: '1px solid #ededed', borderRadius: 'var(--radius)', padding: 16, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <select className="form-select" value={dim} onChange={e => setDim(e.target.value)} style={{ maxWidth: 220 }}>
+          {Object.entries(DIMENSIONS).map(([key, d]) => <option key={key} value={key}>Break down by: {d.label}</option>)}
+        </select>
+        <select className="form-select" value={gender} onChange={e => setGender(e.target.value)} style={{ maxWidth: 140 }}>
+          <option value="">All genders</option><option value="Male">Male</option><option value="Female">Female</option>
+        </select>
+        <select className="form-select" value={status} onChange={e => setStatus(e.target.value)} style={{ maxWidth: 150 }}>
+          <option value="">All statuses</option><option value="active">Active</option><option value="pending">Pending</option><option value="blocked">Blocked</option>
+        </select>
+        <select className="form-select" value={joined} onChange={e => setJoined(e.target.value)} style={{ maxWidth: 150 }}>
+          <option value="all">Joined: any time</option>
+          <option value="today">Joined: today</option>
+          <option value="7d">Joined: last 7 days</option>
+          <option value="30d">Joined: last 30 days</option>
+          <option value="90d">Joined: last 90 days</option>
+        </select>
+      </div>
+      {loading && <div style={{ fontSize: 13, color: '#8e8e8e' }}>Loading…</div>}
+      {!loading && (
+        <>
+          <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 10 }}>{filtered.length} profile{filtered.length === 1 ? '' : 's'} matched</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {rows.map(r => (
+              <div key={r.label}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
+                  <span>{r.label}</span>
+                  <span style={{ color: '#8e8e8e' }}>{r.total} <span style={{ color: '#4f46e5' }}>M {r.male}</span> · <span style={{ color: '#db2777' }}>F {r.female}</span></span>
+                </div>
+                <div style={{ height: 6, borderRadius: 4, background: '#eee', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${(r.total / maxTotal) * 100}%`, background: '#9333ea' }} />
+                </div>
+              </div>
+            ))}
+            {rows.length === 0 && <div style={{ fontSize: 13, color: '#8e8e8e' }}>No profiles match these filters.</div>}
+          </div>
+        </>
       )}
     </div>
   )
