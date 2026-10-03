@@ -4,6 +4,11 @@
 // fake percentage nahi, actual logic se nikla hua.
 
 import { parseHeightToInches, parseIncomeRangeMidpoint } from '../constants/profileOptions'
+import { gunaMilanFor, sameGotra } from './astrology'
+
+// "Horoscope Match Required? = Yes" wale member ko 18/36 se kam Guna
+// wale profiles nahi dikhte (traditional minimum).
+export const MIN_GUNA_WHEN_REQUIRED = 18
 
 // ===================== HARD REQUIREMENTS =====================
 // "me" = jo dekh raha hai, "other" = jo dikh raha hai. Dono taraf ki
@@ -62,6 +67,14 @@ export function passesHardFilters(me, other) {
   if (other.partner_country_preference && other.partner_country_preference !== 'Open to All' &&
       me.country && me.country !== other.partner_country_preference) return false
 
+  // Horoscope Match Required = Yes — dono ki Rashi/Nakshatra pata ho aur
+  // Guna Milan 18 se kam ho to match nahi dikhta. Data missing ho to
+  // exclude nahi karte (computeMatchScore "kundli maangein" bolta hai).
+  if (me.horoscope_match_required === 'Yes' || other.horoscope_match_required === 'Yes') {
+    const guna = gunaMilanFor(me, other)
+    if (guna && guna.total < MIN_GUNA_WHEN_REQUIRED) return false
+  }
+
   // Marital Status compatibility — Never-Married sirf Never-Married se,
   // Divorced/Widowed aapas mein. Yeh Indian matrimonial mein standard
   // hard-rule hai (jaisa Lovekush ke GAS system mein bhi tha).
@@ -86,7 +99,7 @@ export function passesHardFilters(me, other) {
 const WEIGHTS = {
   community: 20, education: 12, incomeOccupation: 12, location: 12,
   age: 10, familyType: 8, diet: 8, manglik: 8, motherTongue: 5, lifestyle: 5,
-  christianDenomination: 10,
+  christianDenomination: 10, guna: 10,
 }
 
 function scoreCategory(condition, points, strengthText, discussText) {
@@ -113,13 +126,28 @@ export function computeMatchScore(me, other) {
     }
   }
 
-  // Gotra — same gotra is a WARNING (traditional same-gotra rule), different is
-  // neutral (no bonus/penalty). "Don't wish to specify" is ignored entirely.
-  if (me.gotra && other.gotra && me.gotra !== "Don't wish to specify" && other.gotra !== "Don't wish to specify") {
-    if (me.gotra === other.gotra) {
-      needsDiscussion.push('⚠ Same Gotra — verify with family before proceeding')
-    }
-    // different gotra: intentionally no strength/discussion entry — neutral
+  // Gotra — same gotra traditionally avoided hota hai, par kuch families
+  // kar bhi lete hain, isliye yeh hard filter nahi hai — sirf warning
+  // (Aryan ne confirm kiya: exclude mat karo, flag karo). Maternal gotra
+  // bhi kai parivar check karte hain, par yeh universal nahi.
+  if (sameGotra(me.gotra, other.gotra)) {
+    needsDiscussion.push('⚠ Same Gotra (' + me.gotra + ') — verify with family before proceeding')
+  }
+  if (sameGotra(me.mother_gotra, other.gotra) || sameGotra(other.mother_gotra, me.gotra)) {
+    needsDiscussion.push("⚠ One partner's gotra matches the other's mother's gotra — check family tradition")
+  }
+
+  // Guna Milan (Ashtakoot, 36 points) — dono ki Rashi/Nakshatra ho tabhi.
+  const guna = gunaMilanFor(me, other)
+  if (guna) {
+    possible += WEIGHTS.guna
+    earned += WEIGHTS.guna * (guna.total / guna.max)
+    const line = 'Guna Milan ' + guna.total + '/36 (' + guna.verdict + ')'
+    if (guna.total >= MIN_GUNA_WHEN_REQUIRED) strengths.push(line)
+    else needsDiscussion.push('⚠ ' + line + ' — consult family/astrologer')
+    guna.doshas.filter(d => !d.includes('cancelled')).forEach(d => needsDiscussion.push('⚠ ' + d + ' — consult family/astrologer'))
+  } else if ((me.horoscope_match_required === 'Yes' || other.horoscope_match_required === 'Yes') && !(me.nakshatra && other.nakshatra)) {
+    needsDiscussion.push('Horoscope match wanted — Rashi/Nakshatra missing, ask for kundli')
   }
 
   // Christian denomination — same-denomination match is a bonus, additive only
@@ -265,6 +293,7 @@ export function computeMatchScore(me, other) {
     // Backward-compat: purana flat "reasons" bhi de dete hain (kuch UI abhi
     // isi ka use kar rahe honge)
     reasons: [...strengths, ...needsDiscussion],
+    guna,
   }
 }
 

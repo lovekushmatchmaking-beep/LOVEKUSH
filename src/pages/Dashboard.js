@@ -22,13 +22,15 @@ import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CA
   CHRISTIAN_DENOMINATION_GROUPS, CHRISTIAN_COMMUNITIES,
   RELIGION_HIERARCHY, NO_RELIGION_VALUES, JAIN_GOTRAS, HEIGHT_RANGES, MARITAL_STATUSES, FAMILY_TYPES, FAMILY_VALUES, LOCATION_PREFERENCES, COMPLEXIONS, BODY_TYPES, WEIGHT_RANGES,
   VEHICLE_OWNERSHIP,
-  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, COUNTRIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
+  PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, COUNTRIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RESIDENCY_STATUSES, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
   LANGUAGES_SPOKEN, HAVE_CHILDREN_OPTIONS, CHILDREN_LIVING_WITH_OPTIONS, GREW_UP_IN_OPTIONS,
   PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, formatHeightFromInches,
   PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS, formatIncomeShort, PROFILE_FOR_OPTIONS, SCHOOL_ONLY_EDUCATIONS, profileManagedByLabel } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
+import { isAstrologyApiEnabled, calculateMoonChartFromBirthDetails } from '../utils/astrologyProvider'
+import { RASHIS, NAKSHATRAS, NAKSHATRA_PADAS, nakshatrasForRashi, rashisForNakshatra } from '../utils/astrology'
 import { maskName } from '../utils/maskName'
 import SignedImage from '../components/SignedImage'
 import MultiSelectChips from '../components/MultiSelectChips'
@@ -187,6 +189,7 @@ export default function Dashboard({ user }) {
           matchScore: r.score,
           matchStrengths: r.strengths,
           matchNeedsDiscussion: r.needsDiscussion,
+          matchGuna: r.guna,
           primaryPhotoPath: approvedOwnerIds.has(r.profile.id) ? (photoPathByProfile[r.profile.id] || null) : null,
         })))
       } else {
@@ -492,20 +495,25 @@ export default function Dashboard({ user }) {
                       ['Physical Disability', profile.physical_disability === 'Yes' ? (profile.disability_details || 'Yes') : null],
                     ]},
                     { group: 'Horoscope', rows: [
+                      ['Rashi (Moon Sign)', profile.rashi],
+                      ['Nakshatra', profile.nakshatra ? profile.nakshatra + (profile.nakshatra_pada ? ' (Pada ' + profile.nakshatra_pada + ')' : '') : null],
                       ['Manglik', profile.manglik],
                       ['Kundli Available', profile.kundli_available],
+                      ['Horoscope Match Required', profile.horoscope_match_required],
                     ]},
                     { group: 'Religion & Community', rows: [
                       ['Religion', profile.religion],
                       ['Community / Caste', profile.community],
                       ['Sub-Caste', profile.sub_caste],
                       ['Gotra', profile.gotra],
+                      ["Mother's Gotra", profile.mother_gotra],
                       ['Mother Tongue', profile.mother_tongue],
                     ]},
                     { group: 'Location', rows: [
                       ['City', profile.city],
                       ['State', profile.state],
                       ['Country', profile.country],
+                      ['Residency Status', profile.country && profile.country !== 'India' ? profile.residency_status : null],
                       ['Native Place', profile.native_place],
                       ['Relocation Preference', profile.relocation_preference],
                     ]},
@@ -1372,6 +1380,11 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     disability_details: profile.disability_details || '',
     sub_caste: profile.sub_caste || '',
     gotra: profile.gotra || '',
+    mother_gotra: profile.mother_gotra || '',
+    rashi: profile.rashi || '',
+    nakshatra: profile.nakshatra || '',
+    nakshatra_pada: profile.nakshatra_pada || '',
+    residency_status: profile.residency_status || '',
     manglik: profile.manglik || '',
     kundli_available: profile.kundli_available || '',
     native_place: profile.native_place || '',
@@ -1419,6 +1432,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
   })
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
+  const [astroLoading, setAstroLoading] = useState(false)
 
   // Nationality badalne par income currency apne aap sync hoti hai — India
   // ke liye INR, kisi aur country ke liye USD (dono currencies dropdown mein
@@ -1543,6 +1557,14 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
       const { community_other, mother_tongue_other, gotra_other, custom_caste_text_gotra,
         father_profession_other, mother_profession_other, ...formToSave } = form
 
+      // Rashi/Nakshatra badle to source 'self' mark karte hain (API se aayi
+      // values 'api' rehti hain jab tak user khud na badle).
+      const astroChanged = form.rashi !== (profile.rashi || '') || form.nakshatra !== (profile.nakshatra || '') ||
+        String(form.nakshatra_pada || '') !== String(profile.nakshatra_pada || '')
+      const astroSourceFields = astroChanged
+        ? { astro_source: (form.rashi || form.nakshatra) ? 'self' : null, astro_updated_at: new Date().toISOString() }
+        : {}
+
       const { count: photoCount } = await supabase
         .from('photos')
         .select('*', { count: 'exact', head: true })
@@ -1558,6 +1580,9 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           community: finalCommunity,
           mother_tongue: finalMotherTongue,
           gotra: finalGotra,
+          nakshatra_pada: parseInt(form.nakshatra_pada) || null,
+          residency_status: form.country === 'India' ? null : (form.residency_status || null),
+          ...astroSourceFields,
           degree: finalDegree,
           father_profession: finalFatherProfession,
           mother_profession: finalMotherProfession,
@@ -1727,6 +1752,52 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
 
       <div className="card" style={{marginBottom:12}}>
         <SectionLabel style={{marginBottom:14}}>Horoscope</SectionLabel>
+        <div className="form-row">
+          <div className="form-group">
+            <FormLabel>Rashi (Moon Sign)</FormLabel>
+            <select className="form-select" value={form.rashi} onChange={e=>{
+              const r = e.target.value
+              set('rashi', r)
+              if (r && form.nakshatra && !rashisForNakshatra(form.nakshatra).includes(r)) set('nakshatra', '')
+            }}>
+              <option value="">Select</option>
+              {RASHIS.map(r=><option key={r}>{r}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <FormLabel>Nakshatra (Birth Star)</FormLabel>
+            <select className="form-select" value={form.nakshatra} onChange={e=>set('nakshatra',e.target.value)}>
+              <option value="">Select</option>
+              {(form.rashi ? nakshatrasForRashi(form.rashi) : NAKSHATRAS).map(n=><option key={n}>{n}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-group">
+          <FormLabel>Nakshatra Pada / Charan</FormLabel>
+          <select className="form-select" value={form.nakshatra_pada} onChange={e=>set('nakshatra_pada',e.target.value)}>
+            <option value="">Don't know</option>
+            {NAKSHATRA_PADAS.map(n=><option key={n} value={n}>{n}</option>)}
+          </select>
+          <div className="form-hint">Rashi aur Nakshatra kundli pe likhe hote hain — inse Guna Milan (36 gun) apne aap nikalta hai.</div>
+        </div>
+        {isAstrologyApiEnabled() && (
+          <div className="form-group">
+            <button type="button" className="btn btn-outline" disabled={astroLoading || !profile.birth_time || !profile.birth_place}
+              onClick={async () => {
+                setAstroLoading(true)
+                try {
+                  const chart = await calculateMoonChartFromBirthDetails(supabase, profile.id)
+                  setForm(p => ({ ...p, rashi: chart.rashi || '', nakshatra: chart.nakshatra || '',
+                    nakshatra_pada: chart.nakshatra_pada || '', manglik: chart.manglik || p.manglik }))
+                  showToast('Rashi / Nakshatra calculated from birth details')
+                } catch (e) { showToast(e.message) }
+                setAstroLoading(false)
+              }}>
+              {astroLoading ? 'Calculating…' : 'Calculate from birth details'}
+            </button>
+            <div className="form-hint">Birth time aur place pehle save karein.</div>
+          </div>
+        )}
         <div className="form-row">
           <div className="form-group">
             <FormLabel>Birth Time</FormLabel>
@@ -1913,6 +1984,13 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             </div>
           )}
         </div>
+        {(form.religion === 'Hindu' || form.religion === 'Jain') && (
+          <div className="form-group">
+            <FormLabel>Mother's Gotra</FormLabel>
+            <input className="form-input" placeholder="Optional" value={form.mother_gotra} onChange={e=>set('mother_gotra',e.target.value)} />
+            <div className="form-hint">Optional — kai parivar maa ka gotra bhi milate hain.</div>
+          </div>
+        )}
         <div className="form-group">
           <FormLabel>Caste No Bar?</FormLabel>
           <ChipSelect options={CASTE_NO_BAR_OPTIONS} value={form.caste_no_bar} onChange={v=>set('caste_no_bar',v)} includeEmpty />
@@ -1921,6 +1999,23 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
 
       <div className="card" style={{marginBottom:12}}>
         <SectionLabel style={{marginBottom:14}}>Location Details</SectionLabel>
+        <div className="form-row">
+          <div className="form-group">
+            <FormLabel>Country of Residence</FormLabel>
+            <select className="form-select" value={form.country} onChange={e=>set('country',e.target.value)}>
+              {COUNTRIES.filter(c=>c!=='Open to All').map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+          {form.country && form.country !== 'India' && (
+            <div className="form-group">
+              <FormLabel>Residency Status</FormLabel>
+              <select className="form-select" value={form.residency_status} onChange={e=>set('residency_status',e.target.value)}>
+                <option value="">Select</option>
+                {RESIDENCY_STATUSES.map(r=><option key={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
         <div className="form-row">
           <div className="form-group">
             <FormLabel>City *</FormLabel>
