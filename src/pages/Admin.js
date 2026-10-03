@@ -4,7 +4,7 @@ import {
   Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote,
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
-  UserRound, Plus, Wrench,
+  UserRound, Plus, Wrench, UserCog,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -76,8 +76,9 @@ export default function Admin({ staffUser }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
-  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0 })
+  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0 })
   const [statsUpdatedAt, setStatsUpdatedAt] = useState(null)
+  const [listUpdatedAt, setListUpdatedAt] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [showBreakdown, setShowBreakdown] = useState(false)
   const [showFunnel, setShowFunnel] = useState(false)
@@ -171,6 +172,9 @@ export default function Admin({ staffUser }) {
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('gender', 'Female'),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startOfToday.toISOString()),
+      // Pending coordination requests — dono members ne abhi accept/decline nahi
+      // kiya, isliye yeh koi list mein nahi dikhte the. Ab count + queue mein visible.
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     ])
     setStats({
       total: counts[0].count || 0,
@@ -183,6 +187,7 @@ export default function Admin({ staffUser }) {
       female: counts[7].count || 0,
       newWeek: counts[8].count || 0,
       newToday: counts[9].count || 0,
+      pendingCoordination: counts[10].count || 0,
     })
     setStatsUpdatedAt(new Date())
     setStatsLoading(false)
@@ -241,6 +246,7 @@ export default function Admin({ staffUser }) {
 
     await loadPhotosFor(newRows)
     setLoading(false); setLoadingMore(false)
+    if (fromIndex === 0) setListUpdatedAt(new Date())
   }
 
   const loadPhotosFor = async (rows) => {
@@ -552,6 +558,10 @@ export default function Admin({ staffUser }) {
           onOpenProfile={(p)=>{ setView('list'); setSelected(p) }} />
       )}
 
+      {view === 'staffManagement' && (
+        <StaffManagementView staffUser={staffUser} onBack={()=>setView('list')} />
+      )}
+
       {view === 'duplicateLeads' && (
         <DuplicateLeadsView onBack={()=>setView('list')}
           onOpenProfile={(p)=>{ setView('list'); setSelected(p) }} />
@@ -658,6 +668,11 @@ export default function Admin({ staffUser }) {
             {loading ? 'Loading...' : <><RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Refresh</>}
           </button>
         </div>
+        {listUpdatedAt && (
+          <div style={{ fontSize: 11, color: 'var(--gray3)', marginTop: -4, marginBottom: 10 }}>
+            Last refreshed {listUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </div>
+        )}
 
         {(search || activeFilterCount > 0) && !loading && (
           <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 10 }}>
@@ -947,7 +962,7 @@ export default function Admin({ staffUser }) {
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500, marginBottom: 20 }}>Tools</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
           <AdminNavCard icon={ClipboardList} label="Caste Suggestions" onClick={()=>setView('casteSuggestions')} />
-          <AdminNavCard icon={Handshake} label="Coordination" onClick={()=>setView('coordinationRequests')} />
+          <AdminNavCard icon={Handshake} label="Coordination" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
           <AdminNavCard icon={Link2} label="Share Links" onClick={()=>setView('shareLinks')} />
         </div>
       </div>
@@ -964,6 +979,11 @@ export default function Admin({ staffUser }) {
             </div>
           </div>
         </div>
+        {staffUser.role === 'admin' && (
+          <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={() => setView('staffManagement')}>
+            <UserCog size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Manage Staff
+          </button>
+        )}
         <button className="btn btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={logout}>
           <LogOut size={16} style={{ marginRight: 6 }} />Logout
         </button>
@@ -1596,6 +1616,10 @@ function CoordinationRequestsView({ onBack }) {
   const [profilesById, setProfilesById] = useState({})
   const [loading, setLoading] = useState(true)
   const [scheduleDraft, setScheduleDraft] = useState({}) // request id -> datetime-local string being edited
+  // Pending (not yet accepted/declined by the receiver) requests were never
+  // shown here before — admin had no visibility until both members acted.
+  // Now included by default so admin can see/coordinate proactively.
+  const [tab, setTab] = useState('open') // open (pending+accepted+contacted) | pending | closed | all
 
   useEffect(() => { load() }, [])
 
@@ -1605,7 +1629,7 @@ function CoordinationRequestsView({ onBack }) {
       const { data, error } = await supabase
         .from('introductions')
         .select('*')
-        .in('status', ['accepted', 'contacted', 'closed'])
+        .in('status', ['pending', 'accepted', 'contacted', 'closed'])
         .order('created_at', { ascending: false })
       if (error) throw error
       const rows = data || []
@@ -1679,20 +1703,35 @@ function CoordinationRequestsView({ onBack }) {
     }
   }
 
+  const filteredRequests = requests.filter(r => {
+    if (tab === 'all') return true
+    if (tab === 'pending') return r.status === 'pending'
+    if (tab === 'closed') return r.status === 'closed'
+    return r.status !== 'closed' // 'open'
+  })
+
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
-      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>Coordination Requests</h2>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:14}}>Coordination Requests</h2>
+
+      <div className="pill-tabs" style={{marginBottom:16}}>
+        {['open','pending','closed','all'].map(t => (
+          <button key={t} className={'pill-tab ' + (tab === t ? 'active' : '')} onClick={()=>setTab(t)}>
+            {t === 'pending' ? `pending (${requests.filter(r=>r.status==='pending').length})` : t}
+          </button>
+        ))}
+      </div>
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
-      ) : requests.length === 0 ? (
+      ) : filteredRequests.length === 0 ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
-          No Talk/Meeting requests yet.
+          {tab === 'pending' ? 'No requests waiting on a response.' : 'No Talk/Meeting requests yet.'}
         </div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {requests.map(r => {
+          {filteredRequests.map(r => {
             const from = profilesById[r.from_profile]
             const to = profilesById[r.to_profile]
             return (
@@ -1708,11 +1747,15 @@ function CoordinationRequestsView({ onBack }) {
                     <div style={{fontSize:10,color:'#bbb',marginTop:2}}>
                       {new Date(r.created_at).toLocaleDateString('en-IN')}
                     </div>
-                    {/* Dono families ko seedha call/WhatsApp — coordination yahin se */}
-                    {[from, to].filter(x => x?.client_phone).map(x => (
-                      <div key={x.id} style={{display:'flex',alignItems:'center',gap:8,marginTop:6,fontSize:12}}>
-                        <span style={{color:'#8e8e8e',minWidth:90}}>{x.full_name}</span>
-                        <ContactButtons phone={x.client_phone} />
+                    {/* Dono families ko seedha call/WhatsApp — coordination yahin se.
+                        Number missing ho to yahin inline add/save bhi ho sakta hai
+                        (Find Matches ka wahi ProfileContact pattern reuse) — pehle
+                        button simply gayab ho jaata tha, admin ko pata nahi chalta tha. */}
+                    {[from, to].filter(Boolean).map(x => (
+                      <div key={x.id} style={{marginTop:6}}>
+                        <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
+                        <ProfileContact profile={x}
+                          onSaved={(phone)=>setProfilesById(prev=>({ ...prev, [x.id]: { ...prev[x.id], client_phone: phone } }))} />
                       </div>
                     ))}
                   </div>
@@ -1985,6 +2028,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
   const [assignedPending, setAssignedPending] = useState([])
   const [newSubmissions, setNewSubmissions] = useState([])
   const [upcomingMeetings, setUpcomingMeetings] = useState([])
+  const [pendingCoordination, setPendingCoordination] = useState([])
 
   useEffect(() => { load() }, [])
 
@@ -1993,26 +2037,39 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
     const nowIso = new Date().toISOString()
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
     const weekFromNow = new Date(Date.now() + 7*24*60*60*1000).toISOString()
-    const [followUpsRes, assignedRes, newRes, meetingsRes] = await Promise.all([
+    const [followUpsRes, assignedRes, newRes, meetingsRes, pendingCoordRes] = await Promise.all([
       supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code, client_phone)').lte('follow_up_at', nowIso).order('follow_up_at', { ascending: true }).limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, profile_status, client_phone').eq('managed_by_staff_id', staffUser.user_id).eq('profile_status', 'pending').limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, created_at, client_phone').eq('profile_status', 'pending').gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(20),
       // Scheduled calls/meetings (introductions.scheduled_at) due in the next 7 days, soonest first
       supabase.from('introductions').select('*').gte('scheduled_at', nowIso).lte('scheduled_at', weekFromNow).order('scheduled_at', { ascending: true }).limit(20),
+      // Coordination requests awaiting the receiver's accept/decline — previously
+      // invisible to admin anywhere. Folded in here per Aryan's ask (2026-10-03).
+      supabase.from('introductions').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
     ])
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
     setNewSubmissions(newRes.data || [])
 
     const meetings = meetingsRes.data || []
-    const ids = [...new Set(meetings.flatMap(m => [m.from_profile, m.to_profile]))]
+    const pendingReqs = pendingCoordRes.data || []
+    const ids = [...new Set([...meetings, ...pendingReqs].flatMap(m => [m.from_profile, m.to_profile]))]
     let profilesById = {}
     if (ids.length > 0) {
       const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
       ;(profs || []).forEach(p => { profilesById[p.id] = p })
     }
     setUpcomingMeetings(meetings.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
+    setPendingCoordination(pendingReqs.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setLoading(false)
+  }
+
+  const updatePendingContact = (profileId, phone) => {
+    setPendingCoordination(prev => prev.map(m => ({
+      ...m,
+      fromProfile: m.fromProfile?.id === profileId ? { ...m.fromProfile, client_phone: phone } : m.fromProfile,
+      toProfile: m.toProfile?.id === profileId ? { ...m.toProfile, client_phone: phone } : m.toProfile,
+    })))
   }
 
   const isToday = (iso) => new Date(iso).toDateString() === new Date().toDateString()
@@ -2036,12 +2093,31 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>My Queue</h2>
-      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Today's follow-ups, your assigned profiles, and new submissions</div>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Coordination requests, today's follow-ups, your assigned profiles, and new submissions</div>
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
       ) : (
         <>
+          <Section icon={Handshake} title="Coordination requests awaiting response" items={pendingCoordination}
+            empty="Nothing waiting on a member right now."
+            renderItem={r => (
+              <div key={r.id} className="list-row">
+                <div style={{fontSize:13,fontWeight:600}}>
+                  {r.fromProfile?.full_name || 'Unknown'} → {r.toProfile?.full_name || 'Unknown'}
+                  <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {r.request_type === 'meeting' ? 'Meeting' : 'Talk'} request</span>
+                </div>
+                <div style={{fontSize:10,color:'#bbb',marginTop:2}}>Sent {new Date(r.created_at).toLocaleDateString('en-IN')} · waiting on {r.toProfile?.full_name || 'receiver'} to accept</div>
+                <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:8}}>
+                  {[r.fromProfile, r.toProfile].filter(Boolean).map(x => (
+                    <div key={x.id}>
+                      <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
+                      <ProfileContact profile={x} onSaved={(phone)=>updatePendingContact(x.id, phone)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )} />
           <Section icon={CalendarClock} title="Calls & meetings (next 7 days)" items={upcomingMeetings} empty="Nothing scheduled."
             renderItem={m => (
               <div key={m.id} className="list-row" style={isToday(m.scheduled_at) ? { borderColor: '#2563eb' } : {}}>
@@ -2103,6 +2179,94 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
               </div>
             )} />
         </>
+      )}
+    </div>
+  )
+}
+
+// ===== STAFF MANAGEMENT — admin-only. Previously the only way to add a
+// staff/admin/RM login was to insert into staff_users directly via the
+// Supabase dashboard. staff_users.user_id is a FK to auth.users, so a new
+// staff member must first sign up for a normal account (Register.js) with
+// the email they'll use; an admin then "promotes" that email here via the
+// assign_staff_role() RPC (SECURITY DEFINER, admin-only — see migration
+// 20261003_staff_management_rpcs.sql). No service-role key needed client-side.
+function StaffManagementView({ staffUser, onBack }) {
+  const [staff, setStaff] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState('relationship_manager')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    const { data, error: err } = await supabase.rpc('list_staff_with_email')
+    if (!err) setStaff(data || [])
+    setLoading(false)
+  }
+
+  const addStaff = async () => {
+    if (!email.trim()) { setError('Enter an email address'); return }
+    setSaving(true); setError('')
+    const { error: err } = await supabase.rpc('assign_staff_role', { target_email: email.trim(), target_role: role })
+    setSaving(false)
+    if (err) { setError(err.message); return }
+    setEmail(''); setRole('relationship_manager')
+    load()
+  }
+
+  const toggleActive = async (row) => {
+    const { error: err } = await supabase.rpc('set_staff_active', { target_user_id: row.user_id, is_active: !row.active })
+    if (err) { alert(err.message); return }
+    load()
+  }
+
+  return (
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: '20px' }}>
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to Account</button>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Manage Staff</h2>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Add admins and relationship managers, or deactivate access.</div>
+
+      <div className="list-row" style={{ marginBottom: 20 }}>
+        <div style={{fontSize:12,fontWeight:600,marginBottom:10}}>Add staff</div>
+        <div style={{fontSize:11,color:'#8e8e8e',marginBottom:10}}>
+          The person must have already created a normal account (sign up at the login page with this email) — this just grants them staff access.
+        </div>
+        <div className="form-row" style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          <input className="form-input" placeholder="staff@email.com" value={email}
+            onChange={e=>setEmail(e.target.value)} style={{flex:'1 1 200px'}} />
+          <select className="form-select" value={role} onChange={e=>setRole(e.target.value)} style={{flex:'0 0 180px'}}>
+            <option value="relationship_manager">Relationship Manager</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button className="btn btn-black btn-sm" disabled={saving} onClick={addStaff}>{saving ? 'Adding...' : 'Add'}</button>
+        </div>
+        {error && <div style={{fontSize:12,color:'#dc2626',marginTop:8}}>{error}</div>}
+      </div>
+
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {staff.map(s => (
+            <div key={s.id} className="list-row" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:600}}>{s.email}</div>
+                <div style={{fontSize:11,color:'#8e8e8e',textTransform:'capitalize'}}>{s.role.replace('_',' ')} · {s.active ? 'Active' : 'Deactivated'}</div>
+              </div>
+              <button className="btn btn-outline btn-sm"
+                style={s.active ? { color:'#dc2626', borderColor:'#dc2626' } : {}}
+                disabled={s.user_id === staffUser.user_id}
+                title={s.user_id === staffUser.user_id ? 'You cannot deactivate your own account' : ''}
+                onClick={()=>toggleActive(s)}>
+                {s.active ? 'Deactivate' : 'Reactivate'}
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
