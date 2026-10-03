@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { FormLabel } from '../components/ui'
+import { FormLabel, SectionLabel } from '../components/ui'
 import { iconForLabel } from '../components/fieldIcons'
 import {
   User, Landmark, GraduationCap, Coffee, Users, Camera, Check, ChevronLeft, ArrowRight,
@@ -955,6 +955,195 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       showToast('Error: ' + err.message)
     }
     setSaving(false)
+  }
+
+  // ===== ADMIN COMPACT FORM — staff already know the client's details
+  // (collected over phone/in person), so stepping through the same
+  // one-question-per-screen wizard self-signup users get (30-40+ taps)
+  // wastes their time. This renders every currently-askable field (same
+  // fields/options as the wizard above — nothing new, nothing removed)
+  // on one page instead, with a single Create Client button at the end.
+  // Self-signup keeps the wizard exactly as-is; this only replaces how
+  // admin-created profiles are entered. Partner Preferences / Family
+  // Type / Assets etc. still aren't asked here either (same as the
+  // wizard) — admin can fill those via Edit Profile afterwards, same as
+  // today.
+  const renderCompactField = (q) => {
+    if (q.type === 'name') {
+      return (
+        <div className="form-row">
+          <div className="form-group">
+            <FormLabel>First Name *</FormLabel>
+            <input className="form-input" placeholder="As per records" value={form.first_name} onChange={e=>set('first_name',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <FormLabel>Middle Name</FormLabel>
+            <input className="form-input" placeholder="Optional" value={form.middle_name} onChange={e=>set('middle_name',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <FormLabel>Last Name / Surname *</FormLabel>
+            <input className="form-input" placeholder="As per records" value={form.last_name} onChange={e=>set('last_name',e.target.value)} />
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div className="form-group">
+        <FormLabel>{q.label}{q.required ? ' *' : ''}</FormLabel>
+        {q.type==='text' && (
+          <input className="form-input" placeholder={q.placeholder} value={form[q.key]} onChange={e=>set(q.key,e.target.value)} />
+        )}
+        {q.type==='date' && (
+          <>
+            <input className="form-input" type="date" value={form.date_of_birth}
+              min={dobInputBounds().min} max={dobInputBounds().max} onChange={e=>set('date_of_birth',e.target.value)} />
+            {form.date_of_birth && (() => {
+              const check = validateAge(form.date_of_birth, form.gender)
+              return <div style={{fontSize:12, marginTop:4, color: check.valid ? '#16a34a' : '#dc2626'}}>{check.valid ? `Age: ${check.age} years` : check.message}</div>
+            })()}
+          </>
+        )}
+        {q.type==='chips' && (
+          <select className="form-select" value={form[q.key]} onChange={e=>set(q.key,e.target.value)}>
+            {!q.required && <option value="">Not specified</option>}
+            {q.options.map(o=><option key={o} value={o}>{o}</option>)}
+          </select>
+        )}
+        {q.type==='select' && (
+          <select className="form-select" value={form[q.key]} onChange={e=>set(q.key,e.target.value)}>
+            <option value="">Select</option>
+            {q.options.map(o=><option key={o}>{o}</option>)}
+          </select>
+        )}
+        {q.type==='multiselect' && (
+          <CheckboxDropdown options={q.options} selected={form[q.key]} onChange={v=>set(q.key,v)} placeholder={q.placeholder} />
+        )}
+        {q.hint && <div className="form-hint">{q.hint}</div>}
+      </div>
+    )
+  }
+
+  const renderCompactAdminForm = () => (
+    <div style={{maxWidth:800,margin:'0 auto',padding:'0 20px 40px'}}>
+      <div className={'toast ' + (toast?'show':'')}>{toast}</div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <SectionLabel style={{marginBottom:14}}>Client Details</SectionLabel>
+        <BiodataAutofill onApply={applyBiodata} includeContact />
+        <div style={{background:'#fff8e1',borderRadius:12,padding:14,marginBottom:4}}>
+          <div style={{fontSize:12,fontWeight:600,marginBottom:10}}>Client Contact (internal — used to share matches, never shown on public profile)</div>
+          <div className="form-row">
+            <div className="form-group">
+              <FormLabel>Client Phone / WhatsApp</FormLabel>
+              <input className="form-input" placeholder="9876543210" value={form.client_phone} onChange={e=>set('client_phone',e.target.value)} />
+            </div>
+            <div className="form-group">
+              <FormLabel>Client Email</FormLabel>
+              <input className="form-input" placeholder="client@email.com" value={form.client_email} onChange={e=>set('client_email',e.target.value)} />
+            </div>
+          </div>
+          {dupMatches.length > 0 && (
+            <div style={{marginTop:10,background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:'10px 12px'}}>
+              <div style={{fontSize:12,fontWeight:600,color:'#dc2626',marginBottom:4}}>⚠ Already registered — possible duplicate</div>
+              {dupMatches.map(m => (
+                <div key={m.id} style={{fontSize:12,color:'#555'}}>{m.full_name} · {m.profile_code} · {m.profile_status} · {new Date(m.created_at).toLocaleDateString('en-IN')}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <SectionLabel style={{marginBottom:14}}>Personal Details</SectionLabel>
+        {PERSONAL_QUESTIONS.filter(q => !(q.skip && q.skip(form))).map(q => (
+          <div key={q.key || 'name'}>{renderCompactField(q)}</div>
+        ))}
+      </div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <SectionLabel style={{marginBottom:14}}>Religion & Community</SectionLabel>
+        {religionBlocks().filter(b => !(b.skip && b.skip())).map((b,i) => (
+          <div key={i} className="form-group">
+            <FormLabel>{b.title}</FormLabel>
+            {b.render()}
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <SectionLabel style={{marginBottom:14}}>Education & Career</SectionLabel>
+        {educationBlocks().filter(b => !(b.skip && b.skip())).map((b,i) => (
+          <div key={i} className="form-group">
+            <FormLabel>{b.title}</FormLabel>
+            {b.render()}
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <SectionLabel style={{marginBottom:14}}>Lifestyle</SectionLabel>
+        {lifestyleBlocks().filter(b => !(b.skip && b.skip())).map((b,i) => (
+          <div key={i}>{b.render()}</div>
+        ))}
+      </div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <SectionLabel style={{marginBottom:14}}>Family Background</SectionLabel>
+        {familyBlocks().filter(b => !(b.skip && b.skip())).map((b,i) => (
+          <div key={i} className="form-group">
+            <FormLabel>{b.title}</FormLabel>
+            {b.render()}
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <SectionLabel style={{marginBottom:14}}>Photos</SectionLabel>
+        <div className="photo-grid" style={{gridTemplateColumns:'repeat(2, 1fr)'}}>
+          {photos.map((photo, idx)=>(
+            <div key={idx} className={'photo-slot ' + (photo?'filled':'')}
+              onClick={()=>!photo&&fileRefs.current[idx].current.click()}>
+              {photo ? (
+                <>
+                  <img src={photo} alt="" style={{opacity: compressingIdx===idx ? 0.5 : 1}} />
+                  {compressingIdx===idx && (
+                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#fff',background:'rgba(0,0,0,0.3)'}}>Processing...</div>
+                  )}
+                  {idx===0 ? (
+                    <button className="remove-btn" onClick={e=>{e.stopPropagation();fileRefs.current[idx].current.click()}} title="Change Photo" aria-label="Change photo"><RefreshCw size={13} /></button>
+                  ) : (
+                    <button className="remove-btn" aria-label="Remove photo" onClick={e=>{e.stopPropagation();removePhoto(idx)}}><X size={13} /></button>
+                  )}
+                  <div style={{position:'absolute',bottom:6,left:6,background:'rgba(0,0,0,0.65)',backdropFilter:'blur(4px)',color:'#fff',fontSize:9,padding:'3px 8px',borderRadius:20,letterSpacing:'0.1em'}}>{idx===0?'PROFILE':'SECONDARY'}</div>
+                </>
+              ) : (
+                <>
+                  <span className="avatar" style={{width:44,height:44}}>{idx===0 ? <Camera size={20} /> : <Plus size={20} />}</span>
+                  <span style={{fontSize:11,color:'var(--gray3)'}}>{idx===0?'Profile':'Secondary'}</span>
+                </>
+              )}
+              <input ref={fileRefs.current[idx]} type="file" accept="image/*" style={{display:'none'}}
+                onChange={e=>{handlePhotoSelect(idx,e.target.files[0]); e.target.value=''}} />
+            </div>
+          ))}
+        </div>
+        {photoErrors.some(Boolean) && (
+          <div style={{marginTop:10}}>
+            {photoErrors.map((err,idx)=>err && (
+              <div key={idx} style={{fontSize:12,color:'#dc2626',marginBottom:4}}>Photo {idx+1}: {err}</div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <button className="btn btn-primary" style={{width:'100%'}} onClick={handleSubmit} disabled={saving || compressingIdx!==null}>
+        {saving ? 'Creating...' : compressingIdx!==null ? 'Processing photo...' : <><Check size={18} style={{verticalAlign:'-3px',marginRight:6}} />Create Client</>}
+      </button>
+    </div>
+  )
+
+  if (adminMode) {
+    return renderCompactAdminForm()
   }
 
   const stepBlocksForPct = (step>=1 && step<=4) ? getStepBlocks(step) : null
