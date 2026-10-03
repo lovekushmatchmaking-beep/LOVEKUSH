@@ -4,7 +4,7 @@ import {
   Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote,
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
-  UserRound, Plus,
+  UserRound, Plus, Wrench,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -100,7 +100,7 @@ export default function Admin({ staffUser }) {
     if (v === 'list') navigate(-1) // undoes the push below — matches hardware back
     else setSearchParams({ view: v })
   }
-  const [menuOpen, setMenuOpen] = useState(false) // drawer nav — secondary admin sections (was a crowded button row)
+  const [section, setSection] = useState('profiles') // main nav: profiles | dashboard | queues | tools | account
   const [editingProfile, setEditingProfile] = useState(null)
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
   const [matchResults, setMatchResults] = useState([])
@@ -455,28 +455,50 @@ export default function Admin({ staffUser }) {
 
   const needsAttention = (stats.needsVerification || 0) + (stats.openReports || 0)
 
+  const navItems = [
+    { id: 'profiles', label: 'Profiles', Icon: Users },
+    { id: 'dashboard', label: 'Dashboard', Icon: BarChart3 },
+    { id: 'queues', label: 'Queues', Icon: ListChecks, badge: needsAttention },
+    { id: 'tools', label: 'Tools', Icon: Wrench },
+    { id: 'account', label: 'Account', Icon: UserRound },
+  ]
+  const sectionForView = { verificationQueue:'queues', reportsQueue:'queues', myQueue:'queues', duplicateLeads:'queues', casteSuggestions:'tools', coordinationRequests:'tools', shareLinks:'tools', createClient:'profiles', editProfile:'profiles', findMatches:'profiles' }
+  const effectiveSection = view === 'list' ? section : (sectionForView[view] || section)
+  const switchSection = (s) => { if (view !== 'list') navigate(-1); setSection(s) }
+
   return (
-    <div style={{ minHeight: '100vh', background: '#fff' }}>
-      <nav className="navbar">
-        <span style={{ fontFamily:'var(--font-display)', fontSize: 15, fontWeight:500, letterSpacing: '0.35em', background: 'var(--brand-gradient)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>ADMIN</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="chip chip-muted" style={{ textTransform: 'none' }}>{staffUser.role === 'admin' ? 'Admin' : 'Relationship Manager'}</span>
-          <button className="icon-btn" onClick={() => setMenuOpen(true)} aria-label="Menu" style={{ position: 'relative' }}>
-            <Menu size={22} />
-            {needsAttention > 0 && <span className="nav-dot" style={{ top: 6, right: 6 }} />}
-          </button>
+    <div className="admin-shell">
+      {/* ===== DESKTOP SIDEBAR ===== */}
+      <aside className="admin-sidebar">
+        <div className="admin-sidebar-brand">
+          <span className="gradient-text" style={{ fontFamily:'var(--font-display)', fontSize: 13, fontWeight:600, letterSpacing:'0.3em' }}>ADMIN</span>
         </div>
-      </nav>
+        {navItems.map(it => (
+          <button key={it.id} className={'admin-sidebar-item' + (effectiveSection === it.id ? ' active' : '')}
+            onClick={() => switchSection(it.id)}>
+            <it.Icon size={19} />
+            <span style={{ flex: 1 }}>{it.label}</span>
+            {!!it.badge && <span className="chip chip-primary" style={{ marginLeft: 'auto' }}>{it.badge}</span>}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        <div style={{ fontSize: 12, color: 'var(--gray3)', padding: '8px 14px' }}>
+          {staffUser.role === 'admin' ? 'Administrator' : 'Relationship Manager'}
+        </div>
+        <button className="admin-sidebar-item danger" onClick={logout}>
+          <LogOut size={19} />
+          <span>Logout</span>
+        </button>
+      </aside>
 
-      <AdminDrawer
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        staffUser={staffUser}
-        stats={stats}
-        onNavigate={(v) => setView(v)}
-        onLogout={logout}
-      />
+      <div className="admin-main">
+        {/* Mobile top bar */}
+        <nav className="navbar admin-topbar">
+          <span className="gradient-text" style={{ fontFamily:'var(--font-display)', fontSize: 15, fontWeight:500, letterSpacing:'0.35em' }}>ADMIN</span>
+          <span className="chip chip-muted" style={{ textTransform: 'none' }}>{staffUser.role === 'admin' ? 'Admin' : 'RM'}</span>
+        </nav>
 
+        <div className="admin-page">
       {view === 'createClient' && (
         <div>
           <div style={{maxWidth:800,margin:'0 auto',padding:'20px 20px 0'}}>
@@ -545,61 +567,14 @@ export default function Admin({ staffUser }) {
         />
       )}
 
-      {view === 'list' && (
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Profiles</div>
-            <div style={{ fontSize: 12, color: '#8e8e8e' }}>Open the menu for queues, reports &amp; share links</div>
-          </div>
+      {view === 'list' && section === 'profiles' && (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Profiles</div>
           <button className="btn btn-black btn-sm" onClick={()=>setView('createClient')}>
-            <Plus size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Create Client Profile
+            <Plus size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Create Client
           </button>
         </div>
-        {/* Stat tiles — Aryan ko pehla screen bahut lamba/"messy" laga, isliye
-            tiles ko compact kiya (chhota padding/font, 3-up grid on mobile)
-            taaki profile list tak scroll kam karna pade. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(102px,1fr))', gap: 8, marginBottom: 16 }}>
-          {[
-            { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555', Icon: Users },
-            { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#4f46e5', Icon: Users },
-            { label: 'Female', val: stats.female, bg: '#fdf2f8', fg: '#db2777', Icon: Users },
-            { label: 'New (7d)', val: stats.newWeek, sub: `Today ${stats.newToday}`, bg: '#ecfeff', fg: '#0891b2', Icon: UserPlus },
-            { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309', Icon: Clock },
-            { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a', Icon: CheckCircle2 },
-            { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626', Icon: ShieldX },
-            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert, onClick: () => setView('verificationQueue') },
-            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag, onClick: () => setView('reportsQueue') },
-          ].map(s => (
-            <div key={s.label} style={{ background: s.bg, borderRadius: 'var(--radius-sm)', padding: '8px 10px', transition: 'transform 0.15s, box-shadow 0.15s', cursor: s.onClick ? 'pointer' : 'default' }}
-              onClick={s.onClick}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)' }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontFamily:'var(--font-display)', fontSize: 20, fontWeight:500 }}>{s.val}</div>
-                <s.Icon size={13} color={s.fg} style={{ opacity: 0.7 }} />
-              </div>
-              <div style={{ fontSize: 9, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{s.label}</div>
-              {s.sub && <div style={{ fontSize: 9.5, color: s.fg, marginTop: 1 }}>{s.sub}</div>}
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, margin: '-10px 0 16px', flexWrap: 'wrap' }}>
-          <button className="btn btn-outline btn-sm" onClick={loadStats} disabled={statsLoading}>
-            <RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />
-            {statsLoading ? 'Refreshing…' : 'Refresh'}
-            {statsUpdatedAt && !statsLoading ? ` · last ${statsUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
-          </button>
-          <button className="btn btn-outline btn-sm" onClick={() => setShowBreakdown(v => !v)}>
-            <BarChart3 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showBreakdown ? 'Hide breakdown' : 'Breakdown (age, height, religion…)'}
-          </button>
-          <button className="btn btn-outline btn-sm" onClick={() => setShowFunnel(v => !v)}>
-            <GitBranch size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showFunnel ? 'Hide funnel' : 'Conversion Funnel'}
-          </button>
-        </div>
-        {showBreakdown && <StatsBreakdown refreshKey={statsUpdatedAt} />}
-        {showFunnel && <FunnelView refreshKey={statsUpdatedAt} onOpenDuplicates={() => setView('duplicateLeads')} />}
-
         {/* SEARCH BAR */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input
@@ -905,56 +880,124 @@ export default function Admin({ staffUser }) {
             )}
           </div>
         )}
+
       </div>
       )}
+      {view === 'list' && section === 'dashboard' && (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Dashboard</div>
+          <button className="btn btn-outline btn-sm" onClick={loadStats} disabled={statsLoading}>
+            <RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />
+            {statsLoading ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
+        {/* Stat tiles */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 20 }}>
+          {[
+            { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555', Icon: Users },
+            { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#4f46e5', Icon: Users },
+            { label: 'Female', val: stats.female, bg: '#fdf2f8', fg: '#db2777', Icon: Users },
+            { label: 'New (7d)', val: stats.newWeek, sub: `Today ${stats.newToday}`, bg: '#ecfeff', fg: '#0891b2', Icon: UserPlus },
+            { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309', Icon: Clock },
+            { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a', Icon: CheckCircle2 },
+            { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626', Icon: ShieldX },
+            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert, onClick: () => { setSection('queues'); setView('verificationQueue') } },
+            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag, onClick: () => { setSection('queues'); setView('reportsQueue') } },
+          ].map(s => (
+            <div key={s.label} className="list-row" style={{ background: s.bg, padding: '16px 14px', cursor: s.onClick ? 'pointer' : 'default', transition: 'transform 0.15s, box-shadow 0.15s' }}
+              onClick={s.onClick}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontFamily:'var(--font-display)', fontSize: 26, fontWeight:600 }}>{s.val}</div>
+                <s.Icon size={18} color={s.fg} style={{ opacity: 0.7 }} />
+              </div>
+              <div style={{ fontSize: 11, color: '#8e8e8e', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 4 }}>{s.label}</div>
+              {s.sub && <div style={{ fontSize: 11, color: s.fg, marginTop: 2 }}>{s.sub}</div>}
+            </div>
+          ))}
+        </div>
+        {statsUpdatedAt && <div style={{ fontSize: 11, color: 'var(--gray3)', marginBottom: 16 }}>Last updated {statsUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          <button className="btn btn-outline btn-sm" onClick={() => setShowBreakdown(v => !v)}>
+            <BarChart3 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showBreakdown ? 'Hide breakdown' : 'Breakdown (age, height, religion...)'}
+          </button>
+          <button className="btn btn-outline btn-sm" onClick={() => setShowFunnel(v => !v)}>
+            <GitBranch size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showFunnel ? 'Hide funnel' : 'Conversion Funnel'}
+          </button>
+        </div>
+        {showBreakdown && <StatsBreakdown refreshKey={statsUpdatedAt} />}
+        {showFunnel && <FunnelView refreshKey={statsUpdatedAt} onOpenDuplicates={() => { setSection('queues'); setView('duplicateLeads') }} />}
+      </div>
+      )}
+      {view === 'list' && section === 'queues' && (
+      <div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500, marginBottom: 20 }}>Queues</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+          <AdminNavCard icon={ListChecks} label="My Queue" onClick={()=>setView('myQueue')} />
+          <AdminNavCard icon={ShieldAlert} label="Verification" badge={stats.needsVerification} onClick={()=>setView('verificationQueue')} />
+          <AdminNavCard icon={Flag} label="Reports" badge={stats.openReports} onClick={()=>setView('reportsQueue')} />
+          <AdminNavCard icon={Copy} label="Duplicate Leads" onClick={()=>setView('duplicateLeads')} />
+        </div>
+      </div>
+      )}
+      {view === 'list' && section === 'tools' && (
+      <div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500, marginBottom: 20 }}>Tools</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+          <AdminNavCard icon={ClipboardList} label="Caste Suggestions" onClick={()=>setView('casteSuggestions')} />
+          <AdminNavCard icon={Handshake} label="Coordination" onClick={()=>setView('coordinationRequests')} />
+          <AdminNavCard icon={Link2} label="Share Links" onClick={()=>setView('shareLinks')} />
+        </div>
+      </div>
+      )}
+      {view === 'list' && section === 'account' && (
+      <div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500, marginBottom: 20 }}>Account</div>
+        <div className="list-row" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="avatar" style={{ width: 48, height: 48 }}><UserRound size={22} /></div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{staffUser.role === 'admin' ? 'Administrator' : 'Relationship Manager'}</div>
+              <div style={{ fontSize: 12, color: 'var(--gray3)' }}>Lovekush Global Matchmaking Services</div>
+            </div>
+          </div>
+        </div>
+        <button className="btn btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={logout}>
+          <LogOut size={16} style={{ marginRight: 6 }} />Logout
+        </button>
+      </div>
+      )}
+        </div>
+      </div>
+
+      {/* ===== MOBILE BOTTOM NAV ===== */}
+      <nav className="bottom-nav admin-bottom-nav">
+        {navItems.map(it => (
+          <button key={it.id} className={'bottom-nav-item' + (effectiveSection === it.id ? ' active' : '')}
+            onClick={() => switchSection(it.id)}>
+            <span className="nav-icon"><it.Icon size={22} /></span>
+            <span className="nav-label">{it.label}</span>
+            {!!it.badge && <span className="nav-dot" />}
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }
 
-// ===== ADMIN NAV DRAWER — Aryan ne "messy" button row (My Queue / Duplicate
-// Leads / Verification / Reports / Caste Suggestions / Coordination
-// Requests / Share Links, sab ek saath wrap ho rahe the) ko hamburger ke
-// peeche drawer mein daalne ko kaha — same slide-in drawer pattern jo
-// user-facing app (AppChrome's SideDrawer) mein already hai, wahi
-// .drawer/.drawer-item CSS reuse karta hai taaki design language consistent rahe.
-function AdminDrawer({ open, onClose, staffUser, stats, onNavigate, onLogout }) {
-  const go = (v) => { onClose(); onNavigate(v) }
-  const items = [
-    { icon: ListChecks, label: 'My Queue', onClick: () => go('myQueue') },
-    { icon: Copy, label: 'Duplicate Leads', onClick: () => go('duplicateLeads') },
-    { icon: ShieldAlert, label: 'Verification Queue', badge: stats.needsVerification, onClick: () => go('verificationQueue') },
-    { icon: Flag, label: 'Reports Queue', badge: stats.openReports, onClick: () => go('reportsQueue') },
-    { sep: true },
-    { icon: ClipboardList, label: 'Caste Suggestions', onClick: () => go('casteSuggestions') },
-    { icon: Handshake, label: 'Coordination Requests', onClick: () => go('coordinationRequests') },
-    { icon: Link2, label: 'My Share Links', onClick: () => go('shareLinks') },
-    { sep: true },
-    { icon: LogOut, label: 'Logout', onClick: () => { onClose(); onLogout() }, danger: true },
-  ]
-
+// ===== NAV CARD — grid item for Queues/Tools sections (replaces old AdminDrawer)
+function AdminNavCard({ icon: Icon, label, badge, onClick }) {
   return (
-    <>
-      <div className={'drawer-overlay' + (open ? ' open' : '')} onClick={onClose} aria-hidden="true" />
-      <aside className={'drawer' + (open ? ' open' : '')} aria-hidden={!open} aria-label="Admin menu">
-        <div className="drawer-head">
-          <div className="avatar" style={{ width: 44, height: 44 }}>
-            <UserRound size={20} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 15 }}>{staffUser.role === 'admin' ? 'Admin' : 'Relationship Manager'}</div>
-            <div style={{ fontSize: 11, color: '#8e8e8e' }}>Lovekush staff panel</div>
-          </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close menu"><X size={22} /></button>
-        </div>
-        {items.map((it, i) => it.sep ? <div key={i} className="drawer-sep" /> : (
-          <button key={it.label} className={'drawer-item' + (it.danger ? ' danger' : '')} onClick={it.onClick} tabIndex={open ? 0 : -1}>
-            <span className="drawer-item-icon"><it.icon size={19} /></span>
-            <span style={{ flex: 1 }}>{it.label}</span>
-            {!!it.badge && <span className="chip chip-primary">{it.badge}</span>}
-          </button>
-        ))}
-      </aside>
-    </>
+    <button className="list-row clickable" onClick={onClick}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '24px 16px', textAlign: 'center', cursor: 'pointer', width: '100%' }}>
+      <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--gray1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={22} color="var(--gray3)" />
+      </div>
+      <span style={{ fontSize: 13, fontWeight: 500 }}>{label}</span>
+      {!!badge && <span className="chip chip-primary">{badge}</span>}
+    </button>
   )
 }
 
