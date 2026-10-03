@@ -774,6 +774,21 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
   // Kai matches ek saath ek hi link mein bhejne ke liye (jaise ek client
   // ke liye 5-6 chune hue profiles) — checkbox se chuno, ek link banao.
   const [picked, setPicked] = useState([])
+  // Paytm receipt jaisa "seedha usi ke WhatsApp par" — web app phone ki share
+  // list ka order nahi badal sakta, isliye client ka number ho to wa.me/<number>
+  // seedha usi chat ko kholta hai. Number save na ho (self-signup profiles)
+  // to yahin daal ke save kar sakte hain.
+  const [clientPhone, setClientPhone] = useState(profile.client_phone || '')
+  const [phoneDraft, setPhoneDraft] = useState('')
+  const [phoneError, setPhoneError] = useState('')
+
+  const saveClientPhone = async () => {
+    const digits = phoneDraft.replace(/\D/g, '')
+    if (digits.length < 10) { setPhoneError('Enter a valid number (10 digits, or with country code)'); return }
+    const { error } = await supabase.from('profiles').update({ client_phone: phoneDraft.trim() }).eq('id', profile.id)
+    if (error) { setPhoneError('Could not save: ' + error.message); return }
+    setClientPhone(phoneDraft.trim()); setPhoneDraft(''); setPhoneError('')
+  }
   const [bundle, setBundle] = useState(null) // { url, generating, error, copied }
 
   const togglePicked = (id) => {
@@ -795,7 +810,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
     ? `Hi! LOVEKUSH has handpicked ${picked.length} ${picked.length === 1 ? 'match' : 'matches'} for you. View them here (link valid for 7 days):\n\n${bundle.url}`
     : ''
   const bundleWaLink = bundle?.url
-    ? (buildWaMeLink(profile.client_phone, bundleMsg) || buildWaChooserLink(bundleMsg))
+    ? (buildWaMeLink(clientPhone, bundleMsg) || buildWaChooserLink(bundleMsg))
     : null
 
   const copyBundle = async () => {
@@ -823,12 +838,24 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
         {profile.profile_code} • Using existing matching algorithm
       </div>
 
+      {!clientPhone && (
+        <div style={{background:'#f9f9f9',borderRadius:12,padding:12,marginBottom:14}}>
+          <div style={{fontSize:12,marginBottom:6}}>Save {profile.full_name}'s WhatsApp number so matches open straight in their chat</div>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            <input className="form-input" placeholder="9876543210" value={phoneDraft} inputMode="tel"
+              onChange={e=>setPhoneDraft(e.target.value)} style={{flex:'1 1 160px',fontSize:13}} />
+            <button className="btn btn-outline btn-sm" onClick={saveClientPhone}>Save number</button>
+          </div>
+          {phoneError && <div style={{fontSize:11,color:'#dc2626',marginTop:6}}>{phoneError}</div>}
+        </div>
+      )}
+
       {picked.length > 0 && (
         <div style={{position:'sticky',top:0,zIndex:5,background:'#fff8e1',borderRadius:12,padding:14,marginBottom:14}}>
           <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>
             {picked.length} selected — share all in one link
-            {profile.client_phone
-              ? <span style={{fontWeight:400,color:'#8e8e8e'}}> · goes straight to client's WhatsApp ({profile.client_phone})</span>
+            {clientPhone
+              ? <span style={{fontWeight:400,color:'#8e8e8e'}}> · goes straight to client's WhatsApp ({clientPhone})</span>
               : <span style={{fontWeight:400,color:'#8e8e8e'}}> · no client phone saved, WhatsApp will ask which chat</span>}
           </div>
           {!bundle?.url ? (
@@ -865,7 +892,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
             const isExpanded = expandedId === other.id
             const linkState = linkFor[other.id]
             const shareMsg = linkState?.url ? `Hi! Found a match for you on LOVEKUSH:\n\n${linkState.url}` : ''
-            const waLink = linkState?.url ? (buildWaMeLink(profile.client_phone, shareMsg) || buildWaChooserLink(shareMsg)) : null
+            const waLink = linkState?.url ? (buildWaMeLink(clientPhone, shareMsg) || buildWaChooserLink(shareMsg)) : null
             const mailLink = linkState?.url ? buildMailtoLink(profile.client_email, 'A match for you — LOVEKUSH', `Hi,\n\nWe found a match for you. View secure profile:\n${linkState.url}\n\n(This link expires in 7 days)\n\nRegards,\nLOVEKUSH Global Matchmaking Services`) : null
 
             return (
@@ -921,7 +948,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
                       </div>
                       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                         <a href={waLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm">📱 Send via WhatsApp</a>
-                        {!profile.client_phone && (
+                        {!clientPhone && (
                           <span style={{fontSize:11,color:'#8e8e8e',alignSelf:'center'}}>No client phone saved, WhatsApp will ask which chat</span>
                         )}
                         {mailLink && <a href={mailLink} className="btn btn-outline btn-sm">✉ Send via Email</a>}
