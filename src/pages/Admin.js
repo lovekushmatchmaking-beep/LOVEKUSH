@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote, ListChecks, UserPlus, BarChart3 } from 'lucide-react'
+import { Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote, ListChecks, UserPlus, BarChart3, RefreshCw } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
 import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/profileOptions'
@@ -55,6 +55,7 @@ export default function Admin({ staffUser }) {
   const [activeTab, setActiveTab] = useState('all')
   const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0 })
   const [statsUpdatedAt, setStatsUpdatedAt] = useState(null)
+  const [statsLoading, setStatsLoading] = useState(false)
   const [showBreakdown, setShowBreakdown] = useState(false)
   const [selected, setSelected] = useState(null)
   const [idMetadata, setIdMetadata] = useState({}) // profile_id -> {created_at, source, created_by} — admin-only, staff_users RLS gated
@@ -87,15 +88,11 @@ export default function Admin({ staffUser }) {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  // LIVE COUNTER — list view khula ho to har 30 sec + tab pe wapas aate hi
-  // counts refresh. Sirf head:true count queries hain (rows nahi aate), sasta hai.
+  // STATS COUNTER — manual refresh only (Aryan asked to remove the 30s
+  // auto-refresh, 2026-10-03). Still loads once when the list view opens.
   useEffect(() => {
     if (view !== 'list') return
     loadStats()
-    const t = setInterval(() => { if (!document.hidden) loadStats() }, 30000)
-    const onFocus = () => loadStats()
-    window.addEventListener('focus', onFocus)
-    return () => { clearInterval(t); window.removeEventListener('focus', onFocus) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view])
 
@@ -120,6 +117,7 @@ export default function Admin({ staffUser }) {
   }, [selected])
 
   const loadStats = async () => {
+    setStatsLoading(true)
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const counts = await Promise.all([
@@ -149,6 +147,7 @@ export default function Admin({ staffUser }) {
       newToday: counts[9].count || 0,
     })
     setStatsUpdatedAt(new Date())
+    setStatsLoading(false)
   }
 
   // Poora query builder — DB-level pe filter apply karta hai, client
@@ -511,10 +510,11 @@ export default function Admin({ staffUser }) {
           ))}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, margin: '-10px 0 16px', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 11, color: '#8e8e8e' }}>
-            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#16a34a', marginRight: 6 }} />
-            Live · updates every 30 sec{statsUpdatedAt ? ` · last ${statsUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
-          </div>
+          <button className="btn btn-outline btn-sm" onClick={loadStats} disabled={statsLoading}>
+            <RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />
+            {statsLoading ? 'Refreshing…' : 'Refresh'}
+            {statsUpdatedAt && !statsLoading ? ` · last ${statsUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
+          </button>
           <button className="btn btn-outline btn-sm" onClick={() => setShowBreakdown(v => !v)}>
             <BarChart3 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showBreakdown ? 'Hide breakdown' : 'Breakdown (age, height, religion…)'}
           </button>
@@ -822,7 +822,7 @@ function StatsBreakdown({ refreshKey }) {
       if (!error) setProfiles(data || [])
       setLoading(false)
     })
-    // refreshKey ticks every 30s with the stat tiles — keeps breakdown in sync
+    // refreshKey ticks whenever the stat tiles are manually refreshed — keeps breakdown in sync
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey])
 
