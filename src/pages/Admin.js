@@ -493,6 +493,29 @@ export default function Admin({ staffUser }) {
   }
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length
+  // Status bhi ab ek filter field ki tarah count hota hai (combined Search &
+  // Filter control) — "X results found", Filters badge aur "Clear all" teeno
+  // search + status + panel filters ko ek saath treat karte hain.
+  const totalFilterCount = activeFilterCount + (activeTab !== 'all' ? 1 : 0)
+  const isNarrowed = !!search || totalFilterCount > 0
+  const clearAllSearchFilters = () => {
+    setSearchInput(''); setSearch(''); setActiveTab('all'); resetFilters()
+  }
+  // Chhote removable chips — jo bhi narrow kar raha hai (search/status/panel
+  // filter) ek hi line mein dikhta hai, panel band hone par bhi.
+  const FILTER_CHIP_LABELS = {
+    religion: v => v, community: v => v, city: v => `City: ${v}`, gender: v => v,
+    ageMin: v => `Age ≥ ${v}`, ageMax: v => `Age ≤ ${v}`, maritalStatus: v => v,
+    education: v => v, assignedToMe: () => 'Assigned to me',
+  }
+  const activeFilterChips = [
+    ...(search ? [{ key: 'search', label: `"${search}"`, clear: () => { setSearchInput(''); setSearch('') } }] : []),
+    ...(activeTab !== 'all' ? [{ key: 'status', label: `Status: ${activeTab}`, clear: () => setActiveTab('all') }] : []),
+    ...Object.entries(filters).filter(([, v]) => v).map(([k, v]) => ({
+      key: k, label: FILTER_CHIP_LABELS[k] ? FILTER_CHIP_LABELS[k](v) : String(v),
+      clear: () => setFilters(f => ({ ...f, [k]: DEFAULT_FILTERS[k] })),
+    })),
+  ]
 
   const logAuditEntry = (action, entityId, metadata) => writeAuditLog(staffUser, action, entityId, metadata)
 
@@ -838,11 +861,19 @@ export default function Admin({ staffUser }) {
             <Plus size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Create Client
           </button>
         </div>
-        {/* SEARCH & FILTER — status tabs, search aur Filters teeno ka kaam
-            "list ko narrow karna" hai, isliye ab ek hi box mein grouped hain
-            (pehle teen alag rows header mein bikhri dikhti thi). Logic same. */}
+        {/* SEARCH & FILTER — ek hi combined control: search box, status aur
+            baaki filters (Religion/City/Age/...) sab isi box mein. Status ab
+            alag "tabs" mechanism nahi, balki ek filter field hai (pills isi
+            box ki pehli filter row hain); Filters badge, active-filter chips
+            aur "Clear all" teeno search + status + panel filters ko saath
+            gin te/hatate hain. Query logic bilkul same hai. */}
         <div style={{ background: '#fafafa', border: '1px solid #ededed', borderRadius: 'var(--radius)', padding: 12, marginBottom: 16 }}>
-        <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Search &amp; Filter</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Search &amp; Filter</div>
+          <button className="btn btn-outline btn-sm" style={{ flex: '0 0 auto', padding: '4px 10px', fontSize: 11 }} onClick={() => runQuery(0)}>
+            {loading ? 'Loading...' : <><RefreshCw size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />Refresh</>}
+          </button>
+        </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input
             type="text"
@@ -850,22 +881,47 @@ export default function Admin({ staffUser }) {
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             style={{
-              flex: 1, padding: '10px 14px', borderRadius: 'var(--radius)',
+              flex: 1, minWidth: 0, padding: '10px 14px', borderRadius: 'var(--radius)',
               border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, outline: 'none',
             }}
           />
           <button
-            className="btn btn-outline btn-sm"
+            className={'btn btn-sm ' + (showFilters ? 'btn-black' : 'btn-outline')}
             onClick={() => setShowFilters(!showFilters)}
-            style={{ position: 'relative' }}
+            style={{ position: 'relative', flex: '0 0 auto' }}
           >
-            <SlidersHorizontal size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+            <SlidersHorizontal size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showFilters ? 'Less' : 'More filters'} {activeFilterCount > 0 && `(${activeFilterCount})`}
           </button>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: (showFilters || activeFilterChips.length) ? 10 : 0 }}>
+          <span style={{ fontSize: 11, color: '#8e8e8e', flex: '0 0 auto' }}>Status</span>
+          <div className="pill-tabs" style={{ flex: '1 1 auto', minWidth: 0 }}>
+            {['all', 'pending', 'active', 'blocked'].map(t => (
+              <button key={t} className={'pill-tab ' + (activeTab === t ? 'active' : '')} onClick={() => setActiveTab(t)}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeFilterChips.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: showFilters ? 10 : 0 }}>
+            {activeFilterChips.map(c => (
+              <button key={c.key} className="chip chip-muted" style={{ textTransform: 'none', cursor: 'pointer', border: 'none' }}
+                onClick={c.clear} title="Remove this filter">
+                {c.label} ✕
+              </button>
+            ))}
+            {activeFilterChips.length > 1 && (
+              <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11 }} onClick={clearAllSearchFilters}>Clear all</button>
+            )}
+          </div>
+        )}
+
         {/* ADVANCED FILTERS PANEL */}
         {showFilters && (
-          <div className="list-row" style={{ marginBottom: 14 }}>
+          <div className="list-row" style={{ marginBottom: 0 }}>
             <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Religion & Community</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               <select className="form-select" value={filters.religion} onChange={e=>setFilters(f=>({...f,religion:e.target.value}))}>
@@ -907,24 +963,12 @@ export default function Admin({ staffUser }) {
               <input type="checkbox" checked={filters.assignedToMe} onChange={e=>setFilters(f=>({...f,assignedToMe:e.target.checked}))} />
               Assigned to me only <span style={{ color: '#8e8e8e', fontSize: 11 }}>(all statuses — today's pending to-dos are in Queues → My Queue)</span>
             </label>
-            {activeFilterCount > 0 && (
-              <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={resetFilters}>Reset Filters</button>
+            {totalFilterCount > 0 && (
+              <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={clearAllSearchFilters}>Clear all</button>
             )}
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div className="pill-tabs" style={{ flex: '1 1 auto', minWidth: 0 }}>
-            {['all', 'pending', 'active', 'blocked'].map(t => (
-              <button key={t} className={'pill-tab ' + (activeTab === t ? 'active' : '')} onClick={() => setActiveTab(t)}>
-                {t}
-              </button>
-            ))}
-          </div>
-          <button className="btn btn-black btn-sm" style={{ flex: '0 0 auto' }} onClick={() => runQuery(0)}>
-            {loading ? 'Loading...' : <><RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Refresh</>}
-          </button>
-        </div>
         </div>
         {listUpdatedAt && (
           <div style={{ fontSize: 11, color: 'var(--gray3)', marginTop: -4, marginBottom: 10 }}>
@@ -932,7 +976,7 @@ export default function Admin({ staffUser }) {
           </div>
         )}
 
-        {(search || activeFilterCount > 0) && !loading && (
+        {isNarrowed && !loading && (
           <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 10 }}>
             {profiles.length} result{profiles.length !== 1 ? 's' : ''} found
             {search && ` for "${search}"`}
@@ -1235,8 +1279,12 @@ export default function Admin({ staffUser }) {
             { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309', Icon: Clock },
             { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a', Icon: CheckCircle2 },
             { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626', Icon: ShieldX },
-            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert, onClick: () => goToSectionView('queues', 'verificationQueue') },
-            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag, onClick: () => goToSectionView('queues', 'reportsQueue') },
+            // Verify/Reports tiles ab navigate nahi karte — Queues tab ke
+            // cards aur sidebar badge se hi queue khulti hai (3 jagah same
+            // shortcut tha, 2 kaafi hain). Number yahan sirf context ke
+            // liye dikhta hai.
+            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert },
+            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag },
           ].map(s => (
             <div key={s.label} className="list-row" style={{ background: s.bg, padding: '16px 14px', cursor: s.onClick ? 'pointer' : 'default', transition: 'transform 0.15s, box-shadow 0.15s' }}
               onClick={s.onClick}
@@ -1261,7 +1309,7 @@ export default function Admin({ staffUser }) {
           </button>
         </div>
         {showBreakdown && <StatsBreakdown profiles={dashProfiles} capped={dashProfilesCapped} />}
-        {showFunnel && <FunnelView profiles={dashProfiles} capped={dashProfilesCapped} refreshKey={statsUpdatedAt} onOpenDuplicates={() => goToSectionView('queues', 'duplicateLeads')} />}
+        {showFunnel && <FunnelView profiles={dashProfiles} capped={dashProfilesCapped} refreshKey={statsUpdatedAt} />}
       </div>
       )}
       {view === 'list' && section === 'queues' && (
@@ -1302,7 +1350,11 @@ export default function Admin({ staffUser }) {
             <UserCog size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Manage Staff
           </button>
         )}
-        <button className="btn btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={logout}>
+        {/* Logout yahan sirf mobile par dikhta hai — desktop par sidebar
+            mein already Logout hai, dono saath dikhna duplicate tha
+            (Aryan's audit). CSS admin-account-logout-mobile ko >=768px par
+            hide karta hai. */}
+        <button className="btn btn-outline admin-account-logout-mobile" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={logout}>
           <LogOut size={16} style={{ marginRight: 6 }} />Logout
         </button>
       </div>
@@ -1413,7 +1465,7 @@ function StatsBreakdown({ profiles, capped }) {
 // are computed client-side like StatsBreakdown already does.
 // `profiles` comes from Admin's shared dashboard fetch (same rows as Breakdown);
 // only introductions/match_actions are fetched here.
-function FunnelView({ profiles, capped, refreshKey, onOpenDuplicates }) {
+function FunnelView({ profiles, capped, refreshKey }) {
   const [activity, setActivity] = useState(null) // { intros, actions }
 
   useEffect(() => {
@@ -1486,8 +1538,11 @@ function FunnelView({ profiles, capped, refreshKey, onOpenDuplicates }) {
             "% of previous" = yeh stage ki count ÷ pichle stage ki count — har stage par kitna drop-off hua, yeh dikhata hai (funnel khud raw counts hai, yeh us par ratio hai).
           </div>
           {dupCount > 0 && (
-            <div style={{ marginTop: 10, fontSize: 12 }}>
-              <button className="btn btn-outline btn-sm" onClick={onOpenDuplicates}>🧬 {dupCount} possible duplicate lead{dupCount === 1 ? '' : 's'} found — review</button>
+            // Shortcut button hata diya — Duplicate Leads already Queues tab
+            // ke card se khulti hai, teesri entry point ki zaroorat nahi.
+            // Count yahan sirf context ke liye.
+            <div style={{ marginTop: 10, fontSize: 12, color: '#8e8e8e' }}>
+              🧬 {dupCount} possible duplicate lead{dupCount === 1 ? '' : 's'} found — see Queues → Duplicate Leads
             </div>
           )}
         </>
