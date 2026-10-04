@@ -4,7 +4,7 @@ import {
   Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote,
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
-  UserRound, Plus, Wrench, UserCog, Eye,
+  UserRound, Plus, Wrench, UserCog, Eye, Phone, Info,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -18,6 +18,7 @@ import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
+import { useToast } from '../components/ui'
 
 // SEARCH DESIGN NOTE: yeh search ab DATABASE se query karta hai (Supabase
 // .ilike()/.eq()/.gte() ke saath), poore profiles table ko browser mein
@@ -25,7 +26,10 @@ import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, g
 // 100,000, search speed same rahegi. Pagination (Load More) bhi hai
 // taaki ek baar mein poora table na load ho.
 
-const PAGE_SIZE = 30
+// 30 → 50: cheap, no-new-UI way to cut down on repetitive "Load More"
+// clicking (Aryan's audit, gap #11) without building a bulk-select
+// workaround — still well under one query's worth of reasonable rows.
+const PAGE_SIZE = 50
 
 // Dashboard Breakdown + Funnel ek hi profiles fetch share karte hain —
 // Breakdown ke columns + Funnel/duplicate-check ke liye id/contact.
@@ -111,18 +115,21 @@ const coordStatusLabel = (status) => COORD_STATUS_LABELS[status] || status
 const coordBadgeClass = (status) => 'badge badge-coord-' + (COORD_STATUS_LABELS[status] ? status : 'pending')
 
 // Request Selfie / Verify & Make Live / Reject. Returns the applied patch, or null on failure.
-async function applyVerificationStatus(staffUser, profile, status) {
+// `notify`: a toast function (showToast) — kept optional/defaulted so any
+// caller that forgets to pass one still gets *something* instead of a
+// silent failure, but every real call site below passes the shared toast.
+async function applyVerificationStatus(staffUser, profile, status, notify = console.error) {
   const patch = verificationPatch(status, profile?.profile_status)
   const { error } = await supabase.from('profiles').update(patch).eq('id', profile.id)
-  if (error) { alert('Update failed: ' + error.message); return null }
+  if (error) { notify('Update failed: ' + error.message); return null }
   await writeAuditLog(staffUser, 'verification_status_change', profile.id, { new_status: status })
   return patch
 }
 
 // Approve / Block / Set Pending for one or many profiles. Returns true on success.
-async function applyProfileStatus(staffUser, ids, status, extraMeta) {
+async function applyProfileStatus(staffUser, ids, status, extraMeta, notify = console.error) {
   const { error } = await supabase.from('profiles').update({ profile_status: status }).in('id', ids)
-  if (error) { alert('Update failed: ' + error.message); return false }
+  if (error) { notify('Update failed: ' + error.message); return false }
   await writeAuditLogs(staffUser, 'profile_status_change', ids, { new_status: status, ...(extraMeta || {}) })
   return true
 }
@@ -167,6 +174,9 @@ const matchesSearch = (q, ...fields) => {
 
 export default function Admin({ staffUser }) {
   const navigate = useNavigate()
+  // Toast replaces every browser alert() in this screen (Aryan's audit,
+  // 2026-10-04) — same hook/CSS the rest of the app already uses elsewhere.
+  const [showToast, ToastView] = useToast()
   const [profiles, setProfiles] = useState([])
   const [photos, setPhotos] = useState({})
   const [loading, setLoading] = useState(false)
@@ -528,7 +538,7 @@ export default function Admin({ staffUser }) {
     // safety net ab Block par bhi (symmetric confirmations).
     if (status === 'blocked' && target
       && !window.confirm(`Block ${target.full_name || 'this profile'}? They will no longer be visible to other members.`)) return
-    if (!(await applyProfileStatus(staffUser, [id], status))) return
+    if (!(await applyProfileStatus(staffUser, [id], status, null, showToast))) return
     setProfiles(prev => prev.map(p => p.id === id ? { ...p, profile_status: status } : p))
     loadStats()
     setSelected(null)
@@ -541,7 +551,7 @@ export default function Admin({ staffUser }) {
   const togglePremium = async (id, current) => {
     const { error } = await supabase.from('profiles').update({ is_premium: !current }).eq('id', id)
     if (error) {
-      alert('Update failed: ' + error.message)
+      showToast('Update failed: ' + error.message)
       return
     }
     await logAuditEntry('premium_toggle', id, { is_premium: !current })
@@ -555,7 +565,7 @@ export default function Admin({ staffUser }) {
   // kar sakta hai, taaki follow-up kiske zimme hai yeh clear rahe.
   const assignToMe = async (id) => {
     const { error } = await supabase.from('profiles').update({ managed_by_staff_id: staffUser.user_id }).eq('id', id)
-    if (error) { alert('Assign failed: ' + error.message); return }
+    if (error) { showToast('Assign failed: ' + error.message); return }
     await logAuditEntry('rm_assigned', id, { managed_by_staff_id: staffUser.user_id })
     setProfiles(prev => prev.map(p => p.id === id ? { ...p, managed_by_staff_id: staffUser.user_id } : p))
     if (selected?.id === id) setSelected(prev => ({ ...prev, managed_by_staff_id: staffUser.user_id }))
@@ -563,7 +573,7 @@ export default function Admin({ staffUser }) {
 
   const unassign = async (id) => {
     const { error } = await supabase.from('profiles').update({ managed_by_staff_id: null }).eq('id', id)
-    if (error) { alert('Unassign failed: ' + error.message); return }
+    if (error) { showToast('Unassign failed: ' + error.message); return }
     await logAuditEntry('rm_unassigned', id, {})
     setProfiles(prev => prev.map(p => p.id === id ? { ...p, managed_by_staff_id: null } : p))
     if (selected?.id === id) setSelected(prev => ({ ...prev, managed_by_staff_id: null }))
@@ -574,7 +584,7 @@ export default function Admin({ staffUser }) {
   // isi se hota hai — Verify karte hi profile live (active) ho jaati hai.
   const setVerificationStatus = async (id, status) => {
     const target = profiles.find(p => p.id === id) || (selected?.id === id ? selected : { id })
-    const patch = await applyVerificationStatus(staffUser, target, status)
+    const patch = await applyVerificationStatus(staffUser, target, status, showToast)
     if (!patch) return
     setProfiles(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p))
     if (selected?.id === id) setSelected(prev => ({ ...prev, ...patch }))
@@ -598,7 +608,7 @@ export default function Admin({ staffUser }) {
       follow_up_at: newNoteFollowUp || null,
       call_outcome: newNoteOutcome || null,
     })
-    if (error) { alert('Could not save note: ' + error.message); return }
+    if (error) { showToast('Could not save note: ' + error.message); return }
     setNewNote('')
     setNewNoteFollowUp('')
     setNewNoteOutcome('')
@@ -676,7 +686,7 @@ export default function Admin({ staffUser }) {
     if (status === 'blocked'
       && !window.confirm(`Block ${ids.length} selected profile(s)? They will no longer be visible to other members.`)) return
     setBulkWorking(true)
-    if (await applyProfileStatus(staffUser, ids, status, { via: 'bulk' })) {
+    if (await applyProfileStatus(staffUser, ids, status, { via: 'bulk' }, showToast)) {
       setProfiles(prev => prev.map(p => ids.includes(p.id) ? { ...p, profile_status: status } : p))
       setSelectedIds(new Set())
       setSelectionMode(false)
@@ -699,7 +709,7 @@ export default function Admin({ staffUser }) {
       .limit(150)
 
     if (error) {
-      alert('Could not load candidates: ' + error.message)
+      showToast('Could not load candidates: ' + error.message)
       setMatchesLoading(false)
       return
     }
@@ -736,6 +746,7 @@ export default function Admin({ staffUser }) {
 
   return (
     <div className="admin-shell">
+      <ToastView />
       {/* ===== DESKTOP SIDEBAR ===== */}
       <aside className="admin-sidebar">
         <div className="admin-sidebar-brand">
@@ -869,8 +880,8 @@ export default function Admin({ staffUser }) {
             gin te/hatate hain. Query logic bilkul same hai. */}
         <div style={{ background: '#fafafa', border: '1px solid #ededed', borderRadius: 'var(--radius)', padding: 12, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Search &amp; Filter</div>
-          <button className="btn btn-outline btn-sm" style={{ flex: '0 0 auto', padding: '4px 10px', fontSize: 11 }} onClick={() => runQuery(0)}>
+          <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Search &amp; Filter</div>
+          <button className="btn btn-outline btn-sm" style={{ flex: '0 0 auto', padding: '7px 14px', fontSize: 13 }} onClick={() => runQuery(0)}>
             {loading ? 'Loading...' : <><RefreshCw size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />Refresh</>}
           </button>
         </div>
@@ -895,7 +906,7 @@ export default function Admin({ staffUser }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: (showFilters || activeFilterChips.length) ? 10 : 0 }}>
-          <span style={{ fontSize: 11, color: '#8e8e8e', flex: '0 0 auto' }}>Status</span>
+          <span style={{ fontSize: 13, color: '#8e8e8e', flex: '0 0 auto' }}>Status</span>
           <div className="pill-tabs" style={{ flex: '1 1 auto', minWidth: 0 }}>
             {['all', 'pending', 'active', 'blocked'].map(t => (
               <button key={t} className={'pill-tab ' + (activeTab === t ? 'active' : '')} onClick={() => setActiveTab(t)}>
@@ -914,7 +925,7 @@ export default function Admin({ staffUser }) {
               </button>
             ))}
             {activeFilterChips.length > 1 && (
-              <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11 }} onClick={clearAllSearchFilters}>Clear all</button>
+              <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13 }} onClick={clearAllSearchFilters}>Clear all</button>
             )}
           </div>
         )}
@@ -922,7 +933,7 @@ export default function Admin({ staffUser }) {
         {/* ADVANCED FILTERS PANEL */}
         {showFilters && (
           <div className="list-row" style={{ marginBottom: 0 }}>
-            <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Religion & Community</div>
+            <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Religion & Community</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               <select className="form-select" value={filters.religion} onChange={e=>setFilters(f=>({...f,religion:e.target.value}))}>
                 <option value="">Any Religion</option>
@@ -934,7 +945,7 @@ export default function Admin({ staffUser }) {
               </select>
             </div>
 
-            <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Location & Demographics</div>
+            <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Location & Demographics</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               <input className="form-input" placeholder="City" value={filters.city}
                 onChange={e=>setFilters(f=>({...f,city:e.target.value}))} />
@@ -948,7 +959,7 @@ export default function Admin({ staffUser }) {
                 onChange={e=>setFilters(f=>({...f,ageMax:e.target.value}))} />
             </div>
 
-            <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Marital Status & Education</div>
+            <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Marital Status & Education</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <select className="form-select" value={filters.maritalStatus} onChange={e=>setFilters(f=>({...f,maritalStatus:e.target.value}))}>
                 <option value="">Any Marital Status</option>
@@ -961,7 +972,7 @@ export default function Admin({ staffUser }) {
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 14, cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.assignedToMe} onChange={e=>setFilters(f=>({...f,assignedToMe:e.target.checked}))} />
-              Assigned to me only <span style={{ color: '#8e8e8e', fontSize: 11 }}>(all statuses — today's pending to-dos are in Queues → My Queue)</span>
+              Assigned to me only <span style={{ color: '#8e8e8e', fontSize: 13 }}>(all statuses — today's pending to-dos are in Queues → My Queue)</span>
             </label>
             {totalFilterCount > 0 && (
               <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={clearAllSearchFilters}>Clear all</button>
@@ -971,7 +982,7 @@ export default function Admin({ staffUser }) {
 
         </div>
         {listUpdatedAt && (
-          <div style={{ fontSize: 11, color: 'var(--gray3)', marginTop: -4, marginBottom: 10 }}>
+          <div style={{ fontSize: 13, color: 'var(--gray3)', marginTop: -4, marginBottom: 10 }}>
             Last refreshed {listUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </div>
         )}
@@ -1031,7 +1042,7 @@ export default function Admin({ staffUser }) {
                 onMouseDown={() => startLongPress(p.id)}
                 onMouseUp={cancelLongPress}
                 onMouseLeave={cancelLongPress}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   {selectionMode && (
                     <input type="checkbox" checked={selectedIds.has(p.id)} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(p.id)} />
                   )}
@@ -1041,28 +1052,75 @@ export default function Admin({ staffUser }) {
                       : <UserRound size={18} color="#bbb" />
                     }
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: '1 1 140px', minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{p.full_name}</div>
                     <div style={{ fontSize: 12, color: '#8e8e8e' }}>{p.age}y · {p.city} · {p.religion}</div>
                   </div>
-                  {selected?.id !== p.id && <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} />}
                   {/* Ek hi row mein wrap karo — pehle "active" + "✓ Verified" + "Premium"
                       alag-alag lines mein stack hoke card ko lamba bana rahe the. "active"
                       ka matlab hi verified hai (is app ke flow mein), isliye Verified badge
-                      ab sirf tab dikhta hai jab status active nahi hai — ek kam badge, kam clutter. */}
+                      ab sirf tab dikhta hai jab status active nahi hai — ek kam badge, kam clutter.
+                      Title tooltips har badge par — "yeh color/badge ka matlab kya hai" roz yaad
+                      na karna pade (Aryan's audit, 2026-10-04, gap #2). */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 4 }}>
-                      <div className={"badge badge-" + p.profile_status} style={{ fontSize: 10 }}>{p.profile_status}</div>
-                      {p.verification_status === 'verified' && p.profile_status !== 'active' && <div className="badge" style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>✓ Verified</div>}
-                      {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb' }}>Selfie received</div>}
-                      {SHOW_PREMIUM_TOGGLE && p.is_premium && <div className="badge" style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Crown size={10} />Premium</div>}
+                      <div className={"badge badge-" + p.profile_status} style={{ fontSize: 12 }} title={'Profile status: ' + p.profile_status}>{p.profile_status}</div>
+                      {p.verification_status === 'verified' && p.profile_status !== 'active' && <div className="badge" style={{ fontSize: 12, background: '#f0fdf4', color: '#16a34a' }} title="Selfie/ID verified by staff">✓ Verified</div>}
+                      {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 12, background: '#eff6ff', color: '#2563eb' }} title="Member sent a selfie — needs comparing to their photo">Selfie received</div>}
+                      {SHOW_PREMIUM_TOGGLE && p.is_premium && <div className="badge" style={{ fontSize: 12, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }} title="Marked Premium"><Crown size={10} />Premium</div>}
                     </div>
-                    <div style={{ fontSize: 10, color: '#8e8e8e', fontFamily: 'monospace' }}>{p.profile_code}</div>
+                    <div style={{ fontSize: 12, color: '#8e8e8e', fontFamily: 'monospace' }}>{p.profile_code}</div>
                   </div>
                 </div>
 
+                {/* Quick actions right in the row, no expand needed — Aryan's
+                    #1 priority fix: Call/WhatsApp (with text labels now) and,
+                    for a pending profile, Approve, directly here. Reuses
+                    updateStatus (same confirm/audit-log path as the expanded
+                    view's Approve button) — no new logic. */}
+                {selected?.id !== p.id && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }} onClick={e => e.stopPropagation()}>
+                    <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} />
+                    {p.profile_status !== 'active' && (
+                      <button className="btn btn-black btn-sm" style={{ padding: '7px 14px', fontSize: 12 }}
+                        onClick={() => updateStatus(p.id, 'active')}>
+                        <CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {selected?.id === p.id && (
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                    {/* Quick actions repeated near the top too — the full
+                        action row is still at the bottom, but a 50-profile
+                        review day shouldn't need a full scroll just to tap
+                        Approve/Block (Aryan's audit, gap #10). */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }} onClick={e => e.stopPropagation()}>
+                      <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} />
+                      {p.profile_status !== 'active' && (
+                        <button className="btn btn-black btn-sm" style={{ padding: '7px 14px', fontSize: 12 }}
+                          onClick={() => updateStatus(p.id, 'active')}><CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve</button>
+                      )}
+                      {p.profile_status !== 'blocked' && (
+                        <button className="btn btn-outline btn-sm" style={{ padding: '7px 14px', fontSize: 12, color: '#dc2626', borderColor: '#dc2626' }}
+                          onClick={() => updateStatus(p.id, 'blocked')}><ShieldX size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block</button>
+                      )}
+                    </div>
+
+                    {/* Legend — what each badge color above means, so it
+                        doesn't need to be memorized fresh every day
+                        (Aryan's audit, gap #2). */}
+                    <div className="admin-legend">
+                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#16a34a' }} />Active / Verified</span>
+                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#b45309' }} />Pending</span>
+                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#dc2626' }} />Blocked</span>
+                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#2563eb' }} />Selfie received / Coordination</span>
+                      {SHOW_PREMIUM_TOGGLE && <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#b45309' }} />Premium</span>}
+                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#9333ea' }} />Report</span>
+                    </div>
+
+                    <div className="admin-section-header"><UserRound size={13} />Profile Details</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14, fontSize: 13 }}>
                       {[
                         ['Community', p.community],
@@ -1087,11 +1145,13 @@ export default function Admin({ staffUser }) {
                     {p.about_me && <div style={{ fontSize: 13, color: '#555', background: '#f9f9f9', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>{p.about_me}</div>}
 
                     {/* Quick contact — client_phone par seedha Call / WhatsApp */}
+                    <div className="admin-section-header"><Phone size={13} />Contact</div>
                     <ProfileContact key={p.id + (p.client_phone || '')} profile={p}
                       onSaved={phone => updateClientPhone(p.id, phone)}
                       onAction={kind => startContactLog(p, kind)} />
 
                     {/* RM assignment — profiles.managed_by_staff_id, already in DB */}
+                    <div className="admin-section-header"><UserCheck size={13} />RM Assignment</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 12 }}>
                       <UserCheck size={14} color="#8e8e8e" />
                       {p.managed_by_staff_id ? (
@@ -1099,19 +1159,20 @@ export default function Admin({ staffUser }) {
                           <span style={{ color: '#8e8e8e' }}>
                             {p.managed_by_staff_id === staffUser.user_id ? 'Assigned to you' : 'Assigned to another staff member'}
                           </span>
-                          <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11 }}
+                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13 }}
                             onClick={e => { e.stopPropagation(); unassign(p.id) }}>Unassign</button>
                         </>
                       ) : (
                         <>
                           <span style={{ color: '#8e8e8e' }}>Unassigned</span>
-                          <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11 }}
+                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13 }}
                             onClick={e => { e.stopPropagation(); assignToMe(p.id) }}>Assign to me</button>
                         </>
                       )}
                     </div>
 
                     {/* Verification — selfie request / compare / verify (profiles.verification_status) */}
+                    <div className="admin-section-header"><ShieldAlert size={13} />Verification</div>
                     <div style={{ marginBottom: 14, fontSize: 12 }} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         {p.verification_status === 'verified'
@@ -1123,15 +1184,15 @@ export default function Admin({ staffUser }) {
                           {p.is_admin_managed && p.verification_status !== 'verified' ? ' · created by staff, no selfie needed' : ''}
                         </span>
                         {p.verification_status !== 'verified' && !['selfie_requested', 'selfie_submitted'].includes(p.verification_status) && !p.is_admin_managed && (
-                          <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11 }}
+                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13 }}
                             onClick={() => setVerificationStatus(p.id, 'selfie_requested')}><Camera size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Request Selfie</button>
                         )}
                         {p.verification_status !== 'verified' && (
-                          <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11, color: '#16a34a', borderColor: '#16a34a' }}
+                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13, color: '#16a34a', borderColor: '#16a34a' }}
                             onClick={() => setVerificationStatus(p.id, 'verified')}><ShieldCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Verify &amp; Make Live</button>
                         )}
                         {(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) && (
-                          <button className="btn btn-outline btn-sm" style={{ padding: '2px 10px', fontSize: 11, color: '#dc2626', borderColor: '#dc2626' }}
+                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13, color: '#dc2626', borderColor: '#dc2626' }}
                             onClick={() => setVerificationStatus(p.id, 'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
                         )}
                       </div>
@@ -1141,42 +1202,43 @@ export default function Admin({ staffUser }) {
                     </div>
 
                     {/* Notes / follow-up — naya chhota profile_notes table */}
+                    <div className="admin-section-header"><StickyNote size={13} />Notes &amp; Follow-ups</div>
                     <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#8e8e8e', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <StickyNote size={13} /> Notes & Follow-ups
-                      </div>
                       {(notesByProfile[p.id] || []).map(n => (
                         <div key={n.id} style={{ fontSize: 12, background: '#f9f9f9', padding: '8px 10px', borderRadius: 8, marginBottom: 6 }}>
                           {n.introduction_id && (
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, marginRight: 6, background: '#eff6ff', color: '#2563eb' }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 20, marginRight: 6, background: '#eff6ff', color: '#2563eb' }}>
                               🤝 Coordination
                             </span>
                           )}
                           {n.call_outcome && (
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, marginRight: 6,
+                            <span style={{ fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 20, marginRight: 6,
                               background: CALL_OUTCOME_COLORS[n.call_outcome]?.bg, color: CALL_OUTCOME_COLORS[n.call_outcome]?.fg }}>
                               {CALL_OUTCOME_LABELS[n.call_outcome]}
                             </span>
                           )}
                           <div style={{ display: 'inline' }}>{n.note}</div>
-                          <div style={{ fontSize: 10, color: '#bbb', marginTop: 4 }}>
+                          <div style={{ fontSize: 12, color: '#bbb', marginTop: 4 }}>
                             {new Date(n.created_at).toLocaleString('en-IN')}
                             {n.follow_up_at && <> · Follow up: {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</>}
                           </div>
                         </div>
                       ))}
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                      {/* Outcome chips se text/date box ke beech thoda zyada gap
+                          (10px, pehle 6px) — galti se paas wale control pe tap
+                          lagne ka risk kam karta hai (Aryan's audit, gap #9). */}
+                      <div className="admin-tight-controls" style={{ marginTop: 10 }}>
                         {Object.entries(CALL_OUTCOME_LABELS).map(([key, label]) => (
                           <button key={key} type="button"
                             className="btn btn-outline btn-sm"
-                            style={{ padding: '2px 8px', fontSize: 11,
+                            style={{ padding: '6px 12px', fontSize: 13,
                               ...((selected?.id === p.id && newNoteOutcome === key) ? { background: CALL_OUTCOME_COLORS[key].bg, color: CALL_OUTCOME_COLORS[key].fg, borderColor: CALL_OUTCOME_COLORS[key].fg } : {}) }}
                             onClick={() => { if (selected?.id !== p.id) setSelected(p); setNewNoteOutcome(prev => (selected?.id === p.id && prev === key) ? '' : key) }}>
                             {label}
                           </button>
                         ))}
                       </div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                      <div className="admin-tight-controls" style={{ marginTop: 10 }}>
                         <input className="form-input" placeholder="Add a note (call log, decision, etc.)" value={selected?.id === p.id ? newNote : ''}
                           onChange={e => setNewNote(e.target.value)} style={{ flex: '1 1 200px', fontSize: 12 }} />
                         <input className="form-input" type="date" value={selected?.id === p.id ? newNoteFollowUp : ''}
@@ -1188,10 +1250,8 @@ export default function Admin({ staffUser }) {
                     {/* Coordination requests involving this client — so admin doesn't
                         have to jump to the separate Coordination Requests screen and
                         search for them (Aryan's 2026-10-04 audit, gap #5). */}
+                    <div className="admin-section-header"><Handshake size={13} />Coordination Requests</div>
                     <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#8e8e8e', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Handshake size={13} /> Coordination requests
-                      </div>
                       {(coordByProfile[p.id] || []).length === 0 ? (
                         <div style={{ fontSize: 12, color: '#bbb' }}>No Talk/Meeting requests involving this profile.</div>
                       ) : (
@@ -1205,7 +1265,7 @@ export default function Admin({ staffUser }) {
                                   <strong>{r.other?.full_name || 'Unknown'}</strong>
                                   <span style={{ color: '#8e8e8e', textTransform: 'capitalize' }}> · {r.request_type === 'meeting' ? 'Meeting' : 'Talk'}</span>
                                 </div>
-                                <span className={coordBadgeClass(r.status)} style={{ fontSize: 10 }}>{coordStatusLabel(r.status)}</span>
+                                <span className={coordBadgeClass(r.status)} style={{ fontSize: 12 }}>{coordStatusLabel(r.status)}</span>
                               </div>
                             </div>
                           ))}
@@ -1214,11 +1274,15 @@ export default function Admin({ staffUser }) {
                     </div>
 
                     {idMetadata[p.id] && (
-                      <div style={{ fontSize: 11, color: '#8e8e8e', background: '#f5f5f5', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
-                        🔒 Admin only — Profile ID <strong style={{ fontFamily: 'monospace' }}>{p.profile_code}</strong> generated {new Date(idMetadata[p.id].created_at).toLocaleString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
-                        {idMetadata[p.id].created_by && <> (staff id: {idMetadata[p.id].created_by.slice(0, 8)})</>}
-                      </div>
+                      <>
+                        <div className="admin-section-header"><Info size={13} />Metadata</div>
+                        <div style={{ fontSize: 13, color: '#8e8e8e', background: '#f5f5f5', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
+                          🔒 Admin only — Profile ID <strong style={{ fontFamily: 'monospace' }}>{p.profile_code}</strong> generated {new Date(idMetadata[p.id].created_at).toLocaleString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
+                          {idMetadata[p.id].created_by && <> (staff id: {idMetadata[p.id].created_by.slice(0, 8)})</>}
+                        </div>
+                      </>
                     )}
+                    <div className="admin-section-header"><ListChecks size={13} />Actions</div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {p.profile_status !== 'active' && (
                         <button className="btn btn-black btn-sm" onClick={e => { e.stopPropagation(); updateStatus(p.id, 'active') }}><CheckCircle2 size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve</button>
@@ -1286,20 +1350,23 @@ export default function Admin({ staffUser }) {
             { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert },
             { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag },
           ].map(s => (
-            <div key={s.label} className="list-row" style={{ background: s.bg, padding: '16px 14px', cursor: s.onClick ? 'pointer' : 'default', transition: 'transform 0.15s, box-shadow 0.15s' }}
-              onClick={s.onClick}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)' }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
+            // None of these tiles navigate anywhere (s.onClick is always
+            // undefined here) — they're pure counts. Hover-lift removed:
+            // it was making them look like a shortcut when they aren't,
+            // which is exactly the "same destination, different look"
+            // confusion Aryan's audit flagged (gap #5) — Queues tab's
+            // cards + the sidebar badge are the only real entry points now.
+            <div key={s.label} className="list-row" style={{ background: s.bg, padding: '16px 14px', cursor: 'default' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ fontFamily:'var(--font-display)', fontSize: 26, fontWeight:600 }}>{s.val}</div>
                 <s.Icon size={18} color={s.fg} style={{ opacity: 0.7 }} />
               </div>
-              <div style={{ fontSize: 11, color: '#8e8e8e', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 4 }}>{s.label}</div>
-              {s.sub && <div style={{ fontSize: 11, color: s.fg, marginTop: 2 }}>{s.sub}</div>}
+              <div style={{ fontSize: 13, color: '#8e8e8e', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 4 }}>{s.label}</div>
+              {s.sub && <div style={{ fontSize: 13, color: s.fg, marginTop: 2 }}>{s.sub}</div>}
             </div>
           ))}
         </div>
-        {statsUpdatedAt && <div style={{ fontSize: 11, color: 'var(--gray3)', marginBottom: 16 }}>Last updated {statsUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>}
+        {statsUpdatedAt && <div style={{ fontSize: 13, color: 'var(--gray3)', marginBottom: 16 }}>Last updated {statsUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <button className="btn btn-outline btn-sm" onClick={() => setShowBreakdown(v => !v)}>
             <BarChart3 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showBreakdown ? 'Hide breakdown' : 'Breakdown (age, height, religion...)'}
@@ -1386,7 +1453,7 @@ function AdminNavCard({ icon: Icon, label, subtitle, badge, onClick }) {
         <Icon size={22} color="var(--gray3)" />
       </div>
       <span style={{ fontSize: 13, fontWeight: 500 }}>{label}</span>
-      {subtitle && <span style={{ fontSize: 11, color: 'var(--gray3)', marginTop: -6 }}>{subtitle}</span>}
+      {subtitle && <span style={{ fontSize: 13, color: 'var(--gray3)', marginTop: -6 }}>{subtitle}</span>}
       {!!badge && <span className="chip chip-primary">{badge}</span>}
     </button>
   )
@@ -1434,7 +1501,7 @@ function StatsBreakdown({ profiles, capped }) {
         <>
           <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 10 }}>{filtered.length} profile{filtered.length === 1 ? '' : 's'} matched</div>
           {capped && (
-            <div style={{ fontSize: 11, color: '#b45309', background: '#fff8e1', padding: '6px 10px', borderRadius: 8, marginBottom: 10 }}>
+            <div style={{ fontSize: 13, color: '#b45309', background: '#fff8e1', padding: '6px 10px', borderRadius: 8, marginBottom: 10 }}>
               Database is bigger than {DASH_CAP.toLocaleString('en-IN')} profiles — showing the most recent {DASH_CAP.toLocaleString('en-IN')} only.
             </div>
           )}
@@ -1514,7 +1581,7 @@ function FunnelView({ profiles, capped, refreshKey }) {
       {!loading && (
         <>
           {capped && (
-            <div style={{ fontSize: 11, color: '#b45309', background: '#fff8e1', padding: '6px 10px', borderRadius: 8, marginBottom: 10 }}>
+            <div style={{ fontSize: 13, color: '#b45309', background: '#fff8e1', padding: '6px 10px', borderRadius: 8, marginBottom: 10 }}>
               Database is bigger than {DASH_CAP.toLocaleString('en-IN')} profiles — counts below are based on a capped sample, not every profile.
             </div>
           )}
@@ -1534,7 +1601,7 @@ function FunnelView({ profiles, capped, refreshKey }) {
               </div>
             ))}
           </div>
-          <div style={{ fontSize: 11, color: '#8e8e8e', marginTop: 14 }}>
+          <div style={{ fontSize: 13, color: '#8e8e8e', marginTop: 14 }}>
             "% of previous" = yeh stage ki count ÷ pichle stage ki count — har stage par kitna drop-off hua, yeh dikhata hai (funnel khud raw counts hai, yeh us par ratio hai).
           </div>
           {dupCount > 0 && (
@@ -1597,8 +1664,8 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
                   <div key={p.id} className="list-row clickable" style={{background:'#f9f9f9'}} onClick={()=>onOpenProfile(p)}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
                       <div>
-                        <div style={{fontSize:13,fontWeight:600}}>{p.full_name} <span className={"badge badge-" + p.profile_status} style={{fontSize:9,marginLeft:6}}>{p.profile_status}</span></div>
-                        <div style={{fontSize:11,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code} · registered {new Date(p.created_at).toLocaleDateString('en-IN')}</div>
+                        <div style={{fontSize:13,fontWeight:600}}>{p.full_name} <span className={"badge badge-" + p.profile_status} style={{fontSize:12,marginLeft:6}}>{p.profile_status}</span></div>
+                        <div style={{fontSize:13,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code} · registered {new Date(p.created_at).toLocaleDateString('en-IN')}</div>
                       </div>
                       <ContactButtons phone={p.client_phone} logProfile={p} />
                     </div>
@@ -1712,7 +1779,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
               onChange={e=>setPhoneDraft(e.target.value)} style={{flex:'1 1 160px',fontSize:13}} />
             <button className="btn btn-outline btn-sm" onClick={saveClientPhone}>Save number</button>
           </div>
-          {phoneError && <div style={{fontSize:11,color:'#dc2626',marginTop:6}}>{phoneError}</div>}
+          {phoneError && <div style={{fontSize:13,color:'#dc2626',marginTop:6}}>{phoneError}</div>}
         </div>
       )}
 
@@ -1738,10 +1805,10 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
                 </button>
               )}
               <button className="btn btn-outline btn-sm" onClick={copyBundle}>{bundle.copied ? '✓ Copied' : 'Copy link'}</button>
-              <span style={{fontSize:11,color:'#16a34a'}}>Link ready, expires in 7 days</span>
+              <span style={{fontSize:13,color:'#16a34a'}}>Link ready, expires in 7 days</span>
             </div>
           )}
-          {bundle?.error && <div style={{fontSize:11,color:'#dc2626',marginTop:6}}>{bundle.error}</div>}
+          {bundle?.error && <div style={{fontSize:13,color:'#dc2626',marginTop:6}}>{bundle.error}</div>}
         </div>
       )}
 
@@ -1774,13 +1841,13 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
                   <div style={{flex:1,cursor:'pointer'}} onClick={()=>setExpandedId(isExpanded?null:other.id)}>
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
                       <span style={{fontWeight:600,fontSize:14}}>{other.full_name}</span>
-                      <span style={{fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:20,
+                      <span style={{fontSize:12,fontWeight:600,padding:'6px 12px',borderRadius:20,
                         background: r.score>=70?'#f0fdf4':r.score>=40?'#fff8e1':'#f5f5f5',
                         color: r.score>=70?'#16a34a':r.score>=40?'#b45309':'#8e8e8e'}}>
                         {r.score}% match
                       </span>
                     </div>
-                    <div style={{fontSize:11,color:'#8e8e8e'}}>{other.age}y • {other.city} • {other.profile_code}</div>
+                    <div style={{fontSize:13,color:'#8e8e8e'}}>{other.age}y • {other.city} • {other.profile_code}</div>
                   </div>
                   <ContactButtons phone={phonesById[other.id]} logProfile={other} />
                 </div>
@@ -1789,13 +1856,13 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
                   <div style={{marginTop:12,paddingTop:12,borderTop:'1px solid rgba(0,0,0,0.06)'}}>
                     {r.strengths?.length > 0 && (
                       <div style={{marginBottom:8}}>
-                        <div style={{fontSize:11,fontWeight:600,color:'#16a34a',marginBottom:4}}>Strong Matches</div>
+                        <div style={{fontSize:13,fontWeight:600,color:'#16a34a',marginBottom:4}}>Strong Matches</div>
                         {r.strengths.map((s,i)=><div key={i} style={{fontSize:12,marginBottom:2}}>✓ {s}</div>)}
                       </div>
                     )}
                     {r.needsDiscussion?.length > 0 && (
                       <div>
-                        <div style={{fontSize:11,fontWeight:600,color:'#b45309',marginBottom:4}}>Needs Discussion</div>
+                        <div style={{fontSize:13,fontWeight:600,color:'#b45309',marginBottom:4}}>Needs Discussion</div>
                         {r.needsDiscussion.map((s,i)=><div key={i} style={{fontSize:12,marginBottom:2}}>△ {s}</div>)}
                       </div>
                     )}
@@ -1810,19 +1877,19 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
                     </button>
                   ) : (
                     <div>
-                      <div style={{fontSize:11,color:'#16a34a',marginBottom:6}}>
+                      <div style={{fontSize:13,color:'#16a34a',marginBottom:6}}>
                         ✓ Link ready (expires in 7 days, one-click revoke available in "My Share Links")
                       </div>
                       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                         <a href={waLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm">📱 Send via WhatsApp</a>
                         {!clientPhone && (
-                          <span style={{fontSize:11,color:'#8e8e8e',alignSelf:'center'}}>No client phone saved, WhatsApp will ask which chat</span>
+                          <span style={{fontSize:13,color:'#8e8e8e',alignSelf:'center'}}>No client phone saved, WhatsApp will ask which chat</span>
                         )}
                         {mailLink && <a href={mailLink} className="btn btn-outline btn-sm">✉ Send via Email</a>}
                       </div>
                     </div>
                   )}
-                  {linkState?.error && <div style={{fontSize:11,color:'#dc2626',marginTop:6}}>{linkState.error}</div>}
+                  {linkState?.error && <div style={{fontSize:13,color:'#dc2626',marginTop:6}}>{linkState.error}</div>}
                 </div>
               </div>
             )
@@ -1837,6 +1904,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
 function ShareLinksView({ staffUserId, onBack }) {
   const [links, setLinks] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showToast, ToastView] = useToast()
 
   useEffect(() => { load() }, [])
 
@@ -1856,17 +1924,18 @@ function ShareLinksView({ staffUserId, onBack }) {
       await revokeShareLink(linkId)
       load()
     } catch (err) {
-      alert(err.message)
+      showToast(err.message)
     }
   }
 
   const copyLink = (token) => {
     navigator.clipboard?.writeText(`${window.location.origin}/share/${token}`)
-    alert('Link copied!')
+    showToast('Link copied!')
   }
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <ToastView />
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>My Share Links</h2>
 
@@ -1887,11 +1956,11 @@ function ShareLinksView({ staffUserId, onBack }) {
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                   <div>
                     <div style={{fontSize:12,fontFamily:'monospace',color:'#8e8e8e'}}>/{l.token.slice(0,12)}...</div>
-                    <div style={{fontSize:11,color:statusColor,fontWeight:600,marginTop:2}}>{status}</div>
+                    <div style={{fontSize:13,color:statusColor,fontWeight:600,marginTop:2}}>{status}</div>
                   </div>
                   <div style={{textAlign:'right'}}>
                     <div style={{fontSize:12,color:'#8e8e8e'}}>{l.view_count} view{l.view_count!==1?'s':''}</div>
-                    <div style={{fontSize:10,color:'#bbb'}}>
+                    <div style={{fontSize:12,color:'#bbb'}}>
                       {l.revoked ? 'Revoked' : `Expires ${new Date(l.expires_at).toLocaleDateString('en-IN')}`}
                     </div>
                   </div>
@@ -1916,6 +1985,7 @@ function CasteSuggestionsView({ onBack }) {
   const [suggestions, setSuggestions] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
+  const [showToast, ToastView] = useToast()
 
   useEffect(() => { load() }, [])
 
@@ -1943,12 +2013,13 @@ function CasteSuggestionsView({ onBack }) {
       if (error) throw error
       load()
     } catch (err) {
-      alert(err.message)
+      showToast(err.message)
     }
   }
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>Caste Suggestions</h2>
       {suggestions.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by name, religion or type..." />}
@@ -1971,7 +2042,7 @@ function CasteSuggestionsView({ onBack }) {
                   <div style={{fontSize:12,color:'#8e8e8e',marginTop:2}}>
                     {s.religion}{s.denomination ? ' · ' + s.denomination : ''} · <span style={{textTransform:'capitalize'}}>{s.field_type}</span>
                   </div>
-                  <div style={{fontSize:10,color:'#bbb',marginTop:2}}>
+                  <div style={{fontSize:12,color:'#bbb',marginTop:2}}>
                     {new Date(s.created_at).toLocaleDateString('en-IN')}
                   </div>
                 </div>
@@ -2001,6 +2072,7 @@ const COORD_ALL_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'mee
 const COORD_OPEN_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'meeting_done']
 
 function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
+  const [showToast, ToastView] = useToast()
   const [requests, setRequests] = useState([])
   const [profilesById, setProfilesById] = useState({})
   const [notesByIntroduction, setNotesByIntroduction] = useState({}) // introduction_id -> profile_notes[] (history, incl. reschedules)
@@ -2110,7 +2182,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
       setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r))
       refreshPendingCount()
     } catch (err) {
-      alert(err.message)
+      showToast(err.message)
     }
   }
 
@@ -2122,7 +2194,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
       if (error) throw error
       setRequests(prev => prev.map(r => r.id === id ? { ...r, viewed_at } : r))
     } catch (err) {
-      alert(err.message)
+      showToast(err.message)
     }
   }
 
@@ -2149,7 +2221,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
       setScheduleDraft(prev => ({ ...prev, [id]: undefined }))
       setRequests(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: newWhen } : r))
     } catch (err) {
-      alert(err.message)
+      showToast(err.message)
     }
   }
 
@@ -2159,7 +2231,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
       if (error) throw error
       setRequests(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: null } : r))
     } catch (err) {
-      alert(err.message)
+      showToast(err.message)
     }
   }
 
@@ -2170,7 +2242,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
       if (error) throw error
       setRequests(prev => prev.map(r => r.id === id ? { ...r, ...fb } : r))
     } catch (err) {
-      alert(err.message)
+      showToast(err.message)
     }
   }
 
@@ -2182,6 +2254,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:14}}>Coordination Requests</h2>
       {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by member name or Profile ID..." />}
@@ -2217,7 +2290,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
                     <div style={{fontSize:12,color:'#8e8e8e',marginTop:2,textTransform:'capitalize'}}>
                       {r.request_type === 'meeting' ? 'Meeting request' : 'Talk request'}
                     </div>
-                    <div style={{fontSize:10,color:'#bbb',marginTop:2}}>
+                    <div style={{fontSize:12,color:'#bbb',marginTop:2}}>
                       {new Date(r.created_at).toLocaleDateString('en-IN')}
                     </div>
                     {/* Dono families ko seedha call/WhatsApp — coordination yahin se.
@@ -2230,7 +2303,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
                         meeting) — audit gap #4. */}
                     {[from, to].filter(Boolean).map(x => (
                       <div key={x.id} style={{marginTop:6}}>
-                        <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2,display:'flex',alignItems:'center',gap:6}}>
+                        <div style={{fontSize:13,color:'#8e8e8e',marginBottom:2,display:'flex',alignItems:'center',gap:6}}>
                           {x.full_name} <AddNoteButton profile={x} introductionId={r.id} />
                         </div>
                         <ProfileContact profile={x} logCalls introductionId={r.id}
@@ -2239,11 +2312,11 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
                     ))}
                   </div>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-                    <div className={coordBadgeClass(r.status)} style={{fontSize:10}}>
+                    <div className={coordBadgeClass(r.status)} style={{fontSize:12}}>
                       {coordStatusLabel(r.status)}
                     </div>
                     {r.scheduled_at && (
-                      <div style={{fontSize:10,color:'#2563eb',display:'flex',alignItems:'center',gap:4}}>
+                      <div style={{fontSize:12,color:'#2563eb',display:'flex',alignItems:'center',gap:4}}>
                         <CalendarClock size={11} /> {new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                       </div>
                     )}
@@ -2252,15 +2325,15 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
                 {/* Schedule a call/meeting time — My Queue ke "Today" section mein dikhta hai */}
                 <div style={{display:'flex',alignItems:'center',gap:6,marginTop:8,flexWrap:'wrap'}} onClick={e=>e.stopPropagation()}>
                   <CalendarClock size={13} color="#8e8e8e" />
-                  <input type="datetime-local" className="form-input" style={{fontSize:12,padding:'4px 8px',width:190}}
+                  <input type="datetime-local" className="form-input" style={{fontSize:12,padding:'7px 12px',width:190}}
                     value={scheduleDraft[r.id] ?? ''}
                     onChange={e=>setScheduleDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
-                  <button className="btn btn-outline btn-sm" style={{padding:'3px 10px',fontSize:11}}
+                  <button className="btn btn-outline btn-sm" style={{padding:'7px 14px',fontSize:13}}
                     onClick={()=>handleSchedule(r.id, scheduleDraft[r.id], r.scheduled_at, r.from_profile)}>
                     {r.scheduled_at ? 'Reschedule' : 'Schedule'}
                   </button>
                   {r.scheduled_at && (
-                    <button className="btn btn-outline btn-sm" style={{padding:'3px 10px',fontSize:11,color:'#dc2626',borderColor:'#dc2626'}}
+                    <button className="btn btn-outline btn-sm" style={{padding:'7px 14px',fontSize:13,color:'#dc2626',borderColor:'#dc2626'}}
                       onClick={()=>handleUnschedule(r.id)}>Clear</button>
                   )}
                 </div>
@@ -2283,19 +2356,19 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
                     <button className="btn btn-outline btn-sm" onClick={()=>handleAction(r.id, 'closed')}>Close</button>
                   )}
                 </div>
-                {r.viewed_at && <div style={{fontSize:10,color:'#bbb',marginTop:6}}>Viewed {new Date(r.viewed_at).toLocaleString('en-IN')}</div>}
+                {r.viewed_at && <div style={{fontSize:12,color:'#bbb',marginTop:6}}>Viewed {new Date(r.viewed_at).toLocaleString('en-IN')}</div>}
 
                 {/* History — every call/WhatsApp log, free-form note and reschedule
                     for this request, not just the final close-time feedback
                     (audit gap #4: "beech ki baatein kahin save nahi hoti thi"). */}
                 {history.length > 0 && (
                   <div style={{ marginTop: 10 }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>History</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>History</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {history.map(n => (
-                        <div key={n.id} style={{ fontSize: 11, background: '#f9f9f9', padding: '6px 8px', borderRadius: 8 }}>
+                        <div key={n.id} style={{ fontSize: 13, background: '#f9f9f9', padding: '6px 8px', borderRadius: 8 }}>
                           {n.call_outcome && (
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 20, marginRight: 6,
+                            <span style={{ fontSize: 12, fontWeight: 600, padding: '7px 14px', borderRadius: 20, marginRight: 6,
                               background: CALL_OUTCOME_COLORS[n.call_outcome]?.bg, color: CALL_OUTCOME_COLORS[n.call_outcome]?.fg }}>
                               {CALL_OUTCOME_LABELS[n.call_outcome]}
                             </span>
@@ -2355,9 +2428,9 @@ function SelfieCompare({ selfiePath, photoPath }) {
       {[['Verification selfie', selfiePath], ['Profile photo', photoPath]].map(([label, path]) => (
         <div key={label} style={{ textAlign: 'center' }}>
           <div style={box}>
-            {path ? <SignedImage path={path} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 11, color: '#8e8e8e' }}>No photo</span>}
+            {path ? <SignedImage path={path} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 13, color: '#8e8e8e' }}>No photo</span>}
           </div>
-          <div style={{ fontSize: 10, color: '#8e8e8e', marginTop: 4 }}>{label}</div>
+          <div style={{ fontSize: 12, color: '#8e8e8e', marginTop: 4 }}>{label}</div>
         </div>
       ))}
     </div>
@@ -2369,6 +2442,7 @@ function SelfieCompare({ selfiePath, photoPath }) {
 // selfie request karo, aayi hui selfie ko photo se compare karke Verify karo
 // (Verify = verified badge + profile live).
 function VerificationQueueView({ staffUser, onBack }) {
+  const [showToast, ToastView] = useToast()
   const [profiles, setProfiles] = useState([])
   const [photoByProfile, setPhotoByProfile] = useState({})
   const [loading, setLoading] = useState(true)
@@ -2411,7 +2485,7 @@ function VerificationQueueView({ staffUser, onBack }) {
   // Optimistic local update instead of a full reload — keeps whatever's
   // already been "Load More"-d in place rather than snapping back to page 1.
   const act = async (p, status) => {
-    const patch = await applyVerificationStatus(staffUser, p, status)
+    const patch = await applyVerificationStatus(staffUser, p, status, showToast)
     if (!patch) return
     if (status === 'verified') setProfiles(prev => prev.filter(x => x.id !== p.id)) // done — leaves the queue
     else setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, ...patch } : x))
@@ -2425,6 +2499,7 @@ function VerificationQueueView({ staffUser, onBack }) {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Verification Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Self-signup profiles go live only after their selfie is matched with their photo and verified</div>
@@ -2444,7 +2519,7 @@ function VerificationQueueView({ staffUser, onBack }) {
                     <div style={{fontSize:14,fontWeight:600}}>{p.full_name}</div>
                     <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
                   </div>
-                  <div className="badge" style={{fontSize:10, background:'#eff6ff', color:'#2563eb'}}>
+                  <div className="badge" style={{fontSize:12, background:'#eff6ff', color:'#2563eb'}}>
                     {p.id_document_uploaded && p.verification_status !== 'selfie_submitted' ? 'ID document uploaded' : (VERIFICATION_LABELS[p.verification_status] || 'Not verified')}
                   </div>
                 </div>
@@ -2475,6 +2550,7 @@ function VerificationQueueView({ staffUser, onBack }) {
 // ===== REPORTS QUEUE — profile_reports table already existed in the DB
 // (client "Report" flow writes to it) par admin side koi review UI nahi tha.
 function ReportsQueueView({ staffUser, onBack }) {
+  const [showToast, ToastView] = useToast()
   const [reports, setReports] = useState([])
   const [profilesById, setProfilesById] = useState({})
   const [loading, setLoading] = useState(true)
@@ -2521,12 +2597,12 @@ function ReportsQueueView({ staffUser, onBack }) {
       if (!window.confirm(`Block ${reported?.full_name || 'this profile'}? They will no longer be visible to other members.`)) return
       // Same block path as the Profiles list — writes the audit log too
       // (pehle yahan se block karne par audit log nahi banta tha).
-      if (!(await applyProfileStatus(staffUser, [reportedProfileId], 'blocked', { via: 'report', report_id: id }))) return
+      if (!(await applyProfileStatus(staffUser, [reportedProfileId], 'blocked', { via: 'report', report_id: id }, showToast))) return
     }
     const { error } = await supabase.from('profile_reports').update({
       status, resolved_at: new Date().toISOString(), resolved_by: staffUser.user_id,
     }).eq('id', id)
-    if (error) { alert(error.message); return }
+    if (error) { showToast(error.message); return }
     // Resolved/dismissed reports leave this (pending-only) queue — drop it
     // locally instead of a full reload, so any already-"Load More"-d rows
     // further down the list stay in place.
@@ -2535,6 +2611,7 @@ function ReportsQueueView({ staffUser, onBack }) {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Reports Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles reported by other members, awaiting review</div>
@@ -2557,7 +2634,7 @@ function ReportsQueueView({ staffUser, onBack }) {
                   {reported ? reported.full_name : 'Unknown'} <span style={{fontWeight:400,color:'#8e8e8e'}}>reported by {reporter ? reporter.full_name : 'Unknown'}</span>
                 </div>
                 <div style={{fontSize:12,color:'#555',marginTop:4}}>{r.reason}</div>
-                <div style={{fontSize:10,color:'#bbb',marginTop:4}}>{new Date(r.created_at).toLocaleDateString('en-IN')}</div>
+                <div style={{fontSize:12,color:'#bbb',marginTop:4}}>{new Date(r.created_at).toLocaleDateString('en-IN')}</div>
                 <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
                   <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
                     onClick={()=>resolve(r.id, 'resolved', r.reported_profile_id, true)}><ShieldX size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block Reported Profile</button>
@@ -2662,7 +2739,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
         <Icon size={14} /> {title} {items.length > 0 && `(${items.length})`}
       </div>
-      {hint && <div style={{ fontSize: 11, color: '#bbb', marginTop: -6, marginBottom: 8 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 13, color: '#bbb', marginTop: -6, marginBottom: 8 }}>{hint}</div>}
       {items.length === 0 ? (
         <div style={{ fontSize: 12, color: '#bbb' }}>{empty}</div>
       ) : (
@@ -2693,15 +2770,15 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
                     <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {r.request_type === 'meeting' ? 'Meeting' : 'Talk'} request</span>
                   </div>
                   {onManageCoordination && (
-                    <button className="btn btn-outline btn-sm" style={{padding:'2px 8px',fontSize:11}}
+                    <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
                       onClick={()=>onManageCoordination(r.id)}>Manage</button>
                   )}
                 </div>
-                <div style={{fontSize:10,color:'#bbb',marginTop:2}}>Sent {new Date(r.created_at).toLocaleDateString('en-IN')} · waiting on {r.toProfile?.full_name || 'receiver'} to accept</div>
+                <div style={{fontSize:12,color:'#bbb',marginTop:2}}>Sent {new Date(r.created_at).toLocaleDateString('en-IN')} · waiting on {r.toProfile?.full_name || 'receiver'} to accept</div>
                 <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:8}}>
                   {[r.fromProfile, r.toProfile].filter(Boolean).map(x => (
                     <div key={x.id}>
-                      <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
+                      <div style={{fontSize:13,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
                       <ProfileContact profile={x} logCalls introductionId={r.id} onSaved={(phone)=>updatePendingContact(x.id, phone)} />
                     </div>
                   ))}
@@ -2718,13 +2795,13 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
                       {m.fromProfile?.full_name || 'Unknown'} → {m.toProfile?.full_name || 'Unknown'}
                       <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {m.request_type === 'meeting' ? 'Meeting' : 'Talk'}</span>
                     </div>
-                    <div style={{fontSize:11,color: isToday(m.scheduled_at) ? '#2563eb' : '#8e8e8e',marginTop:2,fontWeight: isToday(m.scheduled_at) ? 600 : 400}}>
+                    <div style={{fontSize:13,color: isToday(m.scheduled_at) ? '#2563eb' : '#8e8e8e',marginTop:2,fontWeight: isToday(m.scheduled_at) ? 600 : 400}}>
                       {isToday(m.scheduled_at) ? 'Today' : new Date(m.scheduled_at).toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' })}
                       {' · '}{new Date(m.scheduled_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}
                     </div>
                   </div>
                   {onManageCoordination && (
-                    <button className="btn btn-outline btn-sm" style={{padding:'2px 8px',fontSize:11}}
+                    <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
                       onClick={()=>onManageCoordination(m.id)}>Manage</button>
                   )}
                 </div>
@@ -2746,7 +2823,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
                   <ContactButtons phone={n.profiles?.client_phone} logProfile={n.profiles} />
                 </div>
                 <div style={{fontSize:12,color:'#555',marginTop:2}}>{n.note}</div>
-                <div style={{fontSize:10,color:'#bbb',marginTop:4}}>Due {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</div>
+                <div style={{fontSize:12,color:'#bbb',marginTop:4}}>Due {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</div>
               </div>
             )} />
           <Section icon={ListChecks} title="Your pending profiles (to-do)" items={assignedPending} empty="No pending profiles assigned to you."
@@ -2790,9 +2867,9 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
                     <div key={s.user_id} className="list-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>{s.email}</div>
-                        <div style={{ fontSize: 11, color: '#8e8e8e', textTransform: 'capitalize' }}>{s.role.replace('_', ' ')}</div>
+                        <div style={{ fontSize: 13, color: '#8e8e8e', textTransform: 'capitalize' }}>{s.role.replace('_', ' ')}</div>
                       </div>
-                      <div className="badge" style={{ fontSize: 11, background: s.pendingCount > 0 ? '#fff8e1' : '#f0fdf4', color: s.pendingCount > 0 ? '#b45309' : '#16a34a' }}>
+                      <div className="badge" style={{ fontSize: 13, background: s.pendingCount > 0 ? '#fff8e1' : '#f0fdf4', color: s.pendingCount > 0 ? '#b45309' : '#16a34a' }}>
                         {s.pendingCount} pending
                       </div>
                     </div>
@@ -2815,6 +2892,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
 // assign_staff_role() RPC (SECURITY DEFINER, admin-only — see migration
 // 20261003_staff_management_rpcs.sql). No service-role key needed client-side.
 function StaffManagementView({ staffUser, onBack }) {
+  const [showToast, ToastView] = useToast()
   const [staff, setStaff] = useState([])
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState('')
@@ -2843,19 +2921,20 @@ function StaffManagementView({ staffUser, onBack }) {
 
   const toggleActive = async (row) => {
     const { error: err } = await supabase.rpc('set_staff_active', { target_user_id: row.user_id, is_active: !row.active })
-    if (err) { alert(err.message); return }
+    if (err) { showToast(err.message); return }
     load()
   }
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '20px' }}>
+      <ToastView />
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to Account</button>
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Manage Staff</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Add admins and relationship managers, or deactivate access.</div>
 
       <div className="list-row" style={{ marginBottom: 20 }}>
         <div style={{fontSize:12,fontWeight:600,marginBottom:10}}>Add staff</div>
-        <div style={{fontSize:11,color:'#8e8e8e',marginBottom:10}}>
+        <div style={{fontSize:13,color:'#8e8e8e',marginBottom:10}}>
           The person must have already created a normal account (sign up at the login page with this email) — this just grants them staff access.
         </div>
         <div className="form-row" style={{display:'flex',gap:8,flexWrap:'wrap'}}>
@@ -2878,7 +2957,7 @@ function StaffManagementView({ staffUser, onBack }) {
             <div key={s.id} className="list-row" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
               <div>
                 <div style={{fontSize:13,fontWeight:600}}>{s.email}</div>
-                <div style={{fontSize:11,color:'#8e8e8e',textTransform:'capitalize'}}>{s.role.replace('_',' ')} · {s.active ? 'Active' : 'Deactivated'}</div>
+                <div style={{fontSize:13,color:'#8e8e8e',textTransform:'capitalize'}}>{s.role.replace('_',' ')} · {s.active ? 'Active' : 'Deactivated'}</div>
               </div>
               <button className="btn btn-outline btn-sm"
                 style={s.active ? { color:'#dc2626', borderColor:'#dc2626' } : {}}

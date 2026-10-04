@@ -8,6 +8,22 @@ import { supabase } from '../supabase'
 // hain — yeh sirf woh chhote pieces hain jo har page pe repeat hote the
 // (back button, form label, section label, empty state, three-dot menu).
 
+// ===== TOAST — AccountSettings/CreateProfile/Dashboard/EditPhotos sab mein
+// pehle se yahi pattern tha (useState('') + setTimeout + .toast CSS class),
+// bas har file apna copy rakhti thi. Admin.js ab isi hook se browser
+// alert() ko replace karta hai (Aryan's audit, 2026-10-04 — alert() poore
+// app ke design se bahar ka, jarring OK-click popup tha). Ek chhota hook,
+// koi naya CSS/visual nahi — wahi .toast jo pehle se hai.
+export function useToast(duration = 3000) {
+  const [toast, setToast] = useState('')
+  const showToast = (msg) => {
+    setToast(msg)
+    setTimeout(() => setToast(''), duration)
+  }
+  const ToastView = () => <div className={'toast ' + (toast ? 'show' : '')}>{toast}</div>
+  return [showToast, ToastView]
+}
+
 // Form label + auto icon (label text se fieldIcons.js ka icon chunta hai).
 // `icon` prop se override, `icon={false}` se icon band.
 export function FormLabel({ children, icon, className = '', ...rest }) {

@@ -37,12 +37,17 @@ export const contactLogPrefix = (kind) => (kind === 'call' ? '📞 Called: ' : k
 // rahe hon, saved note us request se bhi link ho jaati hai (profile_notes.
 // introduction_id) — taaki request ki apni history mein bhi dikhe, na sirf
 // profile ke Notes & Follow-ups mein.
+// `size`: 'sm' still shows text now too (Aryan's audit — icon-only Call/
+// WhatsApp in list rows made it hard to tell them apart at a glance without
+// reading the icon carefully) — 'sm' just keeps the button a bit more
+// compact than 'md' (used in the expanded profile), both are comfortably
+// tappable (>=7px vertical padding, well over the old 4px).
 export function ContactButtons({ phone, onAction, logProfile, introductionId, size = 'sm' }) {
   const [logKind, setLogKind] = useState(null)
   const tel = buildTelLink(phone)
   const wa = buildWaChatLink(phone)
   if (!tel) return null
-  const pad = size === 'sm' ? '4px 8px' : '6px 12px'
+  const pad = size === 'sm' ? '7px 12px' : '9px 16px'
   const stop = (kind) => (e) => {
     e.stopPropagation()
     if (onAction) onAction(kind)
@@ -51,12 +56,12 @@ export function ContactButtons({ phone, onAction, logProfile, introductionId, si
   return (
     <span style={{ display: 'inline-flex', gap: 6 }}>
       <a href={tel} onClick={stop('call')} className="btn btn-outline btn-sm" title={'Call ' + phone}
-        style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <Phone size={14} />{size !== 'sm' && ' Call'}
+        style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+        <Phone size={14} /> Call
       </a>
       <a href={wa} onClick={stop('whatsapp')} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" title={'WhatsApp ' + phone}
-        style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, color: WA_GREEN, borderColor: WA_GREEN }}>
-        <MessageCircle size={14} />{size !== 'sm' && ' WhatsApp'}
+        style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: WA_GREEN, borderColor: WA_GREEN }}>
+        <MessageCircle size={14} /> WhatsApp
       </a>
       {logKind && <QuickCallLog profile={logProfile} kind={logKind} introductionId={introductionId} onClose={() => setLogKind(null)} />}
     </span>
