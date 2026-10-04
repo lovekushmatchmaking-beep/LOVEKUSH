@@ -411,7 +411,9 @@ export default function Admin({ staffUser }) {
       // taaki koi query-syntax error na aaye ya unexpected result na mile.
       const safeSearch = search.replace(/[,()%*]/g, '')
       if (safeSearch) {
-        q = q.or(`profile_code.ilike.%${safeSearch}%,full_name.ilike.%${safeSearch}%`)
+        // Registered mobile number (client_phone) bhi search karte hain —
+        // partial match, taaki pura number yaad na ho to bhi profile mil jaaye.
+        q = q.or(`profile_code.ilike.%${safeSearch}%,full_name.ilike.%${safeSearch}%,client_phone.ilike.%${safeSearch}%`)
       }
     }
     if (filters.religion) q = q.eq('religion', filters.religion)
@@ -904,7 +906,7 @@ export default function Admin({ staffUser }) {
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input
             type="text"
-            placeholder="Search by Profile ID (e.g. LK-FH26-1073) or name..."
+            placeholder="Search by Profile ID (e.g. LK-FH26-1073), name or phone number..."
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             style={{
@@ -1040,7 +1042,7 @@ export default function Admin({ staffUser }) {
         {!loading && profiles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#8e8e8e', fontSize: 14 }}>
             {search || activeFilterCount > 0
-              ? <>No profiles match your search. Try a different Profile ID, name, or fewer filters.</>
+              ? <>No profiles match your search. Try a different Profile ID, name, phone number, or fewer filters.</>
               : 'No profiles in this category'}
           </div>
         ) : (
