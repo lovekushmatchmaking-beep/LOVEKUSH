@@ -31,6 +31,11 @@ const PAGE_SIZE = 30
 // Breakdown ke columns + Funnel/duplicate-check ke liye id/contact.
 const DASH_PROFILE_COLUMNS = 'id, client_phone, client_email, ' + STATS_COLUMNS
 
+// Breakdown/Funnel ki ek upper-limit — abhi (sau-do sau profiles) iska
+// matlab hi nahi padta, par database badhne par poora table ek saath
+// load hone se bachata hai (scale audit, 2026-10-04).
+const DASH_CAP = 5000
+
 // ===== SELFIE VERIFICATION — existing profiles.verification_status ko hi
 // aage badhaya: not_started → selfie_requested → selfie_submitted →
 // verified / rejected. Self-signup profile tabhi live (active) hoti hai jab
@@ -62,20 +67,30 @@ const needsSelfieVerification = (p) => !p.is_admin_managed && p.verification_sta
 // Reports Queue ka "Block Reported Profile" audit log likhna bhool gaya tha.
 // Ab teeno jagah yahi functions use hote hain, isliye audit log (kisne,
 // kab, kya kiya) har jagah se ek jaisa banta hai.
-async function writeAuditLog(staffUser, action, entityId, metadata) {
+// writeAuditLogs ek hi insert() call mein saare entries bhejta hai — bulk
+// Approve/Block (50-100 profiles) mein pehle har profile ke liye alag
+// parallel request jaati thi, jo bade batch mein slow/partial-fail ho sakti
+// thi (scale audit, 2026-10-04 — gap #6). Single-row callers (writeAuditLog)
+// isi ko [entityId] ke saath call karte hain.
+async function writeAuditLogs(staffUser, action, entityIds, metadata) {
+  if (entityIds.length === 0) return
   try {
-    const { error } = await supabase.from('audit_logs').insert({
+    const rows = entityIds.map(entityId => ({
       actor_user_id: staffUser.user_id,
       actor_role: staffUser.role,
       action,
       entity_type: 'profile',
       entity_id: entityId,
       metadata: metadata || {},
-    })
+    }))
+    const { error } = await supabase.from('audit_logs').insert(rows)
     if (error) throw error
   } catch (e) {
     console.warn('Audit log failed (non-critical):', e.message)
   }
+}
+async function writeAuditLog(staffUser, action, entityId, metadata) {
+  return writeAuditLogs(staffUser, action, [entityId], metadata)
 }
 
 // ===== COORDINATION STATUS — shared between CoordinationRequestsView,
@@ -108,7 +123,7 @@ async function applyVerificationStatus(staffUser, profile, status) {
 async function applyProfileStatus(staffUser, ids, status, extraMeta) {
   const { error } = await supabase.from('profiles').update({ profile_status: status }).in('id', ids)
   if (error) { alert('Update failed: ' + error.message); return false }
-  await Promise.all(ids.map(id => writeAuditLog(staffUser, 'profile_status_change', id, { new_status: status, ...(extraMeta || {}) })))
+  await writeAuditLogs(staffUser, 'profile_status_change', ids, { new_status: status, ...(extraMeta || {}) })
   return true
 }
 
@@ -165,6 +180,7 @@ export default function Admin({ staffUser }) {
   const [showBreakdown, setShowBreakdown] = useState(false)
   const [showFunnel, setShowFunnel] = useState(false)
   const [dashProfiles, setDashProfiles] = useState(null) // shared by Breakdown + Funnel (one fetch)
+  const [dashProfilesCapped, setDashProfilesCapped] = useState(false) // true if profiles table is bigger than DASH_CAP (scale audit)
   const [selected, setSelected] = useState(null)
   const [idMetadata, setIdMetadata] = useState({}) // profile_id -> {created_at, source, created_by} — admin-only, staff_users RLS gated
   const [notesByProfile, setNotesByProfile] = useState({}) // profile_id -> [{id, note, follow_up_at, call_outcome, created_at, staff_user_id}]
@@ -233,9 +249,16 @@ export default function Admin({ staffUser }) {
   const [matchesLoading, setMatchesLoading] = useState(false)
 
   // Bulk selection — list mein checkbox se multiple profiles choose karke
-  // ek saath Approve/Block karne ke liye (ek-ek karke expand karne ke bajaye)
+  // ek saath Approve/Block karne ke liye (ek-ek karke expand karne ke bajaye).
+  // Checkbox hamesha visible rehta tha — Aryan ko laga yeh screen ki jagah
+  // waste karta hai (2026-10-04). Ab "selection mode" tabhi on hota hai
+  // jab kisi row par long-press (ya desktop par "Select" button) karo —
+  // WhatsApp/Gallery jaisa. Normal tap list clean rakhta hai (row expand/
+  // collapse), checkbox kahin nahi dikhta jab tak selection mode on na ho.
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [selectionMode, setSelectionMode] = useState(false)
   const [bulkWorking, setBulkWorking] = useState(false)
+  const LONG_PRESS_MS = 500
 
   // Search + Filters
   const [searchInput, setSearchInput] = useState('')
@@ -441,15 +464,26 @@ export default function Admin({ staffUser }) {
   // Breakdown aur Funnel dono ko same profiles rows chahiye — pehle dono apni
   // taraf se poori profiles table alag fetch karte the. Ab ek hi fetch,
   // dono panels ko prop se milta hai; Refresh (statsUpdatedAt) par dobara.
+  // Scale audit (2026-10-04): abhi (sau-do sau profiles) poori table ek
+  // saath laana safe hai, par database badhne par yeh fetch bhi bada ho
+  // jaata — isliye ek upper-limit cap (DASH_CAP) laga di hai taaki yeh
+  // kabhi unbounded na ho. Server-side aggregation (SQL group-by/RPC) is
+  // the real fix for very large scale — reuse-first ke liye abhi sirf cap,
+  // woh bada rewrite baad mein alag se discuss karenge.
   const dashPanelsOpen = showBreakdown || showFunnel
   useEffect(() => {
     if (!dashPanelsOpen) return
     let cancelled = false
     setDashProfiles(null)
-    supabase.from('profiles').select(DASH_PROFILE_COLUMNS).then(({ data, error }) => {
+    setDashProfilesCapped(false)
+    Promise.all([
+      supabase.from('profiles').select(DASH_PROFILE_COLUMNS).order('created_at', { ascending: false }).limit(DASH_CAP),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+    ]).then(([{ data, error }, { count }]) => {
       if (cancelled) return
       if (error) console.error(error.message)
       setDashProfiles(data || [])
+      setDashProfilesCapped((count || 0) > DASH_CAP)
     })
     return () => { cancelled = true }
   }, [dashPanelsOpen, statsUpdatedAt])
@@ -567,13 +601,48 @@ export default function Admin({ staffUser }) {
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
+      // Last checkbox unticked — exit selection mode automatically, so the
+      // list goes back to its clean (no-checkbox) look on its own.
+      if (next.size === 0) setSelectionMode(false)
       return next
     })
   }
 
+  // "Select all" sirf abhi tak LOADED profiles ko select karta hai, DB ke
+  // saare matching profiles ko nahi (Profiles list paginated hai) — label
+  // isi liye count ke saath "Select all loaded (X)" kehta hai (scale audit
+  // #5), taaki admin "500 pending hain par sirf 30 approve hue" surprise
+  // na ho. Load More ke baad bhi pehle se selected ids waise hi rehte hain
+  // (yeh state clear nahi hoti), naye loaded rows select-all mein add nahi
+  // hote jab tak dobara na dabao — matlab selection accumulate hoti hai,
+  // overwrite nahi.
   const toggleSelectAll = () => {
-    setSelectedIds(prev => prev.size === profiles.length ? new Set() : new Set(profiles.map(p => p.id)))
+    const allLoadedSelected = profiles.length > 0 && profiles.every(p => selectedIds.has(p.id))
+    if (allLoadedSelected) { setSelectedIds(new Set()); setSelectionMode(false); return }
+    setSelectedIds(prev => new Set([...prev, ...profiles.map(p => p.id)]))
+    setSelectionMode(true)
   }
+
+  // ===== LONG-PRESS SELECTION MODE — checkbox pehle hamesha dikhta tha,
+  // Aryan ko "screen ki jagah waste karta hai" laga (2026-10-04). Ab
+  // checkbox tabhi dikhta hai jab selection mode on ho, jo long-press se on
+  // hota hai (WhatsApp/Gallery jaisa) — normal tap list expand/collapse
+  // karta hai jaisa pehle karta tha. Desktop/mouse ke liye ek "Select"
+  // button bhi hai jo wahi mode on karta hai bina long-press ke.
+  const longPressTimer = React.useRef(null)
+  const longPressFired = React.useRef(false)
+  const startLongPress = (id) => {
+    longPressFired.current = false
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      setSelectionMode(true)
+      toggleSelect(id)
+    }, LONG_PRESS_MS)
+  }
+  const cancelLongPress = () => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+  }
+  const exitSelectionMode = () => { setSelectionMode(false); setSelectedIds(new Set()) }
 
   const bulkUpdateStatus = async (status) => {
     if (selectedIds.size === 0) return
@@ -587,6 +656,7 @@ export default function Admin({ staffUser }) {
     if (await applyProfileStatus(staffUser, ids, status, { via: 'bulk' })) {
       setProfiles(prev => prev.map(p => ids.includes(p.id) ? { ...p, profile_status: status } : p))
       setSelectedIds(new Set())
+      setSelectionMode(false)
       loadStats()
     }
     setBulkWorking(false)
@@ -870,16 +940,27 @@ export default function Admin({ staffUser }) {
         )}
 
         {profiles.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, fontSize: 12, color: '#8e8e8e' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-              <input type="checkbox" checked={selectedIds.size === profiles.length} onChange={toggleSelectAll} />
-              Select all
-            </label>
-            {selectedIds.size > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, fontSize: 12, color: '#8e8e8e', flexWrap: 'wrap' }}>
+            {!selectionMode ? (
+              // Checkbox-free default view — tap a row to expand it like
+              // before; a long-press (or this button, for mouse/desktop use)
+              // turns selection mode on (Aryan's ask, 2026-10-04: checkboxes
+              // were always-on before and "wasted screen space").
+              <button className="btn btn-outline btn-sm" onClick={() => setSelectionMode(true)}>Select</button>
+            ) : (
               <>
-                <span>{selectedIds.size} selected</span>
-                <button className="btn btn-black btn-sm" disabled={bulkWorking} onClick={() => bulkUpdateStatus('active')}><CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve Selected</button>
-                <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }} disabled={bulkWorking} onClick={() => bulkUpdateStatus('blocked')}><ShieldX size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block Selected</button>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={profiles.length > 0 && profiles.every(p => selectedIds.has(p.id))} onChange={toggleSelectAll} />
+                  Select all loaded ({profiles.length})
+                </label>
+                <button className="btn btn-outline btn-sm" onClick={exitSelectionMode}>Cancel</button>
+                {selectedIds.size > 0 && (
+                  <>
+                    <span>{selectedIds.size} selected</span>
+                    <button className="btn btn-black btn-sm" disabled={bulkWorking} onClick={() => bulkUpdateStatus('active')}><CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve Selected</button>
+                    <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }} disabled={bulkWorking} onClick={() => bulkUpdateStatus('blocked')}><ShieldX size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block Selected</button>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -895,9 +976,21 @@ export default function Admin({ staffUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {profiles.map(p => (
               <div key={p.id} className="list-row clickable"
-                onClick={() => setSelected(selected?.id === p.id ? null : p)}>
+                onClick={() => {
+                  if (longPressFired.current) { longPressFired.current = false; return } // long-press already handled this tap
+                  if (selectionMode) toggleSelect(p.id)
+                  else setSelected(selected?.id === p.id ? null : p)
+                }}
+                onTouchStart={() => startLongPress(p.id)}
+                onTouchEnd={cancelLongPress}
+                onTouchMove={cancelLongPress}
+                onMouseDown={() => startLongPress(p.id)}
+                onMouseUp={cancelLongPress}
+                onMouseLeave={cancelLongPress}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <input type="checkbox" checked={selectedIds.has(p.id)} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(p.id)} />
+                  {selectionMode && (
+                    <input type="checkbox" checked={selectedIds.has(p.id)} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(p.id)} />
+                  )}
                   <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#f0f0f0', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {photos[p.id]
                       ? <SignedImage path={photos[p.id]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1167,8 +1260,8 @@ export default function Admin({ staffUser }) {
             <GitBranch size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showFunnel ? 'Hide funnel' : 'Conversion Funnel'}
           </button>
         </div>
-        {showBreakdown && <StatsBreakdown profiles={dashProfiles} />}
-        {showFunnel && <FunnelView profiles={dashProfiles} refreshKey={statsUpdatedAt} onOpenDuplicates={() => goToSectionView('queues', 'duplicateLeads')} />}
+        {showBreakdown && <StatsBreakdown profiles={dashProfiles} capped={dashProfilesCapped} />}
+        {showFunnel && <FunnelView profiles={dashProfiles} capped={dashProfilesCapped} refreshKey={statsUpdatedAt} onOpenDuplicates={() => goToSectionView('queues', 'duplicateLeads')} />}
       </div>
       )}
       {view === 'list' && section === 'queues' && (
@@ -1253,7 +1346,7 @@ function AdminNavCard({ icon: Icon, label, subtitle, badge, onClick }) {
 // mein defined) pe on-demand filter/breakdown deta hai. Existing profiles
 // table se hi — koi naya column/table nahi.
 // `profiles` comes from Admin's shared dashboard fetch (null while loading).
-function StatsBreakdown({ profiles }) {
+function StatsBreakdown({ profiles, capped }) {
   const [dim, setDim] = useState('age')
   const [gender, setGender] = useState('')
   const [status, setStatus] = useState('')
@@ -1288,6 +1381,11 @@ function StatsBreakdown({ profiles }) {
       {!loading && (
         <>
           <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 10 }}>{filtered.length} profile{filtered.length === 1 ? '' : 's'} matched</div>
+          {capped && (
+            <div style={{ fontSize: 11, color: '#b45309', background: '#fff8e1', padding: '6px 10px', borderRadius: 8, marginBottom: 10 }}>
+              Database is bigger than {DASH_CAP.toLocaleString('en-IN')} profiles — showing the most recent {DASH_CAP.toLocaleString('en-IN')} only.
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {rows.map(r => (
               <div key={r.label}>
@@ -1315,15 +1413,15 @@ function StatsBreakdown({ profiles }) {
 // are computed client-side like StatsBreakdown already does.
 // `profiles` comes from Admin's shared dashboard fetch (same rows as Breakdown);
 // only introductions/match_actions are fetched here.
-function FunnelView({ profiles, refreshKey, onOpenDuplicates }) {
+function FunnelView({ profiles, capped, refreshKey, onOpenDuplicates }) {
   const [activity, setActivity] = useState(null) // { intros, actions }
 
   useEffect(() => {
     let cancelled = false
     setActivity(null)
     Promise.all([
-      supabase.from('introductions').select('from_profile, to_profile, status'),
-      supabase.from('match_actions').select('actor_profile_id, target_profile_id, action').in('action', ['like', 'super_like']),
+      supabase.from('introductions').select('from_profile, to_profile, status').limit(DASH_CAP),
+      supabase.from('match_actions').select('actor_profile_id, target_profile_id, action').in('action', ['like', 'super_like']).limit(DASH_CAP),
     ]).then(([introsRes, actionsRes]) => {
       if (!cancelled) setActivity({ intros: introsRes.data || [], actions: actionsRes.data || [] })
     })
@@ -1363,6 +1461,11 @@ function FunnelView({ profiles, refreshKey, onOpenDuplicates }) {
       {loading && <div style={{ fontSize: 13, color: '#8e8e8e' }}>Loading…</div>}
       {!loading && (
         <>
+          {capped && (
+            <div style={{ fontSize: 11, color: '#b45309', background: '#fff8e1', padding: '6px 10px', borderRadius: 8, marginBottom: 10 }}>
+              Database is bigger than {DASH_CAP.toLocaleString('en-IN')} profiles — counts below are based on a capped sample, not every profile.
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {stages.map(s => (
               <div key={s.key}>
@@ -1406,8 +1509,11 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
 
   const load = async () => {
     setLoading(true)
-    const { data } = await supabase.from('profiles')
-      .select('id, full_name, profile_code, age, city, profile_status, client_phone, client_email, created_at')
+    // Server-side duplicate detection (find_duplicate_leads RPC, migration
+    // 20261004) — only profiles that actually share a phone/email come
+    // back, instead of the whole profiles table (scale audit, 2026-10-04).
+    const { data, error } = await supabase.rpc('find_duplicate_leads')
+    if (error) console.error(error.message)
     setGroups(findDuplicateLeads(data || []))
     setLoading(false)
   }
@@ -1834,11 +1940,24 @@ function CasteSuggestionsView({ onBack }) {
 
 // Talk/Meeting requests (introductions table) — staff yahan se dekh ke
 // dono profiles ko manually coordinate karte hain, koi in-app chat nahi.
+// Status sets for each tab's server-side query — 'open' deliberately still
+// includes 'pending' (not-yet-accepted requests show in both, same as before).
+const COORD_ALL_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'meeting_done', 'closed']
+const COORD_OPEN_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'meeting_done']
+
 function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
   const [requests, setRequests] = useState([])
   const [profilesById, setProfilesById] = useState({})
   const [notesByIntroduction, setNotesByIntroduction] = useState({}) // introduction_id -> profile_notes[] (history, incl. reschedules)
   const [loading, setLoading] = useState(true)
+  // ===== PAGINATION (scale audit, 2026-10-04) — pehle yeh poori
+  // introductions table (sab pending/declined/accepted/contacted/
+  // meeting_done/closed rows) ek saath load karta tha. Ab Profiles list
+  // jaisa hi "Load More" pattern (30 per page), server-side tab filter ke
+  // saath — ek baar mein ek page hi aati hai.
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [pendingCount, setPendingCount] = useState(0) // badge ke liye — loaded rows se independent, poore table ka sahi count
   const [scheduleDraft, setScheduleDraft] = useState({}) // request id -> datetime-local string being edited
   // Pending (not yet accepted/declined by the receiver) requests were never
   // shown here before — admin had no visibility until both members acted.
@@ -1846,63 +1965,95 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
   const [tab, setTab] = useState('open') // open (not closed) | pending | closed | all
   const [query, setQuery] = useState('')
 
-  useEffect(() => { load() }, [])
+  const buildQuery = (forTab, from, to) => {
+    let q = supabase.from('introductions').select('*').order('created_at', { ascending: false }).range(from, to)
+    if (forTab === 'pending') q = q.eq('status', 'pending')
+    else if (forTab === 'closed') q = q.eq('status', 'closed')
+    else if (forTab === 'open') q = q.in('status', COORD_OPEN_STATUSES)
+    else q = q.in('status', COORD_ALL_STATUSES)
+    return q
+  }
 
-  // Opened via a "Manage"/"View" link elsewhere (My Queue, a profile's own
-  // Coordination section) — jump to the tab that has it and scroll to it,
-  // instead of making admin scroll/search for it again (audit gap #5).
-  useEffect(() => {
-    if (!focusId || loading || requests.length === 0) return
-    const r = requests.find(x => x.id === focusId)
-    if (r) {
-      setTab(r.status === 'pending' ? 'pending' : r.status === 'closed' ? 'closed' : 'open')
-      setQuery('')
-      setTimeout(() => {
-        document.getElementById('coord-req-' + focusId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }, 50)
+  // Merges related profiles/notes for a set of (newly loaded) rows into the
+  // existing maps, instead of refetching everything already on screen.
+  const loadRelated = async (rows) => {
+    if (rows.length === 0) return
+    const ids = [...new Set(rows.flatMap(r => [r.from_profile, r.to_profile]))]
+    if (ids.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
+      const map = {}
+      ;(profs || []).forEach(p => { map[p.id] = p })
+      setProfilesById(prev => ({ ...prev, ...map }))
     }
-    onConsumeFocus && onConsumeFocus()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, loading, requests])
+    const { data: notes } = await supabase.from('profile_notes').select('*')
+      .in('introduction_id', rows.map(r => r.id)).order('created_at', { ascending: false })
+    const byIntro = {}
+    ;(notes || []).forEach(n => { (byIntro[n.introduction_id] = byIntro[n.introduction_id] || []).push(n) })
+    setNotesByIntroduction(prev => ({ ...prev, ...byIntro }))
+  }
 
-  const load = async () => {
-    setLoading(true)
+  const refreshPendingCount = async () => {
+    const { count } = await supabase.from('introductions').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+    setPendingCount(count || 0)
+  }
+
+  const runQuery = async (forTab, fromIndex) => {
+    if (fromIndex === 0) setLoading(true); else setLoadingMore(true)
     try {
-      const { data, error } = await supabase
-        .from('introductions')
-        .select('*')
-        .in('status', ['pending', 'declined', 'accepted', 'contacted', 'meeting_done', 'closed'])
-        .order('created_at', { ascending: false })
+      const { data, error } = await buildQuery(forTab, fromIndex, fromIndex + PAGE_SIZE - 1)
       if (error) throw error
-      const rows = data || []
-      setRequests(rows)
-      const ids = [...new Set(rows.flatMap(r => [r.from_profile, r.to_profile]))]
-      if (ids.length > 0) {
-        const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
-        const map = {}
-        ;(profs || []).forEach(p => { map[p.id] = p })
-        setProfilesById(map)
-      }
-      if (rows.length > 0) {
-        const { data: notes } = await supabase.from('profile_notes').select('*')
-          .in('introduction_id', rows.map(r => r.id)).order('created_at', { ascending: false })
-        const byIntro = {}
-        ;(notes || []).forEach(n => { (byIntro[n.introduction_id] = byIntro[n.introduction_id] || []).push(n) })
-        setNotesByIntroduction(byIntro)
-      } else {
-        setNotesByIntroduction({})
-      }
+      const newRows = data || []
+      setHasMore(newRows.length === PAGE_SIZE)
+      if (fromIndex === 0) setRequests(newRows)
+      else setRequests(prev => [...prev, ...newRows])
+      await loadRelated(newRows)
     } catch (err) {
       console.error(err.message)
     }
-    setLoading(false)
+    setLoading(false); setLoadingMore(false)
   }
+
+  // Manual "Refresh" — resets back to this tab's first page (same as the
+  // Profiles list's Refresh button).
+  const load = () => { runQuery(tab, 0); refreshPendingCount() }
+  const loadMore = () => { if (!hasMore || loadingMore) return; runQuery(tab, requests.length) }
+
+  useEffect(() => { runQuery(tab, 0) }, [tab])
+  useEffect(() => { refreshPendingCount() }, [])
+
+  // Opened via a "Manage"/"View" link elsewhere (My Queue, a profile's own
+  // Coordination section) — jump to the tab that has it, make sure that
+  // exact request is loaded even if pagination hasn't reached it yet, then
+  // scroll to it (audit gap #5).
+  useEffect(() => {
+    if (!focusId) return
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase.from('introductions').select('*').eq('id', focusId).maybeSingle()
+      if (cancelled) return
+      if (!data) { onConsumeFocus && onConsumeFocus(); return }
+      const targetTab = data.status === 'pending' ? 'pending' : data.status === 'closed' ? 'closed' : 'open'
+      setQuery('')
+      setTab(targetTab)
+      await runQuery(targetTab, 0)
+      if (cancelled) return
+      setRequests(prev => prev.some(x => x.id === data.id) ? prev : [data, ...prev])
+      await loadRelated([data])
+      setTimeout(() => {
+        document.getElementById('coord-req-' + focusId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 50)
+      onConsumeFocus && onConsumeFocus()
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId])
 
   const handleAction = async (id, status) => {
     try {
       const { error } = await supabase.from('introductions').update({ status }).eq('id', id)
       if (error) throw error
-      load()
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r))
+      refreshPendingCount()
     } catch (err) {
       alert(err.message)
     }
@@ -1911,9 +2062,10 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
   // "viewed" status — SmartMatchApp jaisa sent→viewed→accepted/declined lifecycle
   const handleMarkViewed = async (id) => {
     try {
-      const { error } = await supabase.from('introductions').update({ viewed_at: new Date().toISOString() }).eq('id', id)
+      const viewed_at = new Date().toISOString()
+      const { error } = await supabase.from('introductions').update({ viewed_at }).eq('id', id)
       if (error) throw error
-      load()
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, viewed_at } : r))
     } catch (err) {
       alert(err.message)
     }
@@ -1929,17 +2081,18 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
       const newWhen = new Date(datetimeLocal).toISOString()
       if (prevScheduledAt) {
         const { data: auth } = await supabase.auth.getUser()
-        await supabase.from('profile_notes').insert({
+        const { data: noteRow } = await supabase.from('profile_notes').insert({
           profile_id: fromProfileId,
           staff_user_id: auth?.user?.id,
           introduction_id: id,
           note: `🔁 Rescheduled: ${new Date(prevScheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} → ${new Date(newWhen).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`,
-        })
+        }).select('*').single()
+        if (noteRow) setNotesByIntroduction(prev => ({ ...prev, [id]: [noteRow, ...(prev[id] || [])] }))
       }
       const { error } = await supabase.from('introductions').update({ scheduled_at: newWhen }).eq('id', id)
       if (error) throw error
       setScheduleDraft(prev => ({ ...prev, [id]: undefined }))
-      load()
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: newWhen } : r))
     } catch (err) {
       alert(err.message)
     }
@@ -1949,7 +2102,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
     try {
       const { error } = await supabase.from('introductions').update({ scheduled_at: null }).eq('id', id)
       if (error) throw error
-      load()
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: null } : r))
     } catch (err) {
       alert(err.message)
     }
@@ -1960,18 +2113,14 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
     try {
       const { error } = await supabase.from('introductions').update(fb).eq('id', id)
       if (error) throw error
-      load()
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...fb } : r))
     } catch (err) {
       alert(err.message)
     }
   }
 
+  // Tab filtering ab server-side ho gaya hai — yahan sirf search (loaded page par)
   const filteredRequests = requests.filter(r => {
-    if (tab === 'all') return true
-    if (tab === 'pending') return r.status === 'pending'
-    if (tab === 'closed') return r.status === 'closed'
-    return r.status !== 'closed' // 'open'
-  }).filter(r => {
     const a = profilesById[r.from_profile], b = profilesById[r.to_profile]
     return matchesSearch(query, a?.full_name, a?.profile_code, b?.full_name, b?.profile_code)
   })
@@ -1985,7 +2134,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
       <div className="pill-tabs" style={{marginBottom:16}}>
         {['open','pending','closed','all'].map(t => (
           <button key={t} className={'pill-tab ' + (tab === t ? 'active' : '')} onClick={()=>setTab(t)}>
-            {t === 'pending' ? `pending (${requests.filter(r=>r.status==='pending').length})` : t}
+            {t === 'pending' ? `pending (${pendingCount})` : t}
           </button>
         ))}
       </div>
@@ -2116,6 +2265,11 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
               </div>
             )
           })}
+          {hasMore && !query.trim() && (
+            <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={loadMore} disabled={loadingMore}>
+              {loadingMore ? 'Loading...' : 'Load More'}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -2163,33 +2317,49 @@ function VerificationQueueView({ staffUser, onBack }) {
   const [profiles, setProfiles] = useState([])
   const [photoByProfile, setPhotoByProfile] = useState({})
   const [loading, setLoading] = useState(true)
+  // ===== PAGINATION (scale audit, 2026-10-04) — pehle yeh poori matching
+  // list (sab selfie-submitted/requested/ID-uploaded/pending profiles) ek
+  // saath load karta tha. Ab Profiles list jaisa "Load More" (30 per page).
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
 
-  useEffect(() => { load() }, [])
+  const buildQuery = (from, to) => supabase
+    .from('profiles')
+    .select('id, full_name, profile_code, age, city, profile_status, verification_status, id_document_uploaded, is_admin_managed, selfie_path, selfie_requested_at, selfie_submitted_at, created_at')
+    .neq('verification_status', 'verified')
+    .neq('profile_status', 'blocked')
+    .or('verification_status.in.(selfie_submitted,selfie_requested),id_document_uploaded.eq.true,and(profile_status.eq.pending,is_admin_managed.eq.false)')
+    .order('created_at', { ascending: true })
+    .range(from, to)
 
-  const load = async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, profile_code, age, city, profile_status, verification_status, id_document_uploaded, is_admin_managed, selfie_path, selfie_requested_at, selfie_submitted_at, created_at')
-      .neq('verification_status', 'verified')
-      .neq('profile_status', 'blocked')
-      .or('verification_status.in.(selfie_submitted,selfie_requested),id_document_uploaded.eq.true,and(profile_status.eq.pending,is_admin_managed.eq.false)')
-      .order('created_at', { ascending: true })
+  const load = async (fromIndex = 0) => {
+    if (fromIndex === 0) setLoading(true); else setLoadingMore(true)
+    const { data, error } = await buildQuery(fromIndex, fromIndex + PAGE_SIZE - 1)
     if (error) console.error(error.message)
-    const list = data || []
-    setProfiles(list)
-    if (list.length > 0) {
-      const { data: ph } = await supabase.from('photos').select('profile_id, storage_path').in('profile_id', list.map(p => p.id)).eq('is_primary', true)
+    const newRows = data || []
+    setHasMore(newRows.length === PAGE_SIZE)
+    if (fromIndex === 0) setProfiles(newRows)
+    else setProfiles(prev => [...prev, ...newRows])
+    if (newRows.length > 0) {
+      const { data: ph } = await supabase.from('photos').select('profile_id, storage_path').in('profile_id', newRows.map(p => p.id)).eq('is_primary', true)
       const map = {}
       ;(ph || []).forEach(x => { map[x.profile_id] = x.storage_path })
-      setPhotoByProfile(map)
+      setPhotoByProfile(prev => ({ ...prev, ...map }))
     }
-    setLoading(false)
+    setLoading(false); setLoadingMore(false)
   }
+  const loadMore = () => { if (!hasMore || loadingMore) return; load(profiles.length) }
 
-  // Same shared function as the Profiles list's verification buttons
+  useEffect(() => { load(0) }, [])
+
+  // Same shared function as the Profiles list's verification buttons.
+  // Optimistic local update instead of a full reload — keeps whatever's
+  // already been "Load More"-d in place rather than snapping back to page 1.
   const act = async (p, status) => {
-    if (await applyVerificationStatus(staffUser, p, status)) load()
+    const patch = await applyVerificationStatus(staffUser, p, status)
+    if (!patch) return
+    if (status === 'verified') setProfiles(prev => prev.filter(x => x.id !== p.id)) // done — leaves the queue
+    else setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, ...patch } : x))
   }
 
   const sections = [
@@ -2238,6 +2408,11 @@ function VerificationQueueView({ staffUser, onBack }) {
           </div>
         </div>
       ))}
+      {hasMore && (
+        <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={loadMore} disabled={loadingMore}>
+          {loadingMore ? 'Loading...' : 'Load More'}
+        </button>
+      )}
     </div>
   )
 }
@@ -2249,28 +2424,36 @@ function ReportsQueueView({ staffUser, onBack }) {
   const [profilesById, setProfilesById] = useState({})
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
+  // ===== PAGINATION (scale audit, 2026-10-04) — pehle yeh har pending
+  // report ek saath load karta tha. Ab Profiles list jaisa "Load More".
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
 
-  useEffect(() => { load() }, [])
-
-  const load = async () => {
-    setLoading(true)
+  const load = async (fromIndex = 0) => {
+    if (fromIndex === 0) setLoading(true); else setLoadingMore(true)
     const { data, error } = await supabase
       .from('profile_reports')
       .select('*')
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
-    if (error) { console.error(error.message); setLoading(false); return }
-    const rows = data || []
-    setReports(rows)
-    const ids = [...new Set(rows.flatMap(r => [r.reporter_profile_id, r.reported_profile_id]))]
+      .range(fromIndex, fromIndex + PAGE_SIZE - 1)
+    if (error) { console.error(error.message); setLoading(false); setLoadingMore(false); return }
+    const newRows = data || []
+    setHasMore(newRows.length === PAGE_SIZE)
+    if (fromIndex === 0) setReports(newRows)
+    else setReports(prev => [...prev, ...newRows])
+    const ids = [...new Set(newRows.flatMap(r => [r.reporter_profile_id, r.reported_profile_id]))]
     if (ids.length > 0) {
       const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, profile_status').in('id', ids)
       const map = {}
       ;(profs || []).forEach(p => { map[p.id] = p })
-      setProfilesById(map)
+      setProfilesById(prev => ({ ...prev, ...map }))
     }
-    setLoading(false)
+    setLoading(false); setLoadingMore(false)
   }
+  const loadMore = () => { if (!hasMore || loadingMore) return; load(reports.length) }
+
+  useEffect(() => { load(0) }, [])
 
   const visibleReports = reports.filter(r => {
     const a = profilesById[r.reported_profile_id], b = profilesById[r.reporter_profile_id]
@@ -2289,7 +2472,10 @@ function ReportsQueueView({ staffUser, onBack }) {
       status, resolved_at: new Date().toISOString(), resolved_by: staffUser.user_id,
     }).eq('id', id)
     if (error) { alert(error.message); return }
-    load()
+    // Resolved/dismissed reports leave this (pending-only) queue — drop it
+    // locally instead of a full reload, so any already-"Load More"-d rows
+    // further down the list stay in place.
+    setReports(prev => prev.filter(r => r.id !== id))
   }
 
   return (
@@ -2326,6 +2512,11 @@ function ReportsQueueView({ staffUser, onBack }) {
               </div>
             )
           })}
+          {hasMore && !query.trim() && (
+            <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={loadMore} disabled={loadingMore}>
+              {loadingMore ? 'Loading...' : 'Load More'}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -2340,7 +2531,12 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
   const [assignedPending, setAssignedPending] = useState([])
   const [newSubmissions, setNewSubmissions] = useState([])
   const [upcomingMeetings, setUpcomingMeetings] = useState([])
+  const [meetingsTotal, setMeetingsTotal] = useState(0) // true count in the 7-day window — the list itself is capped at 20 (scale audit #7)
   const [pendingCoordination, setPendingCoordination] = useState([])
+  // Admin-only: how much pending work each staff member is carrying, so a
+  // bulk burst of new profiles/requests can be spread out instead of
+  // landing on whoever happens to click first (scale audit #8).
+  const [staffWorkload, setStaffWorkload] = useState(null) // null = not loaded / not admin
 
   useEffect(() => { load() }, [])
 
@@ -2349,12 +2545,14 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
     const nowIso = new Date().toISOString()
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
     const weekFromNow = new Date(Date.now() + 7*24*60*60*1000).toISOString()
-    const [followUpsRes, assignedRes, newRes, meetingsRes, pendingCoordRes] = await Promise.all([
+    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes] = await Promise.all([
       supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code, client_phone)').lte('follow_up_at', nowIso).order('follow_up_at', { ascending: true }).limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, profile_status, client_phone').eq('managed_by_staff_id', staffUser.user_id).eq('profile_status', 'pending').limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, created_at, client_phone').eq('profile_status', 'pending').gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(20),
       // Scheduled calls/meetings (introductions.scheduled_at) due in the next 7 days, soonest first
       supabase.from('introductions').select('*').gte('scheduled_at', nowIso).lte('scheduled_at', weekFromNow).order('scheduled_at', { ascending: true }).limit(20),
+      // Same window, just the count — so a burst of >20 meetings shows "+N more" instead of silently hiding them (scale audit #7)
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).gte('scheduled_at', nowIso).lte('scheduled_at', weekFromNow),
       // Coordination requests awaiting the receiver's accept/decline — previously
       // invisible to admin anywhere. Folded in here per Aryan's ask (2026-10-03).
       supabase.from('introductions').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
@@ -2362,6 +2560,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
     setNewSubmissions(newRes.data || [])
+    setMeetingsTotal(meetingsCountRes.count || 0)
 
     const meetings = meetingsRes.data || []
     const pendingReqs = pendingCoordRes.data || []
@@ -2373,6 +2572,23 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
     }
     setUpcomingMeetings(meetings.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setPendingCoordination(pendingReqs.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
+
+    // Team workload — admin-only (list_staff_with_email RPC is admin-gated).
+    // Small number of staff, so one count query per staff member is fine
+    // (this never scales with the number of profiles, only staff headcount).
+    if (staffUser.role === 'admin') {
+      const { data: staffList, error: staffErr } = await supabase.rpc('list_staff_with_email')
+      if (!staffErr && staffList) {
+        const activeStaff = staffList.filter(s => s.active)
+        const counts = await Promise.all(activeStaff.map(s =>
+          supabase.from('profiles').select('*', { count: 'exact', head: true })
+            .eq('managed_by_staff_id', s.user_id).eq('profile_status', 'pending')
+        ))
+        setStaffWorkload(activeStaff.map((s, i) => ({ ...s, pendingCount: counts[i].count || 0 })).sort((a, b) => b.pendingCount - a.pendingCount))
+      } else {
+        setStaffWorkload([])
+      }
+    }
     setLoading(false)
   }
 
@@ -2438,6 +2654,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
               </div>
             )} />
           <Section icon={CalendarClock} title="Calls & meetings (next 7 days)" items={upcomingMeetings} empty="Nothing scheduled."
+            hint={meetingsTotal > upcomingMeetings.length ? `Showing the first ${upcomingMeetings.length} — +${meetingsTotal - upcomingMeetings.length} more scheduled this week. Manage from Coordination Requests to see them all.` : null}
             renderItem={m => (
               <div key={m.id} className="list-row" style={isToday(m.scheduled_at) ? { borderColor: '#2563eb' } : {}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
@@ -2502,6 +2719,33 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
                 </div>
               </div>
             )} />
+          {/* Team workload — admin-only. Who's carrying how much pending
+              work, so a bulk burst of new profiles/requests can be spread
+              around instead of landing on whoever clicks first (scale audit #8). */}
+          {staffWorkload !== null && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                <UserCog size={14} /> Team workload
+              </div>
+              {staffWorkload.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#bbb' }}>No active staff found.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {staffWorkload.map(s => (
+                    <div key={s.user_id} className="list-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{s.email}</div>
+                        <div style={{ fontSize: 11, color: '#8e8e8e', textTransform: 'capitalize' }}>{s.role.replace('_', ' ')}</div>
+                      </div>
+                      <div className="badge" style={{ fontSize: 11, background: s.pendingCount > 0 ? '#fff8e1' : '#f0fdf4', color: s.pendingCount > 0 ? '#b45309' : '#16a34a' }}>
+                        {s.pendingCount} pending
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

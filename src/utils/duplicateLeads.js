@@ -1,8 +1,10 @@
 // ===== DUPLICATE LEAD DETECTION — same phone/email dobara register na ho
 // jaaye (ya ho jaaye to admin ko pata chale). Koi naya table/column nahi —
 // profiles.client_phone / client_email ko hi normalize karke compare karte
-// hain. Purely client-side (profile count is small); for live-signup use
-// a direct query instead of loading the whole table.
+// hain. This grouping itself still runs client-side, but as of the
+// 2026-10-04 scale audit the ROWS it receives already come pre-filtered
+// from the find_duplicate_leads() DB RPC (see Admin.js's DuplicateLeadsView)
+// — only profiles that actually share a phone/email, not the whole table.
 
 const normEmail = (e) => (e ? String(e).trim().toLowerCase() : '')
 const normPhone = (p) => {
