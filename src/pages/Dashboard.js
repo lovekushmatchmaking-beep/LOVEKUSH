@@ -56,6 +56,14 @@ function ChipSelect({ options, value, onChange, includeEmpty, emptyLabel }) {
   )
 }
 
+// Scale/perf audit (2026-10-04): hard filters moved from client-side JS
+// into the `get_match_candidates` Postgres RPC (indexed). Flip this to
+// false to instantly revert to the old "500 newest opposite-gender
+// profiles, filter in the browser" path without a code rollback — a
+// per-call RPC error already falls back to it automatically.
+const MATCH_CANDIDATES_VIA_RPC = true
+const MATCH_CANDIDATE_BUCKET_SIZE = 60
+
 export default function Dashboard({ user }) {
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
@@ -152,27 +160,45 @@ export default function Dashboard({ user }) {
         .filter(r => r.requester_profile_id === p.id && r.status === 'approved')
         .map(r => r.owner_profile_id))
 
-      // Load matches — "profiles_public_view" se (sensitive fields
-      // pehle se hi exclude hain database-level pe) — opposite gender
-      // pe query-level pe hi filter karte hain (efficient), phir baaki
-      // hard-filters (age preference, religion) + soft-scoring client
-      // pe hoti hai (matching.js — GAS system jaisi hi philosophy:
-      // dono taraf ki preferences check hoti hain).
-      // Matching tabhi shuru hoti hai jab profile live (active) ho — self-signup
-      // profiles selfie verification ke baad hi active hoti hain.
-      // NOTE: candidate pool abhi bhi client-side hi filter/score hota hai
-      // (profile count chhota hai). `order` + raised limit ek mitigation
-      // hai taaki 100 se zyada profiles hone par bhi purane/random 100
-      // tak simit na rahe — asli fix (bada scale aane par) hard filters
-      // ko query mein hi push karna hoga (ek Postgres function/RPC se).
+      // Load matches — hard filters (gender, age/religion/community
+      // preference dono taraf se, marital-status compatibility,
+      // profile_status=active) ab seedha DB mein (`get_match_candidates`
+      // RPC, indexes ke saath) apply hote hain, jaisa pehle se code
+      // comment mein planned tha — sirf ek relevant bucket wapas aata hai,
+      // poori table ya fixed 500-row window nahi. matching.js ka
+      // scoring/explanation (rankMatches) usi bucket par waisa hi chalta
+      // hai jaisa pehle chalta tha (passesHardFilters safety-net ke taur
+      // par bhi dobara chalta hai — height/Guna Milan jaise fields jo RPC
+      // mein nahi hain, unke liye).
+      // Safe rollout: agar RPC fail ho (naya function abhi propagate na
+      // hua ho, ya koi gap nikle), purana 500-profile client-filter path
+      // fallback ke taur par turant chalta hai — MATCH_CANDIDATES_VIA_RPC
+      // flag se switch kiya ja sakta hai.
       const oppositeGender = p.gender === 'Male' ? 'Female' : 'Male'
-      const { data: candidates } = p.profile_status !== 'active' ? { data: [] } : await supabase
-        .from('profiles_public_view')
-        .select('*')
-        .neq('user_id', user.id)
-        .eq('gender', oppositeGender)
-        .order('created_at', { ascending: false })
-        .limit(500)
+      let candidates = []
+      if (p.profile_status === 'active') {
+        let rpcFailed = true
+        if (MATCH_CANDIDATES_VIA_RPC) {
+          const { data: rpcCandidates, error: rpcError } = await supabase
+            .rpc('get_match_candidates', { p_limit: MATCH_CANDIDATE_BUCKET_SIZE })
+          if (!rpcError) {
+            candidates = rpcCandidates || []
+            rpcFailed = false
+          } else {
+            console.error('get_match_candidates RPC failed, falling back to client-side filter:', rpcError.message)
+          }
+        }
+        if (rpcFailed) {
+          const { data: fallbackCandidates } = await supabase
+            .from('profiles_public_view')
+            .select('*')
+            .neq('user_id', user.id)
+            .eq('gender', oppositeGender)
+            .order('created_at', { ascending: false })
+            .limit(500)
+          candidates = fallbackCandidates || []
+        }
+      }
 
       const visibleCandidates = (candidates || []).filter(c => !dislikedIds.has(c.id) && !blockedEitherWay.has(c.id))
 
