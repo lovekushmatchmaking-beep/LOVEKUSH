@@ -2696,3 +2696,8 @@ export const WORKING_AS_OPTIONS = [
   'Team Member / Staff', 'Team Lead / Supervisor', 'Manager', 'Senior Manager', 'Director / VP',
   'CXO / Founder', 'Business Owner', 'Consultant', 'Freelancer',
 ]
+
+// Lead source — business-owner audit (2026-10-04): how a client found us,
+// captured at signup/Create Client. Used for the admin Breakdown panel and
+// to gauge marketing spend ROI. Matches profiles.lead_source check constraint.
+export const LEAD_SOURCE_OPTIONS = ['Referral', 'Online Ads', 'Walk-in', 'Website', 'Other']
