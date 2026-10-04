@@ -898,6 +898,7 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   .admin-sidebar { display: flex; }
   .admin-bottom-nav { display: none !important; }
   .admin-topbar { display: none !important; }
+  .admin-account-logout-mobile { display: none !important; }
   .admin-main { padding-bottom: 0; }
   .admin-nav-grid { grid-template-columns: repeat(3, 1fr); }
   .admin-stat-grid { grid-template-columns: repeat(4, 1fr); }
