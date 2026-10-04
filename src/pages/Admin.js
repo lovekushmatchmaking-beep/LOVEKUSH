@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote,
@@ -16,7 +16,7 @@ import { rankMatches } from '../utils/matching'
 import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel } from '../utils/adminStats'
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
-import { ContactButtons, ProfileContact } from '../components/ContactButtons'
+import { ContactButtons, ProfileContact, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
 
 // SEARCH DESIGN NOTE: yeh search ab DATABASE se query karta hai (Supabase
@@ -26,6 +26,10 @@ import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, g
 // taaki ek baar mein poora table na load ho.
 
 const PAGE_SIZE = 30
+
+// Dashboard Breakdown + Funnel ek hi profiles fetch share karte hain —
+// Breakdown ke columns + Funnel/duplicate-check ke liye id/contact.
+const DASH_PROFILE_COLUMNS = 'id, client_phone, client_email, ' + STATS_COLUMNS
 
 // ===== SELFIE VERIFICATION — existing profiles.verification_status ko hi
 // aage badhaya: not_started → selfie_requested → selfie_submitted →
@@ -53,20 +57,80 @@ const verificationPatch = (status, currentProfileStatus) => {
 // Self-signup + abhi verified nahi — direct Approve se pehle confirm
 const needsSelfieVerification = (p) => !p.is_admin_managed && p.verification_status !== 'verified'
 
-// ===== CALL LOG OUTCOME — profile_notes.call_outcome (free-text note ke
-// saath optional structured tag), taaki "kal kitni calls lagi, kitni
-// answer hui" jaisa jaldi dikh sake, bina har note padhe.
-const CALL_OUTCOME_LABELS = {
-  answered: '✅ Answered',
-  no_answer: '📵 No answer',
-  call_back: '⏳ Asked to call back',
-  not_interested: '🙅 Not interested',
+// ===== SHARED PROFILE ACTIONS — pehle Profiles list, Verification Queue aur
+// Reports Queue teeno apna-apna DB update likhte the (copy-paste), aur
+// Reports Queue ka "Block Reported Profile" audit log likhna bhool gaya tha.
+// Ab teeno jagah yahi functions use hote hain, isliye audit log (kisne,
+// kab, kya kiya) har jagah se ek jaisa banta hai.
+async function writeAuditLog(staffUser, action, entityId, metadata) {
+  try {
+    const { error } = await supabase.from('audit_logs').insert({
+      actor_user_id: staffUser.user_id,
+      actor_role: staffUser.role,
+      action,
+      entity_type: 'profile',
+      entity_id: entityId,
+      metadata: metadata || {},
+    })
+    if (error) throw error
+  } catch (e) {
+    console.warn('Audit log failed (non-critical):', e.message)
+  }
 }
-const CALL_OUTCOME_COLORS = {
-  answered: { bg: '#f0fdf4', fg: '#16a34a' },
-  no_answer: { bg: '#f5f5f5', fg: '#8e8e8e' },
-  call_back: { bg: '#fff8e1', fg: '#b45309' },
-  not_interested: { bg: '#fef2f2', fg: '#dc2626' },
+
+// Request Selfie / Verify & Make Live / Reject. Returns the applied patch, or null on failure.
+async function applyVerificationStatus(staffUser, profile, status) {
+  const patch = verificationPatch(status, profile?.profile_status)
+  const { error } = await supabase.from('profiles').update(patch).eq('id', profile.id)
+  if (error) { alert('Update failed: ' + error.message); return null }
+  await writeAuditLog(staffUser, 'verification_status_change', profile.id, { new_status: status })
+  return patch
+}
+
+// Approve / Block / Set Pending for one or many profiles. Returns true on success.
+async function applyProfileStatus(staffUser, ids, status, extraMeta) {
+  const { error } = await supabase.from('profiles').update({ profile_status: status }).in('id', ids)
+  if (error) { alert('Update failed: ' + error.message); return false }
+  await Promise.all(ids.map(id => writeAuditLog(staffUser, 'profile_status_change', id, { new_status: status, ...(extraMeta || {}) })))
+  return true
+}
+
+// "Make Premium" button abhi hidden hai — koi real payment/subscription
+// system nahi hai, isliye Aryan ne kaha (2026-10-03) abhi ke liye chhupa do.
+// Code (togglePremium) delete nahi kiya; monetization aane par yeh true karo.
+const SHOW_PREMIUM_TOGGLE = false
+
+// Chhota Refresh button — har queue/tool screen ke header mein same look.
+function RefreshButton({ onClick, loading }) {
+  return (
+    <button className="btn btn-outline btn-sm" onClick={onClick} disabled={loading}>
+      <RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{loading ? 'Refreshing...' : 'Refresh'}
+    </button>
+  )
+}
+
+// Back + Refresh ek row mein (queue/tool screens ka common header).
+function ViewTopBar({ onBack, onRefresh, loading }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+      <button className="btn btn-outline btn-sm" onClick={onBack}>← Back to list</button>
+      {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
+    </div>
+  )
+}
+
+// Simple client-side search box for the smaller queue lists.
+function ListSearch({ value, onChange, placeholder }) {
+  return (
+    <input type="text" className="form-input" value={value} onChange={e => onChange(e.target.value)}
+      placeholder={placeholder} style={{ width: '100%', fontSize: 13, marginBottom: 14 }} />
+  )
+}
+
+const matchesSearch = (q, ...fields) => {
+  const needle = q.trim().toLowerCase()
+  if (!needle) return true
+  return fields.some(f => f && String(f).toLowerCase().includes(needle))
 }
 
 export default function Admin({ staffUser }) {
@@ -83,6 +147,7 @@ export default function Admin({ staffUser }) {
   const [statsLoading, setStatsLoading] = useState(false)
   const [showBreakdown, setShowBreakdown] = useState(false)
   const [showFunnel, setShowFunnel] = useState(false)
+  const [dashProfiles, setDashProfiles] = useState(null) // shared by Breakdown + Funnel (one fetch)
   const [selected, setSelected] = useState(null)
   const [idMetadata, setIdMetadata] = useState({}) // profile_id -> {created_at, source, created_by} — admin-only, staff_users RLS gated
   const [notesByProfile, setNotesByProfile] = useState({}) // profile_id -> [{id, note, follow_up_at, call_outcome, created_at, staff_user_id}]
@@ -323,26 +388,29 @@ export default function Admin({ staffUser }) {
     runQuery(profiles.length)
   }
 
+  // Breakdown aur Funnel dono ko same profiles rows chahiye — pehle dono apni
+  // taraf se poori profiles table alag fetch karte the. Ab ek hi fetch,
+  // dono panels ko prop se milta hai; Refresh (statsUpdatedAt) par dobara.
+  const dashPanelsOpen = showBreakdown || showFunnel
+  useEffect(() => {
+    if (!dashPanelsOpen) return
+    let cancelled = false
+    setDashProfiles(null)
+    supabase.from('profiles').select(DASH_PROFILE_COLUMNS).then(({ data, error }) => {
+      if (cancelled) return
+      if (error) console.error(error.message)
+      setDashProfiles(data || [])
+    })
+    return () => { cancelled = true }
+  }, [dashPanelsOpen, statsUpdatedAt])
+
   const resetFilters = () => {
     setFilters(DEFAULT_FILTERS)
   }
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length
 
-  const logAuditEntry = async (action, entityId, metadata) => {
-    try {
-      await supabase.from('audit_logs').insert({
-        actor_user_id: staffUser.user_id,
-        actor_role: staffUser.role,
-        action,
-        entity_type: 'profile',
-        entity_id: entityId,
-        metadata: metadata || {},
-      })
-    } catch (e) {
-      console.warn('Audit log failed (non-critical):', e.message)
-    }
-  }
+  const logAuditEntry = (action, entityId, metadata) => writeAuditLog(staffUser, action, entityId, metadata)
 
   const updateStatus = async (id, status) => {
     const target = profiles.find(p => p.id === id)
@@ -353,12 +421,7 @@ export default function Admin({ staffUser }) {
     // safety net ab Block par bhi (symmetric confirmations).
     if (status === 'blocked' && target
       && !window.confirm(`Block ${target.full_name || 'this profile'}? They will no longer be visible to other members.`)) return
-    const { error } = await supabase.from('profiles').update({ profile_status: status }).eq('id', id)
-    if (error) {
-      alert('Update failed: ' + error.message)
-      return
-    }
-    await logAuditEntry('profile_status_change', id, { new_status: status })
+    if (!(await applyProfileStatus(staffUser, [id], status))) return
     setProfiles(prev => prev.map(p => p.id === id ? { ...p, profile_status: status } : p))
     loadStats()
     setSelected(null)
@@ -403,11 +466,9 @@ export default function Admin({ staffUser }) {
   // (completeness.js already reads it). Ab selfie request / verify bhi
   // isi se hota hai — Verify karte hi profile live (active) ho jaati hai.
   const setVerificationStatus = async (id, status) => {
-    const target = profiles.find(p => p.id === id)
-    const patch = verificationPatch(status, target?.profile_status)
-    const { error } = await supabase.from('profiles').update(patch).eq('id', id)
-    if (error) { alert('Update failed: ' + error.message); return }
-    await logAuditEntry('verification_status_change', id, { new_status: status })
+    const target = profiles.find(p => p.id === id) || (selected?.id === id ? selected : { id })
+    const patch = await applyVerificationStatus(staffUser, target, status)
+    if (!patch) return
     setProfiles(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p))
     if (selected?.id === id) setSelected(prev => ({ ...prev, ...patch }))
     loadStats()
@@ -442,7 +503,7 @@ export default function Admin({ staffUser }) {
   const startContactLog = (p, kind) => {
     if (selected?.id !== p.id) setSelected(p)
     setNewNote(prev => (selected?.id === p.id && prev.trim()) ? prev
-      : (kind === 'call' ? '📞 Called: ' : '💬 WhatsApp: '))
+      : contactLogPrefix(kind))
   }
 
   const updateClientPhone = (id, phone) => {
@@ -473,11 +534,7 @@ export default function Admin({ staffUser }) {
     if (status === 'blocked'
       && !window.confirm(`Block ${ids.length} selected profile(s)? They will no longer be visible to other members.`)) return
     setBulkWorking(true)
-    const { error } = await supabase.from('profiles').update({ profile_status: status }).in('id', ids)
-    if (error) {
-      alert('Bulk update failed: ' + error.message)
-    } else {
-      await Promise.all(ids.map(id => logAuditEntry('profile_status_change', id, { new_status: status, via: 'bulk' })))
+    if (await applyProfileStatus(staffUser, ids, status, { via: 'bulk' })) {
       setProfiles(prev => prev.map(p => ids.includes(p.id) ? { ...p, profile_status: status } : p))
       setSelectedIds(new Set())
       loadStats()
@@ -660,7 +717,11 @@ export default function Admin({ staffUser }) {
             <Plus size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Create Client
           </button>
         </div>
-        {/* SEARCH BAR */}
+        {/* SEARCH & FILTER — status tabs, search aur Filters teeno ka kaam
+            "list ko narrow karna" hai, isliye ab ek hi box mein grouped hain
+            (pehle teen alag rows header mein bikhri dikhti thi). Logic same. */}
+        <div style={{ background: '#fafafa', border: '1px solid #ededed', borderRadius: 'var(--radius)', padding: 12, marginBottom: 16 }}>
+        <div style={{ fontSize: 10, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Search &amp; Filter</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input
             type="text"
@@ -723,7 +784,7 @@ export default function Admin({ staffUser }) {
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 14, cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.assignedToMe} onChange={e=>setFilters(f=>({...f,assignedToMe:e.target.checked}))} />
-              Assigned to me only
+              Assigned to me only <span style={{ color: '#8e8e8e', fontSize: 11 }}>(all statuses — today's pending to-dos are in Queues → My Queue)</span>
             </label>
             {activeFilterCount > 0 && (
               <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={resetFilters}>Reset Filters</button>
@@ -731,7 +792,7 @@ export default function Admin({ staffUser }) {
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div className="pill-tabs" style={{ flex: '1 1 auto', minWidth: 0 }}>
             {['all', 'pending', 'active', 'blocked'].map(t => (
               <button key={t} className={'pill-tab ' + (activeTab === t ? 'active' : '')} onClick={() => setActiveTab(t)}>
@@ -742,6 +803,7 @@ export default function Admin({ staffUser }) {
           <button className="btn btn-black btn-sm" style={{ flex: '0 0 auto' }} onClick={() => runQuery(0)}>
             {loading ? 'Loading...' : <><RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Refresh</>}
           </button>
+        </div>
         </div>
         {listUpdatedAt && (
           <div style={{ fontSize: 11, color: 'var(--gray3)', marginTop: -4, marginBottom: 10 }}>
@@ -805,7 +867,7 @@ export default function Admin({ staffUser }) {
                       <div className={"badge badge-" + p.profile_status} style={{ fontSize: 10 }}>{p.profile_status}</div>
                       {p.verification_status === 'verified' && p.profile_status !== 'active' && <div className="badge" style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>✓ Verified</div>}
                       {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb' }}>Selfie received</div>}
-                      {p.is_premium && <div className="badge" style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Crown size={10} />Premium</div>}
+                      {SHOW_PREMIUM_TOGGLE && p.is_premium && <div className="badge" style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Crown size={10} />Premium</div>}
                     </div>
                     <div style={{ fontSize: 10, color: '#8e8e8e', fontFamily: 'monospace' }}>{p.profile_code}</div>
                   </div>
@@ -954,11 +1016,13 @@ export default function Admin({ staffUser }) {
                         onClick={e => { e.stopPropagation(); setEditingProfile(p); setView('editProfile') }}><Pencil size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Edit</button>
                       <button className="btn btn-outline btn-sm"
                         onClick={e => { e.stopPropagation(); findMatchesForProfile(p) }}><Search size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Find Matches</button>
-                      <button className="btn btn-outline btn-sm"
-                        style={p.is_premium ? { color: '#b45309', borderColor: '#b45309' } : {}}
-                        onClick={e => { e.stopPropagation(); togglePremium(p.id, p.is_premium) }}>
-                        <><Crown size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />{p.is_premium ? 'Remove Premium' : 'Make Premium'}</>
-                      </button>
+                      {SHOW_PREMIUM_TOGGLE && (
+                        <button className="btn btn-outline btn-sm"
+                          style={p.is_premium ? { color: '#b45309', borderColor: '#b45309' } : {}}
+                          onClick={e => { e.stopPropagation(); togglePremium(p.id, p.is_premium) }}>
+                          <><Crown size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />{p.is_premium ? 'Remove Premium' : 'Make Premium'}</>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1019,8 +1083,8 @@ export default function Admin({ staffUser }) {
             <GitBranch size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showFunnel ? 'Hide funnel' : 'Conversion Funnel'}
           </button>
         </div>
-        {showBreakdown && <StatsBreakdown refreshKey={statsUpdatedAt} />}
-        {showFunnel && <FunnelView refreshKey={statsUpdatedAt} onOpenDuplicates={() => goToSectionView('queues', 'duplicateLeads')} />}
+        {showBreakdown && <StatsBreakdown profiles={dashProfiles} />}
+        {showFunnel && <FunnelView profiles={dashProfiles} refreshKey={statsUpdatedAt} onOpenDuplicates={() => goToSectionView('queues', 'duplicateLeads')} />}
       </div>
       )}
       {view === 'list' && section === 'queues' && (
@@ -1104,23 +1168,13 @@ function AdminNavCard({ icon: Icon, label, subtitle, badge, onClick }) {
 // expandable panel har dimension (age/height/religion/etc, adminStats.js
 // mein defined) pe on-demand filter/breakdown deta hai. Existing profiles
 // table se hi — koi naya column/table nahi.
-function StatsBreakdown({ refreshKey }) {
+// `profiles` comes from Admin's shared dashboard fetch (null while loading).
+function StatsBreakdown({ profiles }) {
   const [dim, setDim] = useState('age')
   const [gender, setGender] = useState('')
   const [status, setStatus] = useState('')
   const [joined, setJoined] = useState('all')
-  const [profiles, setProfiles] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    supabase.from('profiles').select(STATS_COLUMNS).then(({ data, error }) => {
-      if (!error) setProfiles(data || [])
-      setLoading(false)
-    })
-    // refreshKey ticks whenever the stat tiles are manually refreshed — keeps breakdown in sync
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
+  const loading = profiles === null
 
   const filtered = profiles ? filterProfiles(profiles, { gender, status, joined }) : []
   const rows = profiles ? breakdown(filtered, dim) : []
@@ -1175,46 +1229,47 @@ function StatsBreakdown({ refreshKey }) {
 // (existing) plus introductions/match_actions (existing tables) — no new
 // lead/stage table. Small data volume today, so distinct-profile counts
 // are computed client-side like StatsBreakdown already does.
-function FunnelView({ refreshKey, onOpenDuplicates }) {
-  const [loading, setLoading] = useState(true)
-  const [counts, setCounts] = useState(null)
-  const [dupCount, setDupCount] = useState(0)
+// `profiles` comes from Admin's shared dashboard fetch (same rows as Breakdown);
+// only introductions/match_actions are fetched here.
+function FunnelView({ profiles, refreshKey, onOpenDuplicates }) {
+  const [activity, setActivity] = useState(null) // { intros, actions }
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    ;(async () => {
-      const [profilesRes, introsRes, actionsRes] = await Promise.all([
-        supabase.from('profiles').select('id, profile_status, client_phone, client_email, created_at'),
-        supabase.from('introductions').select('from_profile, to_profile, status'),
-        supabase.from('match_actions').select('actor_profile_id, target_profile_id, action').in('action', ['like', 'super_like']),
-      ])
-      if (cancelled) return
-      const profiles = profilesRes.data || []
-      const intros = introsRes.data || []
-      const actions = actionsRes.data || []
+    setActivity(null)
+    Promise.all([
+      supabase.from('introductions').select('from_profile, to_profile, status'),
+      supabase.from('match_actions').select('actor_profile_id, target_profile_id, action').in('action', ['like', 'super_like']),
+    ]).then(([introsRes, actionsRes]) => {
+      if (!cancelled) setActivity({ intros: introsRes.data || [], actions: actionsRes.data || [] })
+    })
+    return () => { cancelled = true }
+  }, [refreshKey])
 
-      const matched = new Set()
-      actions.forEach(a => { matched.add(a.actor_profile_id); matched.add(a.target_profile_id) })
-      const meetingRequested = new Set()
-      const meetingDone = new Set()
-      intros.forEach(i => {
-        meetingRequested.add(i.from_profile); meetingRequested.add(i.to_profile)
-        if (i.status === 'contacted' || i.status === 'closed') { meetingDone.add(i.from_profile); meetingDone.add(i.to_profile) }
-      })
+  const loading = profiles === null || activity === null
 
-      setCounts({
+  const { counts, dupCount } = useMemo(() => {
+    if (loading) return { counts: null, dupCount: 0 }
+    const { intros, actions } = activity
+    const matched = new Set()
+    actions.forEach(a => { matched.add(a.actor_profile_id); matched.add(a.target_profile_id) })
+    const meetingRequested = new Set()
+    const meetingDone = new Set()
+    intros.forEach(i => {
+      meetingRequested.add(i.from_profile); meetingRequested.add(i.to_profile)
+      if (i.status === 'contacted' || i.status === 'closed') { meetingDone.add(i.from_profile); meetingDone.add(i.to_profile) }
+    })
+    return {
+      counts: {
         registered: profiles.length,
         active: profiles.filter(p => p.profile_status === 'active').length,
         matched: matched.size,
         meetingRequested: meetingRequested.size,
         meetingDone: meetingDone.size,
-      })
-      setDupCount(findDuplicateLeads(profiles).length)
-      setLoading(false)
-    })()
-    return () => { cancelled = true }
-  }, [refreshKey])
+      },
+      dupCount: findDuplicateLeads(profiles).length,
+    }
+  }, [loading, profiles, activity])
 
   const stages = counts ? computeFunnel(counts) : []
   const maxCount = Math.max(1, ...stages.map(s => s.count))
@@ -1275,7 +1330,7 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Duplicate Leads</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles sharing the same phone number or email — same person registered twice?</div>
 
@@ -1300,7 +1355,7 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
                         <div style={{fontSize:13,fontWeight:600}}>{p.full_name} <span className={"badge badge-" + p.profile_status} style={{fontSize:9,marginLeft:6}}>{p.profile_status}</span></div>
                         <div style={{fontSize:11,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code} · registered {new Date(p.created_at).toLocaleDateString('en-IN')}</div>
                       </div>
-                      <ContactButtons phone={p.client_phone} />
+                      <ContactButtons phone={p.client_phone} logProfile={p} />
                     </div>
                   </div>
                 ))}
@@ -1400,7 +1455,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
       {clientPhone && (
         <div style={{display:'flex',alignItems:'center',gap:8,marginTop:-12,marginBottom:16,fontSize:12}}>
           <span style={{color:'#8e8e8e',fontFamily:'monospace'}}>{clientPhone}</span>
-          <ContactButtons phone={clientPhone} size="md" />
+          <ContactButtons phone={clientPhone} logProfile={profile} size="md" />
         </div>
       )}
 
@@ -1482,7 +1537,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
                     </div>
                     <div style={{fontSize:11,color:'#8e8e8e'}}>{other.age}y • {other.city} • {other.profile_code}</div>
                   </div>
-                  <ContactButtons phone={phonesById[other.id]} />
+                  <ContactButtons phone={phonesById[other.id]} logProfile={other} />
                 </div>
 
                 {isExpanded && (
@@ -1615,6 +1670,7 @@ function ShareLinksView({ staffUserId, onBack }) {
 function CasteSuggestionsView({ onBack }) {
   const [suggestions, setSuggestions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -1634,6 +1690,8 @@ function CasteSuggestionsView({ onBack }) {
     setLoading(false)
   }
 
+  const visibleSuggestions = suggestions.filter(s => matchesSearch(query, s.suggested_name, s.religion, s.denomination, s.field_type))
+
   const handleAction = async (id, status) => {
     try {
       const { error } = await supabase.from('caste_suggestions').update({ status }).eq('id', id)
@@ -1646,8 +1704,9 @@ function CasteSuggestionsView({ onBack }) {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>Caste Suggestions</h2>
+      {suggestions.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by name, religion or type..." />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
@@ -1655,9 +1714,11 @@ function CasteSuggestionsView({ onBack }) {
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
           No pending suggestions right now.
         </div>
+      ) : visibleSuggestions.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No suggestions match "{query}".</div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {suggestions.map(s => (
+          {visibleSuggestions.map(s => (
             <div key={s.id} className="list-row">
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                 <div>
@@ -1698,6 +1759,7 @@ function CoordinationRequestsView({ onBack }) {
   // shown here before — admin had no visibility until both members acted.
   // Now included by default so admin can see/coordinate proactively.
   const [tab, setTab] = useState('open') // open (pending+accepted+contacted) | pending | closed | all
+  const [query, setQuery] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -1786,12 +1848,16 @@ function CoordinationRequestsView({ onBack }) {
     if (tab === 'pending') return r.status === 'pending'
     if (tab === 'closed') return r.status === 'closed'
     return r.status !== 'closed' // 'open'
+  }).filter(r => {
+    const a = profilesById[r.from_profile], b = profilesById[r.to_profile]
+    return matchesSearch(query, a?.full_name, a?.profile_code, b?.full_name, b?.profile_code)
   })
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:14}}>Coordination Requests</h2>
+      {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by member name or Profile ID..." />}
 
       <div className="pill-tabs" style={{marginBottom:16}}>
         {['open','pending','closed','all'].map(t => (
@@ -1805,7 +1871,7 @@ function CoordinationRequestsView({ onBack }) {
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
       ) : filteredRequests.length === 0 ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
-          {tab === 'pending' ? 'No requests waiting on a response.' : 'No Talk/Meeting requests yet.'}
+          {query.trim() ? `No requests match "${query}".` : tab === 'pending' ? 'No requests waiting on a response.' : 'No Talk/Meeting requests yet.'}
         </div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
@@ -1832,7 +1898,7 @@ function CoordinationRequestsView({ onBack }) {
                     {[from, to].filter(Boolean).map(x => (
                       <div key={x.id} style={{marginTop:6}}>
                         <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
-                        <ProfileContact profile={x}
+                        <ProfileContact profile={x} logCalls
                           onSaved={(phone)=>setProfilesById(prev=>({ ...prev, [x.id]: { ...prev[x.id], client_phone: phone } }))} />
                       </div>
                     ))}
@@ -1961,14 +2027,9 @@ function VerificationQueueView({ staffUser, onBack }) {
     setLoading(false)
   }
 
+  // Same shared function as the Profiles list's verification buttons
   const act = async (p, status) => {
-    const { error } = await supabase.from('profiles').update(verificationPatch(status, p.profile_status)).eq('id', p.id)
-    if (error) { alert(error.message); return }
-    await supabase.from('audit_logs').insert({
-      actor_user_id: staffUser.user_id, actor_role: staffUser.role,
-      action: 'verification_status_change', entity_type: 'profile', entity_id: p.id, metadata: { new_status: status },
-    }).then(()=>{}, ()=>{})
-    load()
+    if (await applyVerificationStatus(staffUser, p, status)) load()
   }
 
   const sections = [
@@ -1979,7 +2040,7 @@ function VerificationQueueView({ staffUser, onBack }) {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Verification Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Self-signup profiles go live only after their selfie is matched with their photo and verified</div>
 
@@ -2027,6 +2088,7 @@ function ReportsQueueView({ staffUser, onBack }) {
   const [reports, setReports] = useState([])
   const [profilesById, setProfilesById] = useState({})
   const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -2050,30 +2112,42 @@ function ReportsQueueView({ staffUser, onBack }) {
     setLoading(false)
   }
 
+  const visibleReports = reports.filter(r => {
+    const a = profilesById[r.reported_profile_id], b = profilesById[r.reporter_profile_id]
+    return matchesSearch(query, r.reason, a?.full_name, a?.profile_code, b?.full_name, b?.profile_code)
+  })
+
   const resolve = async (id, status, reportedProfileId, alsoBlock) => {
+    if (alsoBlock && reportedProfileId) {
+      const reported = profilesById[reportedProfileId]
+      if (!window.confirm(`Block ${reported?.full_name || 'this profile'}? They will no longer be visible to other members.`)) return
+      // Same block path as the Profiles list — writes the audit log too
+      // (pehle yahan se block karne par audit log nahi banta tha).
+      if (!(await applyProfileStatus(staffUser, [reportedProfileId], 'blocked', { via: 'report', report_id: id }))) return
+    }
     const { error } = await supabase.from('profile_reports').update({
       status, resolved_at: new Date().toISOString(), resolved_by: staffUser.user_id,
     }).eq('id', id)
     if (error) { alert(error.message); return }
-    if (alsoBlock && reportedProfileId) {
-      await supabase.from('profiles').update({ profile_status: 'blocked' }).eq('id', reportedProfileId)
-    }
     load()
   }
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Reports Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles reported by other members, awaiting review</div>
+      {reports.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by name, Profile ID or reason..." />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
       ) : reports.length === 0 ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No pending reports.</div>
+      ) : visibleReports.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No reports match "{query}".</div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {reports.map(r => {
+          {visibleReports.map(r => {
             const reporter = profilesById[r.reporter_profile_id]
             const reported = profilesById[r.reported_profile_id]
             return (
@@ -2152,11 +2226,12 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
 
   const isToday = (iso) => new Date(iso).toDateString() === new Date().toDateString()
 
-  const Section = ({ icon: Icon, title, items, renderItem, empty }) => (
+  const Section = ({ icon: Icon, title, hint, items, renderItem, empty }) => (
     <div style={{ marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
         <Icon size={14} /> {title} {items.length > 0 && `(${items.length})`}
       </div>
+      {hint && <div style={{ fontSize: 11, color: '#bbb', marginTop: -6, marginBottom: 8 }}>{hint}</div>}
       {items.length === 0 ? (
         <div style={{ fontSize: 12, color: '#bbb' }}>{empty}</div>
       ) : (
@@ -2169,7 +2244,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
+      <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>My Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Coordination requests, today's follow-ups, your assigned profiles, and new submissions</div>
 
@@ -2190,7 +2265,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
                   {[r.fromProfile, r.toProfile].filter(Boolean).map(x => (
                     <div key={x.id}>
                       <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
-                      <ProfileContact profile={x} onSaved={(phone)=>updatePendingContact(x.id, phone)} />
+                      <ProfileContact profile={x} logCalls onSaved={(phone)=>updatePendingContact(x.id, phone)} />
                     </div>
                   ))}
                 </div>
@@ -2215,7 +2290,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
                   {[m.fromProfile, m.toProfile].filter(x=>x?.client_phone).map(x => (
                     <div key={x.id} style={{display:'flex',alignItems:'center',gap:8,fontSize:12}}>
                       <span style={{color:'#8e8e8e',minWidth:90}}>{x.full_name}</span>
-                      <ContactButtons phone={x.client_phone} />
+                      <ContactButtons phone={x.client_phone} logProfile={x} />
                     </div>
                   ))}
                 </div>
@@ -2226,13 +2301,14 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
               <div key={n.id} className="list-row clickable" onClick={()=>n.profiles && onOpenProfile(n.profiles)}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
                   <div style={{fontSize:13,fontWeight:600}}>{n.profiles?.full_name || 'Profile'}</div>
-                  <ContactButtons phone={n.profiles?.client_phone} />
+                  <ContactButtons phone={n.profiles?.client_phone} logProfile={n.profiles} />
                 </div>
                 <div style={{fontSize:12,color:'#555',marginTop:2}}>{n.note}</div>
                 <div style={{fontSize:10,color:'#bbb',marginTop:4}}>Due {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</div>
               </div>
             )} />
-          <Section icon={ListChecks} title="Your pending profiles" items={assignedPending} empty="No pending profiles assigned to you."
+          <Section icon={ListChecks} title="Your pending profiles (to-do)" items={assignedPending} empty="No pending profiles assigned to you."
+            hint="Only your assigned profiles still pending approval (up to 20). For everything assigned to you, use Profiles → Filters → Assigned to me."
             renderItem={p => (
               <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
@@ -2240,7 +2316,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
                     <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
                     <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
                   </div>
-                  <ContactButtons phone={p.client_phone} />
+                  <ContactButtons phone={p.client_phone} logProfile={p} />
                 </div>
               </div>
             )} />
@@ -2252,7 +2328,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
                     <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
                     <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
                   </div>
-                  <ContactButtons phone={p.client_phone} />
+                  <ContactButtons phone={p.client_phone} logProfile={p} />
                 </div>
               </div>
             )} />
