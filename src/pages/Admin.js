@@ -4,20 +4,22 @@ import {
   Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote,
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
-  UserRound, Plus, Wrench, UserCog, Eye, Phone, Info,
+  UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, Tag, TrendingUp, Trash2,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
-import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS } from '../constants/profileOptions'
+import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS, LEAD_SOURCE_OPTIONS } from '../constants/profileOptions'
 import CreateProfile from './CreateProfile'
 import BiodataView from './BiodataView'
 import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
-import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel } from '../utils/adminStats'
+import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, computeRmPerformance } from '../utils/adminStats'
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
+import { WhatsAppReminderButton } from '../components/WhatsAppReminder'
+import { EVENT_LABELS, fillTemplate, logNotification } from '../utils/notifications'
 import { useToast } from '../components/ui'
 
 // SEARCH DESIGN NOTE: yeh search ab DATABASE se query karta hai (Supabase
@@ -628,6 +630,16 @@ export default function Admin({ staffUser }) {
     if (selected?.id === id) setSelected(prev => ({ ...prev, client_phone: phone }))
   }
 
+  // Lead source — business-owner audit (2026-10-04). Signup/Create Client
+  // already asks this; this is just so admin can set/correct it for a
+  // walk-in that was entered without going through the full question.
+  const updateLeadSource = async (id, value) => {
+    const { error } = await supabase.from('profiles').update({ lead_source: value || null }).eq('id', id)
+    if (error) { showToast('Could not save: ' + error.message); return }
+    setProfiles(prev => prev.map(p => p.id === id ? { ...p, lead_source: value || null } : p))
+    if (selected?.id === id) setSelected(prev => ({ ...prev, lead_source: value || null }))
+  }
+
   // ===== BULK ACTIONS — pending queue bade hone par ek-ek profile expand
   // karke action lena slow ho jaata hai; checkbox select + ek-saath apply.
   const toggleSelect = (id) => {
@@ -847,6 +859,10 @@ export default function Admin({ staffUser }) {
 
       {view === 'staffManagement' && (
         <StaffManagementView staffUser={staffUser} onBack={()=>setView('list')} />
+      )}
+
+      {view === 'whatsappTemplates' && (
+        <WhatsAppTemplatesView staffUser={staffUser} onBack={()=>setView('list')} />
       )}
 
       {view === 'duplicateLeads' && (
@@ -1171,6 +1187,16 @@ export default function Admin({ staffUser }) {
                       )}
                     </div>
 
+                    {/* Lead source — profiles.lead_source, business-owner audit (2026-10-04) */}
+                    <div className="admin-section-header"><Tag size={13} />Lead Source</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                      <select className="form-select" value={p.lead_source || ''} style={{ maxWidth: 180, fontSize: 12 }}
+                        onChange={e => updateLeadSource(p.id, e.target.value)}>
+                        <option value="">Not set</option>
+                        {LEAD_SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+
                     {/* Verification — selfie request / compare / verify (profiles.verification_status) */}
                     <div className="admin-section-header"><ShieldAlert size={13} />Verification</div>
                     <div style={{ marginBottom: 14, fontSize: 12 }} onClick={e => e.stopPropagation()}>
@@ -1194,6 +1220,15 @@ export default function Admin({ staffUser }) {
                         {(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) && (
                           <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13, color: '#dc2626', borderColor: '#dc2626' }}
                             onClick={() => setVerificationStatus(p.id, 'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
+                        )}
+                        {/* No automated WhatsApp/push exists yet (no vendor
+                            chosen — see docs/product/future-whatsapp-plan.md);
+                            this is the one-tap reminder until that's decided. */}
+                        {p.verification_status === 'selfie_requested' && (
+                          <WhatsAppReminderButton profile={p} eventType="selfie_requested" staffUserId={staffUser.user_id} label="Remind on WhatsApp" />
+                        )}
+                        {p.verification_status === 'verified' && (
+                          <WhatsAppReminderButton profile={p} eventType="profile_approved" staffUserId={staffUser.user_id} label="Notify on WhatsApp" />
                         )}
                       </div>
                       {p.selfie_path && p.verification_status !== 'verified' && (
@@ -1397,6 +1432,7 @@ export default function Admin({ staffUser }) {
           <AdminNavCard icon={ClipboardList} label="Caste Suggestions" subtitle="New castes/gotras members typed in" onClick={()=>setView('casteSuggestions')} />
           <AdminNavCard icon={Handshake} label="Coordination" subtitle="Talk/meeting requests between members" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
           <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" onClick={()=>setView('shareLinks')} />
+          <AdminNavCard icon={MessageCircle} label="WhatsApp Templates" subtitle="Saved messages for reminders" onClick={()=>setView('whatsappTemplates')} />
         </div>
       </div>
       )}
@@ -1797,7 +1833,8 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
             </button>
           ) : (
             <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-              <a href={bundleWaLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm">📱 Send via WhatsApp</a>
+              <a href={bundleWaLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm"
+                onClick={()=>logNotification({ profileId: profile.id, eventType: 'match_shared', staffUserId, messagePreview: bundleMsg })}>📱 Send via WhatsApp</a>
               {navigator.share && (
                 <button className="btn btn-outline btn-sm"
                   onClick={()=>nativeShare({ title:'Matches from LOVEKUSH', text: bundleMsg.replace(bundle.url, '').trim(), url: bundle.url })}>
@@ -1881,7 +1918,8 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
                         ✓ Link ready (expires in 7 days, one-click revoke available in "My Share Links")
                       </div>
                       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                        <a href={waLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm">📱 Send via WhatsApp</a>
+                        <a href={waLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm"
+                          onClick={()=>logNotification({ profileId: profile.id, eventType: 'match_shared', staffUserId, messagePreview: shareMsg })}>📱 Send via WhatsApp</a>
                         {!clientPhone && (
                           <span style={{fontSize:13,color:'#8e8e8e',alignSelf:'center'}}>No client phone saved, WhatsApp will ask which chat</span>
                         )}
@@ -2301,15 +2339,27 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
                         link hoti hai (introductionId), + ek plain "Add note" bhi
                         (jab baat call/WhatsApp tap ke bina hui ho, jaise in-person
                         meeting) — audit gap #4. */}
-                    {[from, to].filter(Boolean).map(x => (
+                    {[from, to].filter(Boolean).map(x => {
+                      const other = x.id === from?.id ? to : from
+                      return (
                       <div key={x.id} style={{marginTop:6}}>
                         <div style={{fontSize:13,color:'#8e8e8e',marginBottom:2,display:'flex',alignItems:'center',gap:6}}>
                           {x.full_name} <AddNoteButton profile={x} introductionId={r.id} />
                         </div>
                         <ProfileContact profile={x} logCalls introductionId={r.id}
                           onSaved={(phone)=>setProfilesById(prev=>({ ...prev, [x.id]: { ...prev[x.id], client_phone: phone } }))} />
+                        {/* No automated reminder yet (no WhatsApp vendor
+                            chosen — see docs/product/future-whatsapp-plan.md);
+                            one-tap confirm until that's decided. */}
+                        {r.scheduled_at && (
+                          <div style={{marginTop:4}}>
+                            <WhatsAppReminderButton profile={x} eventType="meeting_scheduled" label="Confirm on WhatsApp"
+                              vars={{ otherName: other?.full_name || 'the other member', when: new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) }} />
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
                     <div className={coordBadgeClass(r.status)} style={{fontSize:12}}>
@@ -2454,7 +2504,7 @@ function VerificationQueueView({ staffUser, onBack }) {
 
   const buildQuery = (from, to) => supabase
     .from('profiles')
-    .select('id, full_name, profile_code, age, city, profile_status, verification_status, id_document_uploaded, is_admin_managed, selfie_path, selfie_requested_at, selfie_submitted_at, created_at')
+    .select('id, full_name, profile_code, age, city, profile_status, verification_status, id_document_uploaded, is_admin_managed, selfie_path, selfie_requested_at, selfie_submitted_at, client_phone, created_at')
     .neq('verification_status', 'verified')
     .neq('profile_status', 'blocked')
     .or('verification_status.in.(selfie_submitted,selfie_requested),id_document_uploaded.eq.true,and(profile_status.eq.pending,is_admin_managed.eq.false)')
@@ -2531,6 +2581,9 @@ function VerificationQueueView({ staffUser, onBack }) {
                   <button className={'btn btn-sm ' + (sec.key === 'review' ? 'btn-black' : 'btn-outline')} onClick={()=>act(p,'verified')}><ShieldCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Verify &amp; Make Live</button>
                   {sec.key === 'review' && (
                     <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}} onClick={()=>act(p,'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
+                  )}
+                  {sec.key === 'waiting' && (
+                    <WhatsAppReminderButton profile={p} eventType="selfie_requested" staffUserId={staffUser.user_id} label="Remind on WhatsApp" />
                   )}
                 </div>
               </div>
@@ -2899,6 +2952,8 @@ function StaffManagementView({ staffUser, onBack }) {
   const [role, setRole] = useState('relationship_manager')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // RM performance — business-owner audit (2026-10-04). null = not loaded yet.
+  const [perfByStaff, setPerfByStaff] = useState(null)
 
   useEffect(() => { load() }, [])
 
@@ -2907,6 +2962,24 @@ function StaffManagementView({ staffUser, onBack }) {
     const { data, error: err } = await supabase.rpc('list_staff_with_email')
     if (!err) setStaff(data || [])
     setLoading(false)
+    loadPerformance(data || [])
+  }
+
+  // Derived from existing tables only (profile_notes, introductions,
+  // profiles.managed_by_staff_id) — no new heavy tracking system.
+  const loadPerformance = async (staffList) => {
+    if (!staffList.length) { setPerfByStaff({}); return }
+    const [notesRes, introRes, managedRes] = await Promise.all([
+      supabase.from('profile_notes').select('staff_user_id, introduction_id, created_at').not('staff_user_id', 'is', null),
+      supabase.from('introductions').select('id, from_profile, to_profile, status, created_at'),
+      supabase.from('profiles').select('id, managed_by_staff_id').not('managed_by_staff_id', 'is', null),
+    ])
+    const rows = computeRmPerformance(staffList, {
+      profileNotes: notesRes.data || [],
+      introductions: introRes.data || [],
+      managedProfiles: managedRes.data || [],
+    })
+    setPerfByStaff(Object.fromEntries(rows.map(r => [r.user_id, r])))
   }
 
   const addStaff = async () => {
@@ -2953,19 +3026,134 @@ function StaffManagementView({ staffUser, onBack }) {
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {staff.map(s => (
-            <div key={s.id} className="list-row" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-              <div>
-                <div style={{fontSize:13,fontWeight:600}}>{s.email}</div>
-                <div style={{fontSize:13,color:'#8e8e8e',textTransform:'capitalize'}}>{s.role.replace('_',' ')} · {s.active ? 'Active' : 'Deactivated'}</div>
+          {staff.map(s => {
+            const perf = perfByStaff?.[s.user_id]
+            return (
+            <div key={s.id} className="list-row">
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600}}>{s.email}</div>
+                  <div style={{fontSize:13,color:'#8e8e8e',textTransform:'capitalize'}}>{s.role.replace('_',' ')} · {s.active ? 'Active' : 'Deactivated'}</div>
+                </div>
+                <button className="btn btn-outline btn-sm"
+                  style={s.active ? { color:'#dc2626', borderColor:'#dc2626' } : {}}
+                  disabled={s.user_id === staffUser.user_id}
+                  title={s.user_id === staffUser.user_id ? 'You cannot deactivate your own account' : ''}
+                  onClick={()=>toggleActive(s)}>
+                  {s.active ? 'Deactivate' : 'Reactivate'}
+                </button>
               </div>
-              <button className="btn btn-outline btn-sm"
-                style={s.active ? { color:'#dc2626', borderColor:'#dc2626' } : {}}
-                disabled={s.user_id === staffUser.user_id}
-                title={s.user_id === staffUser.user_id ? 'You cannot deactivate your own account' : ''}
-                onClick={()=>toggleActive(s)}>
-                {s.active ? 'Deactivate' : 'Reactivate'}
-              </button>
+              {/* RM performance — derived from profile_notes/introductions/
+                  managed_by_staff_id, no new tracking table (audit 2026-10-04) */}
+              {perfByStaff === null ? (
+                <div style={{fontSize:12,color:'#bbb',marginTop:8}}>Loading performance…</div>
+              ) : perf && (
+                <div style={{display:'flex',gap:14,flexWrap:'wrap',marginTop:10,paddingTop:10,borderTop:'1px solid #ededed',fontSize:12}}>
+                  <div><TrendingUp size={12} style={{verticalAlign:'-2px',marginRight:3}} color="#8e8e8e" />
+                    <span style={{fontWeight:600}}>{perf.followUps30d}</span> <span style={{color:'#8e8e8e'}}>follow-ups (30d)</span></div>
+                  <div><span style={{fontWeight:600}}>{perf.matchesClosed}</span> <span style={{color:'#8e8e8e'}}>matches closed</span></div>
+                  <div><span style={{fontWeight:600}}>{perf.avgResponseHours == null ? '—' : perf.avgResponseHours < 1 ? '<1h' : Math.round(perf.avgResponseHours) + 'h'}</span> <span style={{color:'#8e8e8e'}}>avg first response</span></div>
+                </div>
+              )}
+            </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ===== WHATSAPP TEMPLATES - business-owner audit (2026-10-04). Reusable,
+// admin-editable short messages for the one-tap WhatsApp reminder flow
+// (WhatsAppReminderButton) so staff don't retype the same "selfie
+// request"/"meeting confirm" message every time. Simple variable
+// substitution ({{name}}, {{city}}, ...), no templating engine - see
+// src/utils/notifications.js. Everyone active can read/use templates;
+// only an admin can add/edit/delete (same split as Manage Staff).
+function WhatsAppTemplatesView({ staffUser, onBack }) {
+  const [showToast, ToastView] = useToast()
+  const [templates, setTemplates] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [draft, setDraft] = useState({ category: 'general', name: '', message: '' })
+  const [saving, setSaving] = useState(false)
+  const isAdmin = staffUser.role === 'admin'
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    const { data, error } = await supabase.from('whatsapp_templates').select('*').order('category').order('created_at')
+    if (error) showToast(error.message)
+    setTemplates(data || [])
+    setLoading(false)
+  }
+
+  const addTemplate = async () => {
+    if (!draft.name.trim() || !draft.message.trim()) { showToast('Name and message are required'); return }
+    setSaving(true)
+    const { data: auth } = await supabase.auth.getUser()
+    const { error } = await supabase.from('whatsapp_templates').insert({
+      category: draft.category, name: draft.name.trim(), message: draft.message.trim(), created_by: auth?.user?.id,
+    })
+    setSaving(false)
+    if (error) { showToast(error.message); return }
+    setDraft({ category: 'general', name: '', message: '' })
+    load()
+  }
+
+  const deleteTemplate = async (id) => {
+    const { error } = await supabase.from('whatsapp_templates').delete().eq('id', id)
+    if (error) { showToast(error.message); return }
+    setTemplates(prev => prev.filter(t => t.id !== id))
+  }
+
+  return (
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: '20px' }}>
+      <ToastView />
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back</button>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>WhatsApp Templates</h2>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>
+        Saved messages the WhatsApp reminder button fills in automatically. Use {'{{name}}'}, {'{{otherName}}'}, {'{{when}}'} - filled in from the profile.
+      </div>
+
+      {isAdmin && (
+        <div className="list-row" style={{ marginBottom: 20 }}>
+          <div style={{fontSize:12,fontWeight:600,marginBottom:10}}>Add template</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            <select className="form-select" value={draft.category} onChange={e=>setDraft(d=>({ ...d, category: e.target.value }))}>
+              {Object.entries(EVENT_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+            <input className="form-input" placeholder="Template name (e.g. Selfie follow-up)" value={draft.name}
+              onChange={e=>setDraft(d=>({ ...d, name: e.target.value }))} />
+            <textarea className="form-input" placeholder="Hi {{name}}, ..." rows={3} value={draft.message}
+              onChange={e=>setDraft(d=>({ ...d, message: e.target.value }))} style={{resize:'vertical'}} />
+            <button className="btn btn-black btn-sm" disabled={saving} onClick={addTemplate} style={{alignSelf:'flex-start'}}>
+              {saving ? 'Adding...' : 'Add template'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : templates.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No templates yet.</div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {templates.map(t => (
+            <div key={t.id} className="list-row">
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600}}>{t.name}</div>
+                  <div style={{fontSize:12,color:'#8e8e8e',marginBottom:6}}>{EVENT_LABELS[t.category] || t.category}</div>
+                  <div style={{fontSize:13,color:'#555',background:'#f9f9f9',padding:'8px 10px',borderRadius:8}}>{t.message}</div>
+                </div>
+                {isAdmin && (
+                  <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626',flexShrink:0}}
+                    onClick={()=>deleteTemplate(t.id)}><Trash2 size={13} /></button>
+                )}
+              </div>
             </div>
           ))}
         </div>

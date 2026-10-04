@@ -46,6 +46,7 @@ import {
   PROFILE_FOR_OPTIONS,
   PROFILE_FOR_GENDER,
   SCHOOL_ONLY_EDUCATIONS,
+  LEAD_SOURCE_OPTIONS,
 } from '../constants/profileOptions'
 import CheckboxDropdown from '../components/CheckboxDropdown'
 import { compressImage } from '../utils/compressImage'
@@ -108,6 +109,10 @@ const buildPersonalQuestions = (adminMode) => [
   { key:'children_living_with', label:'Who do your children live with?', type:'select', options:CHILDREN_LIVING_WITH_OPTIONS,
     skip: f=>f.have_children!=='Yes' },
   { key:'languages_spoken', label:'Which languages do you speak?', type:'multiselect', options:LANGUAGES_SPOKEN, placeholder:'Select languages...' },
+  // Business-owner audit (2026-10-04) — simple lead-source tag for the
+  // admin Breakdown panel / marketing ROI, asked for self-signup too, not
+  // just admin Create Client. Optional, so it never blocks signup.
+  { key:'lead_source', label:'How did you hear about us?', type:'select', options:LEAD_SOURCE_OPTIONS },
 ]
 // Weight, Complexion, Body Type, Blood Group, Health Information, Grew Up In
 // and Physical Disability were removed from the signup wizard (user's ask:

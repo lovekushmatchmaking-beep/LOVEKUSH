@@ -3,7 +3,7 @@
 // ko hi buckets mein group karta hai — koi naya column/table nahi.
 import { parseHeightToInches } from '../constants/profileOptions'
 
-export const STATS_COLUMNS = 'gender, age, date_of_birth, height, religion, community, city, state, country, marital_status, education, profile_for, mother_tongue, manglik, diet, profile_status, created_at'
+export const STATS_COLUMNS = 'gender, age, date_of_birth, height, religion, community, city, state, country, marital_status, education, profile_for, mother_tongue, manglik, diet, profile_status, lead_source, created_at'
 
 const UNKNOWN = 'Not filled'
 
@@ -59,6 +59,7 @@ export const DIMENSIONS = {
   manglik: { label: 'Manglik', bucket: field('manglik') },
   diet: { label: 'Diet', bucket: field('diet') },
   profile_status: { label: 'Profile Status', bucket: field('profile_status') },
+  lead_source: { label: 'Lead Source', bucket: field('lead_source') },
 }
 
 // ===== CONVERSION FUNNEL — "Lead → Match → Meeting" stages Aryan ne
@@ -84,6 +85,55 @@ export function computeFunnel(counts) {
     const conversionPct = prev === null ? null : (prev === 0 ? 0 : Math.round((count / prev) * 100))
     prev = count
     return { key, label: FUNNEL_STAGE_LABELS[key], count, conversionPct }
+  })
+}
+
+// ===== RM PERFORMANCE — business-owner audit (2026-10-04): "kis RM ne
+// kitne follow-up liye, kitne matches close kiye, response time kitna
+// tha" wasn't tracked anywhere. No new heavy tracking table — derived from
+// profile_notes (already how calls/follow-ups get logged) and
+// introductions + the existing profiles.managed_by_staff_id link (a
+// coordination request is attributed to the RM managing its "from" profile).
+//
+// staffList: [{ user_id, ... }], profileNotes: [{ staff_user_id, introduction_id, created_at }],
+// introductions: [{ id, from_profile, to_profile, status, created_at }],
+// managedProfiles: [{ id, managed_by_staff_id }] (profiles with an RM assigned)
+export function computeRmPerformance(staffList, { profileNotes, introductions, managedProfiles }) {
+  const sinceMs = Date.now() - 30 * DAY
+  const notesByStaff = new Map()
+  for (const n of profileNotes) {
+    if (!n.staff_user_id) continue
+    const arr = notesByStaff.get(n.staff_user_id) || []
+    arr.push(n)
+    notesByStaff.set(n.staff_user_id, arr)
+  }
+  const firstNoteByIntroduction = new Map()
+  for (const n of profileNotes) {
+    if (!n.introduction_id) continue
+    const existing = firstNoteByIntroduction.get(n.introduction_id)
+    if (!existing || new Date(n.created_at) < new Date(existing.created_at)) firstNoteByIntroduction.set(n.introduction_id, n)
+  }
+  return staffList.map(s => {
+    const managedIds = new Set(managedProfiles.filter(p => p.managed_by_staff_id === s.user_id).map(p => p.id))
+    const theirIntros = introductions.filter(i => managedIds.has(i.from_profile) || managedIds.has(i.to_profile))
+    const notes = notesByStaff.get(s.user_id) || []
+
+    const responseHours = []
+    for (const intro of theirIntros) {
+      const firstNote = firstNoteByIntroduction.get(intro.id)
+      if (!firstNote) continue
+      const hours = (new Date(firstNote.created_at) - new Date(intro.created_at)) / (60 * 60 * 1000)
+      if (hours >= 0) responseHours.push(hours)
+    }
+    const avgResponseHours = responseHours.length ? responseHours.reduce((a, b) => a + b, 0) / responseHours.length : null
+
+    return {
+      user_id: s.user_id,
+      followUpsTotal: notes.length,
+      followUps30d: notes.filter(n => new Date(n.created_at).getTime() >= sinceMs).length,
+      matchesClosed: theirIntros.filter(i => i.status === 'closed' || i.status === 'meeting_done').length,
+      avgResponseHours,
+    }
   })
 }
 
