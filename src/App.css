@@ -613,6 +613,17 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 .badge-active { background: var(--success-soft); color: var(--success); }
 .badge-blocked { background: var(--danger-soft); color: var(--danger); }
 
+/* Coordination-request stages — deliberately NOT reusing the profile-status
+   colors above (accepted/contacted were showing as pending-yellow/active-green,
+   which read as "pending approval" / "live profile" and confused admins —
+   Aryan's 2026-10-04 audit). Own palette, one color per stage. */
+.badge-coord-pending { background: #f5f5f5; color: #8e8e8e; }
+.badge-coord-declined { background: var(--danger-soft); color: var(--danger); }
+.badge-coord-accepted { background: #eff6ff; color: #2563eb; }
+.badge-coord-contacted { background: var(--warning-soft); color: #b45309; }
+.badge-coord-meeting_done { background: #f5f3ff; color: #7c3aed; }
+.badge-coord-closed { background: var(--success-soft); color: var(--success); }
+
 /* ================= Icon-first shared components ================= */
 
 /* Lucide icons — poore app mein ek hi stroke width */

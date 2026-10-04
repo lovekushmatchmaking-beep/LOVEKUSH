@@ -16,7 +16,7 @@ import { rankMatches } from '../utils/matching'
 import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel } from '../utils/adminStats'
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
-import { ContactButtons, ProfileContact, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
+import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
 
 // SEARCH DESIGN NOTE: yeh search ab DATABASE se query karta hai (Supabase
@@ -77,6 +77,23 @@ async function writeAuditLog(staffUser, action, entityId, metadata) {
     console.warn('Audit log failed (non-critical):', e.message)
   }
 }
+
+// ===== COORDINATION STATUS — shared between CoordinationRequestsView,
+// MyQueueView and the Profiles-list "Coordination requests" section, so a
+// request's stage/label/color reads the same wherever it shows up.
+// 'contacted' ("we called them") and 'meeting_done' ("the meeting actually
+// happened") used to be the same single status — Aryan's 2026-10-04 audit
+// flagged that as ambiguous.
+const COORD_STATUS_LABELS = {
+  pending: 'Awaiting response',
+  declined: 'Declined',
+  accepted: 'Accepted',
+  contacted: 'Call done',
+  meeting_done: 'Meeting done',
+  closed: 'Closed',
+}
+const coordStatusLabel = (status) => COORD_STATUS_LABELS[status] || status
+const coordBadgeClass = (status) => 'badge badge-coord-' + (COORD_STATUS_LABELS[status] ? status : 'pending')
 
 // Request Selfie / Verify & Make Live / Reject. Returns the applied patch, or null on failure.
 async function applyVerificationStatus(staffUser, profile, status) {
@@ -154,6 +171,18 @@ export default function Admin({ staffUser }) {
   const [newNote, setNewNote] = useState('')
   const [newNoteFollowUp, setNewNoteFollowUp] = useState('')
   const [newNoteOutcome, setNewNoteOutcome] = useState('')
+  // Coordination requests involving the expanded profile — so "has this
+  // client got any Talk/Meeting requests" doesn't need a trip to the
+  // separate Coordination Requests screen (Aryan's audit, gap #5).
+  const [coordByProfile, setCoordByProfile] = useState({})
+  // Set when a request is opened via a "Manage"/"View" link elsewhere (My
+  // Queue, this profile section) — CoordinationRequestsView picks the right
+  // tab and scrolls/highlights that one card.
+  const [coordFocusId, setCoordFocusId] = useState(null)
+  const goToCoordination = (requestId) => {
+    setCoordFocusId(requestId)
+    goToSectionView('tools', 'coordinationRequests')
+  }
   // ===== VIEW NAVIGATION — Aryan ne complain kiya ki drawer/queue ke andar
   // jaane ke baad phone ka "back" button kaam nahi karta (view sirf local
   // state tha, URL/history se juda nahi). Ab view ko ?view= query param mein
@@ -274,6 +303,27 @@ export default function Admin({ staffUser }) {
     loadNotesFor(selected.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected])
+
+  // Coordination requests involving this profile, lazily on expand (gap #5)
+  useEffect(() => {
+    if (!selected || coordByProfile[selected.id]) return
+    loadCoordFor(selected.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected])
+
+  const loadCoordFor = async (profileId) => {
+    const { data } = await supabase.from('introductions').select('*')
+      .or(`from_profile.eq.${profileId},to_profile.eq.${profileId}`)
+      .order('created_at', { ascending: false }).limit(10)
+    const rows = data || []
+    const otherIds = [...new Set(rows.map(r => (r.from_profile === profileId ? r.to_profile : r.from_profile)))]
+    let others = {}
+    if (otherIds.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code').in('id', otherIds)
+      ;(profs || []).forEach(p => { others[p.id] = p })
+    }
+    setCoordByProfile(prev => ({ ...prev, [profileId]: rows.map(r => ({ ...r, other: others[r.from_profile === profileId ? r.to_profile : r.from_profile] })) }))
+  }
 
   const loadStats = async () => {
     setStatsLoading(true)
@@ -674,7 +724,7 @@ export default function Admin({ staffUser }) {
       )}
 
       {view === 'coordinationRequests' && (
-        <CoordinationRequestsView onBack={()=>setView('list')} />
+        <CoordinationRequestsView onBack={()=>setView('list')} focusId={coordFocusId} onConsumeFocus={()=>setCoordFocusId(null)} />
       )}
 
       {view === 'verificationQueue' && (
@@ -687,7 +737,8 @@ export default function Admin({ staffUser }) {
 
       {view === 'myQueue' && (
         <MyQueueView staffUser={staffUser} onBack={()=>setView('list')}
-          onOpenProfile={(p)=>{ setView('list'); setSelected(p) }} />
+          onOpenProfile={(p)=>{ setView('list'); setSelected(p) }}
+          onManageCoordination={goToCoordination} />
       )}
 
       {view === 'staffManagement' && (
@@ -959,6 +1010,11 @@ export default function Admin({ staffUser }) {
                       </div>
                       {(notesByProfile[p.id] || []).map(n => (
                         <div key={n.id} style={{ fontSize: 12, background: '#f9f9f9', padding: '8px 10px', borderRadius: 8, marginBottom: 6 }}>
+                          {n.introduction_id && (
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, marginRight: 6, background: '#eff6ff', color: '#2563eb' }}>
+                              🤝 Coordination
+                            </span>
+                          )}
                           {n.call_outcome && (
                             <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, marginRight: 6,
                               background: CALL_OUTCOME_COLORS[n.call_outcome]?.bg, color: CALL_OUTCOME_COLORS[n.call_outcome]?.fg }}>
@@ -990,6 +1046,34 @@ export default function Admin({ staffUser }) {
                           onChange={e => setNewNoteFollowUp(e.target.value)} style={{ fontSize: 12, width: 140 }} />
                         <button className="btn btn-outline btn-sm" onClick={() => addNote(p.id)}>+ Add</button>
                       </div>
+                    </div>
+
+                    {/* Coordination requests involving this client — so admin doesn't
+                        have to jump to the separate Coordination Requests screen and
+                        search for them (Aryan's 2026-10-04 audit, gap #5). */}
+                    <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#8e8e8e', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Handshake size={13} /> Coordination requests
+                      </div>
+                      {(coordByProfile[p.id] || []).length === 0 ? (
+                        <div style={{ fontSize: 12, color: '#bbb' }}>No Talk/Meeting requests involving this profile.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {coordByProfile[p.id].map(r => (
+                            <div key={r.id} className="list-row clickable" style={{ padding: '8px 10px' }}
+                              onClick={() => goToCoordination(r.id)}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                <div style={{ fontSize: 12 }}>
+                                  {r.from_profile === p.id ? 'Sent to ' : 'Received from '}
+                                  <strong>{r.other?.full_name || 'Unknown'}</strong>
+                                  <span style={{ color: '#8e8e8e', textTransform: 'capitalize' }}> · {r.request_type === 'meeting' ? 'Meeting' : 'Talk'}</span>
+                                </div>
+                                <span className={coordBadgeClass(r.status)} style={{ fontSize: 10 }}>{coordStatusLabel(r.status)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {idMetadata[p.id] && (
@@ -1750,18 +1834,36 @@ function CasteSuggestionsView({ onBack }) {
 
 // Talk/Meeting requests (introductions table) — staff yahan se dekh ke
 // dono profiles ko manually coordinate karte hain, koi in-app chat nahi.
-function CoordinationRequestsView({ onBack }) {
+function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
   const [requests, setRequests] = useState([])
   const [profilesById, setProfilesById] = useState({})
+  const [notesByIntroduction, setNotesByIntroduction] = useState({}) // introduction_id -> profile_notes[] (history, incl. reschedules)
   const [loading, setLoading] = useState(true)
   const [scheduleDraft, setScheduleDraft] = useState({}) // request id -> datetime-local string being edited
   // Pending (not yet accepted/declined by the receiver) requests were never
   // shown here before — admin had no visibility until both members acted.
   // Now included by default so admin can see/coordinate proactively.
-  const [tab, setTab] = useState('open') // open (pending+accepted+contacted) | pending | closed | all
+  const [tab, setTab] = useState('open') // open (not closed) | pending | closed | all
   const [query, setQuery] = useState('')
 
   useEffect(() => { load() }, [])
+
+  // Opened via a "Manage"/"View" link elsewhere (My Queue, a profile's own
+  // Coordination section) — jump to the tab that has it and scroll to it,
+  // instead of making admin scroll/search for it again (audit gap #5).
+  useEffect(() => {
+    if (!focusId || loading || requests.length === 0) return
+    const r = requests.find(x => x.id === focusId)
+    if (r) {
+      setTab(r.status === 'pending' ? 'pending' : r.status === 'closed' ? 'closed' : 'open')
+      setQuery('')
+      setTimeout(() => {
+        document.getElementById('coord-req-' + focusId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 50)
+    }
+    onConsumeFocus && onConsumeFocus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, loading, requests])
 
   const load = async () => {
     setLoading(true)
@@ -1769,7 +1871,7 @@ function CoordinationRequestsView({ onBack }) {
       const { data, error } = await supabase
         .from('introductions')
         .select('*')
-        .in('status', ['pending', 'accepted', 'contacted', 'closed'])
+        .in('status', ['pending', 'declined', 'accepted', 'contacted', 'meeting_done', 'closed'])
         .order('created_at', { ascending: false })
       if (error) throw error
       const rows = data || []
@@ -1780,6 +1882,15 @@ function CoordinationRequestsView({ onBack }) {
         const map = {}
         ;(profs || []).forEach(p => { map[p.id] = p })
         setProfilesById(map)
+      }
+      if (rows.length > 0) {
+        const { data: notes } = await supabase.from('profile_notes').select('*')
+          .in('introduction_id', rows.map(r => r.id)).order('created_at', { ascending: false })
+        const byIntro = {}
+        ;(notes || []).forEach(n => { (byIntro[n.introduction_id] = byIntro[n.introduction_id] || []).push(n) })
+        setNotesByIntroduction(byIntro)
+      } else {
+        setNotesByIntroduction({})
       }
     } catch (err) {
       console.error(err.message)
@@ -1809,11 +1920,23 @@ function CoordinationRequestsView({ onBack }) {
   }
 
   // Call/meeting scheduling — introductions.scheduled_at, "Today's calls &
-  // meetings" (My Queue) ko yahin se data milta hai.
-  const handleSchedule = async (id, datetimeLocal) => {
+  // meetings" (My Queue) ko yahin se data milta hai. Reschedule ka purana
+  // time overwrite hone se pehle profile_notes mein log hota hai, taaki
+  // "pehle kab rakha tha, kyun badla" ki history na gayab ho (audit gap #4).
+  const handleSchedule = async (id, datetimeLocal, prevScheduledAt, fromProfileId) => {
     if (!datetimeLocal) return
     try {
-      const { error } = await supabase.from('introductions').update({ scheduled_at: new Date(datetimeLocal).toISOString() }).eq('id', id)
+      const newWhen = new Date(datetimeLocal).toISOString()
+      if (prevScheduledAt) {
+        const { data: auth } = await supabase.auth.getUser()
+        await supabase.from('profile_notes').insert({
+          profile_id: fromProfileId,
+          staff_user_id: auth?.user?.id,
+          introduction_id: id,
+          note: `🔁 Rescheduled: ${new Date(prevScheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} → ${new Date(newWhen).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`,
+        })
+      }
+      const { error } = await supabase.from('introductions').update({ scheduled_at: newWhen }).eq('id', id)
       if (error) throw error
       setScheduleDraft(prev => ({ ...prev, [id]: undefined }))
       load()
@@ -1878,8 +2001,10 @@ function CoordinationRequestsView({ onBack }) {
           {filteredRequests.map(r => {
             const from = profilesById[r.from_profile]
             const to = profilesById[r.to_profile]
+            const history = notesByIntroduction[r.id] || []
             return (
-              <div key={r.id} className="list-row">
+              <div key={r.id} id={'coord-req-' + r.id} className="list-row"
+                style={focusId === r.id ? { borderColor: '#2563eb', boxShadow: '0 0 0 2px rgba(37,99,235,0.25)' } : {}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                   <div>
                     <div style={{fontSize:14,fontWeight:600}}>
@@ -1894,18 +2019,24 @@ function CoordinationRequestsView({ onBack }) {
                     {/* Dono families ko seedha call/WhatsApp — coordination yahin se.
                         Number missing ho to yahin inline add/save bhi ho sakta hai
                         (Find Matches ka wahi ProfileContact pattern reuse) — pehle
-                        button simply gayab ho jaata tha, admin ko pata nahi chalta tha. */}
+                        button simply gayab ho jaata tha, admin ko pata nahi chalta tha.
+                        Call/WhatsApp yahan se log ki gayi note is request se bhi
+                        link hoti hai (introductionId), + ek plain "Add note" bhi
+                        (jab baat call/WhatsApp tap ke bina hui ho, jaise in-person
+                        meeting) — audit gap #4. */}
                     {[from, to].filter(Boolean).map(x => (
                       <div key={x.id} style={{marginTop:6}}>
-                        <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
-                        <ProfileContact profile={x} logCalls
+                        <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2,display:'flex',alignItems:'center',gap:6}}>
+                          {x.full_name} <AddNoteButton profile={x} introductionId={r.id} />
+                        </div>
+                        <ProfileContact profile={x} logCalls introductionId={r.id}
                           onSaved={(phone)=>setProfilesById(prev=>({ ...prev, [x.id]: { ...prev[x.id], client_phone: phone } }))} />
                       </div>
                     ))}
                   </div>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-                    <div className={"badge badge-" + (r.status==='closed'?'blocked':r.status==='contacted'?'active':'pending')} style={{fontSize:10}}>
-                      {r.status}
+                    <div className={coordBadgeClass(r.status)} style={{fontSize:10}}>
+                      {coordStatusLabel(r.status)}
                     </div>
                     {r.scheduled_at && (
                       <div style={{fontSize:10,color:'#2563eb',display:'flex',alignItems:'center',gap:4}}>
@@ -1921,7 +2052,7 @@ function CoordinationRequestsView({ onBack }) {
                     value={scheduleDraft[r.id] ?? ''}
                     onChange={e=>setScheduleDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
                   <button className="btn btn-outline btn-sm" style={{padding:'3px 10px',fontSize:11}}
-                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id])}>
+                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id], r.scheduled_at, r.from_profile)}>
                     {r.scheduled_at ? 'Reschedule' : 'Schedule'}
                   </button>
                   {r.scheduled_at && (
@@ -1933,15 +2064,44 @@ function CoordinationRequestsView({ onBack }) {
                   {!r.viewed_at && (
                     <button className="btn btn-outline btn-sm" onClick={()=>handleMarkViewed(r.id)}>👁 Mark Viewed</button>
                   )}
-                  {r.status !== 'contacted' && (
-                    <button className="btn btn-outline btn-sm" style={{color:'#16a34a',borderColor:'#16a34a'}}
-                      onClick={()=>handleAction(r.id, 'contacted')}>✓ Mark Contacted</button>
+                  {/* "Call done" aur "Meeting done" ab alag stages hain — pehle
+                      dono ek hi "contacted" status the, admin ko exact pata
+                      nahi chalta tha kya hua (audit gap #3). */}
+                  {!['contacted', 'meeting_done', 'closed'].includes(r.status) && (
+                    <button className="btn btn-outline btn-sm" style={{color:'#b45309',borderColor:'#b45309'}}
+                      onClick={()=>handleAction(r.id, 'contacted')}>📞 Mark Call Done</button>
+                  )}
+                  {r.status !== 'meeting_done' && r.status !== 'closed' && (
+                    <button className="btn btn-outline btn-sm" style={{color:'#7c3aed',borderColor:'#7c3aed'}}
+                      onClick={()=>handleAction(r.id, 'meeting_done')}>🤝 Mark Meeting Done</button>
                   )}
                   {r.status !== 'closed' && (
                     <button className="btn btn-outline btn-sm" onClick={()=>handleAction(r.id, 'closed')}>Close</button>
                   )}
                 </div>
                 {r.viewed_at && <div style={{fontSize:10,color:'#bbb',marginTop:6}}>Viewed {new Date(r.viewed_at).toLocaleString('en-IN')}</div>}
+
+                {/* History — every call/WhatsApp log, free-form note and reschedule
+                    for this request, not just the final close-time feedback
+                    (audit gap #4: "beech ki baatein kahin save nahi hoti thi"). */}
+                {history.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>History</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {history.map(n => (
+                        <div key={n.id} style={{ fontSize: 11, background: '#f9f9f9', padding: '6px 8px', borderRadius: 8 }}>
+                          {n.call_outcome && (
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 20, marginRight: 6,
+                              background: CALL_OUTCOME_COLORS[n.call_outcome]?.bg, color: CALL_OUTCOME_COLORS[n.call_outcome]?.fg }}>
+                              {CALL_OUTCOME_LABELS[n.call_outcome]}
+                            </span>
+                          )}
+                          {n.note} <span style={{ color: '#bbb' }}>· {new Date(n.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Post-introduction feedback — closes the VIP-matchmaking style loop: feedback sharpens the next match */}
                 {r.status === 'closed' && (
@@ -2174,7 +2334,7 @@ function ReportsQueueView({ staffUser, onBack }) {
 
 // ===== MY QUEUE — "what needs me today" view (Shaadi/SmartMatchApp RM
 // dashboard pattern), existing tables se compute, koi naya data model nahi.
-function MyQueueView({ staffUser, onBack, onOpenProfile }) {
+function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination }) {
   const [loading, setLoading] = useState(true)
   const [overdueFollowUps, setOverdueFollowUps] = useState([])
   const [assignedPending, setAssignedPending] = useState([])
@@ -2256,16 +2416,22 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
             empty="Nothing waiting on a member right now."
             renderItem={r => (
               <div key={r.id} className="list-row">
-                <div style={{fontSize:13,fontWeight:600}}>
-                  {r.fromProfile?.full_name || 'Unknown'} → {r.toProfile?.full_name || 'Unknown'}
-                  <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {r.request_type === 'meeting' ? 'Meeting' : 'Talk'} request</span>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                  <div style={{fontSize:13,fontWeight:600}}>
+                    {r.fromProfile?.full_name || 'Unknown'} → {r.toProfile?.full_name || 'Unknown'}
+                    <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {r.request_type === 'meeting' ? 'Meeting' : 'Talk'} request</span>
+                  </div>
+                  {onManageCoordination && (
+                    <button className="btn btn-outline btn-sm" style={{padding:'2px 8px',fontSize:11}}
+                      onClick={()=>onManageCoordination(r.id)}>Manage</button>
+                  )}
                 </div>
                 <div style={{fontSize:10,color:'#bbb',marginTop:2}}>Sent {new Date(r.created_at).toLocaleDateString('en-IN')} · waiting on {r.toProfile?.full_name || 'receiver'} to accept</div>
                 <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:8}}>
                   {[r.fromProfile, r.toProfile].filter(Boolean).map(x => (
                     <div key={x.id}>
                       <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
-                      <ProfileContact profile={x} logCalls onSaved={(phone)=>updatePendingContact(x.id, phone)} />
+                      <ProfileContact profile={x} logCalls introductionId={r.id} onSaved={(phone)=>updatePendingContact(x.id, phone)} />
                     </div>
                   ))}
                 </div>
@@ -2285,12 +2451,16 @@ function MyQueueView({ staffUser, onBack, onOpenProfile }) {
                       {' · '}{new Date(m.scheduled_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}
                     </div>
                   </div>
+                  {onManageCoordination && (
+                    <button className="btn btn-outline btn-sm" style={{padding:'2px 8px',fontSize:11}}
+                      onClick={()=>onManageCoordination(m.id)}>Manage</button>
+                  )}
                 </div>
                 <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:8}}>
                   {[m.fromProfile, m.toProfile].filter(x=>x?.client_phone).map(x => (
                     <div key={x.id} style={{display:'flex',alignItems:'center',gap:8,fontSize:12}}>
                       <span style={{color:'#8e8e8e',minWidth:90}}>{x.full_name}</span>
-                      <ContactButtons phone={x.client_phone} logProfile={x} />
+                      <ContactButtons phone={x.client_phone} logProfile={x} introductionId={m.id} />
                     </div>
                   ))}
                 </div>
