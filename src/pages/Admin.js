@@ -5,6 +5,7 @@ import {
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, Tag, TrendingUp, Trash2,
+  ThumbsUp,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -17,7 +18,7 @@ import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, co
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
-import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks } from '../utils/shareLinks'
+import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest } from '../utils/shareLinks'
 import { WhatsAppReminderButton } from '../components/WhatsAppReminder'
 import { EVENT_LABELS, fillTemplate, logNotification } from '../utils/notifications'
 import { useToast } from '../components/ui'
@@ -185,7 +186,7 @@ export default function Admin({ staffUser }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
-  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0, overdueFollowUps: 0 })
+  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0, overdueFollowUps: 0, pendingShareInterest: 0 })
   const [statsUpdatedAt, setStatsUpdatedAt] = useState(null)
   const [listUpdatedAt, setListUpdatedAt] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
@@ -390,6 +391,10 @@ export default function Admin({ staffUser }) {
       // includes today's) so My Queue's nav badge only fires on the ones that
       // actually got missed (Aryan's audit, 2026-10-05, gap #4).
       supabase.from('profile_notes').select('*', { count: 'exact', head: true }).not('follow_up_at', 'is', null).lt('follow_up_at', startOfToday.toISOString()),
+      // Share-link clients who tapped "👍 Interested" that admin hasn't
+      // acknowledged yet (audit gap, 2026-10-05) — previously this signal
+      // didn't exist at all.
+      supabase.from('share_links').select('*', { count: 'exact', head: true }).not('interested_at', 'is', null).is('interest_acknowledged_at', null),
     ])
     setStats({
       total: counts[0].count || 0,
@@ -404,6 +409,7 @@ export default function Admin({ staffUser }) {
       newToday: counts[9].count || 0,
       pendingCoordination: counts[10].count || 0,
       overdueFollowUps: counts[11].count || 0,
+      pendingShareInterest: counts[12].count || 0,
     })
     setStatsUpdatedAt(new Date())
     setStatsLoading(false)
@@ -870,7 +876,8 @@ export default function Admin({ staffUser }) {
       {view === 'myQueue' && (
         <MyQueueView staffUser={staffUser} onBack={()=>setView('list')}
           onOpenProfile={(p)=>{ setView('list'); setSelected(p) }}
-          onManageCoordination={goToCoordination} />
+          onManageCoordination={goToCoordination}
+          onOpenShareLinks={()=>setView('shareLinks')} />
       )}
 
       {view === 'staffManagement' && (
@@ -1452,7 +1459,7 @@ export default function Admin({ staffUser }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
           <AdminNavCard icon={ClipboardList} label="Caste Suggestions" subtitle="New castes/gotras members typed in" onClick={()=>setView('casteSuggestions')} />
           <AdminNavCard icon={Handshake} label="Coordination" subtitle="Talk/meeting requests between members" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
-          <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" onClick={()=>setView('shareLinks')} />
+          <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" badge={stats.pendingShareInterest} onClick={()=>setView('shareLinks')} />
           <AdminNavCard icon={MessageCircle} label="WhatsApp Templates" subtitle="Saved messages for reminders" onClick={()=>setView('whatsappTemplates')} />
         </div>
       </div>
@@ -1783,7 +1790,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
   const handleGenerateBundle = async () => {
     setBundle({ generating: true })
     try {
-      const b = await generateShareBundle(picked, staffUserId)
+      const b = await generateShareBundle(picked, staffUserId, profile.id)
       setBundle({ url: b.url })
     } catch (err) {
       setBundle({ error: err.message })
@@ -1804,7 +1811,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
   const handleGenerateLink = async (otherProfileId) => {
     setLinkFor(prev => ({ ...prev, [otherProfileId]: { generating: true } }))
     try {
-      const link = await generateShareLink(otherProfileId, staffUserId)
+      const link = await generateShareLink(otherProfileId, staffUserId, profile.id)
       setLinkFor(prev => ({ ...prev, [otherProfileId]: { url: link.url } }))
     } catch (err) {
       setLinkFor(prev => ({ ...prev, [otherProfileId]: { error: err.message } }))
@@ -1962,6 +1969,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
 // ===== SHARE LINKS MANAGEMENT — view kitni baar khula, revoke karo =====
 function ShareLinksView({ staffUserId, onBack }) {
   const [links, setLinks] = useState([])
+  const [profilesById, setProfilesById] = useState({}) // shown-profile id + client_profile_id -> {full_name, profile_code}
   const [loading, setLoading] = useState(true)
   const [showToast, ToastView] = useToast()
 
@@ -1971,7 +1979,22 @@ function ShareLinksView({ staffUserId, onBack }) {
     setLoading(true)
     try {
       const data = await getMyShareLinks(staffUserId)
+      // Interested-but-unacknowledged links first, newest interest first —
+      // that's what needs the admin's attention right now (audit gap, 2026-10-05).
+      data.sort((a, b) => {
+        const aPending = a.interested_at && !a.interest_acknowledged_at
+        const bPending = b.interested_at && !b.interest_acknowledged_at
+        if (aPending !== bPending) return aPending ? -1 : 1
+        return new Date(b.created_at) - new Date(a.created_at)
+      })
       setLinks(data)
+      const ids = [...new Set(data.flatMap(l => [l.profile_id, l.client_profile_id]).filter(Boolean))]
+      if (ids.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code').in('id', ids)
+        const map = {}
+        ;(profs || []).forEach(p => { map[p.id] = p })
+        setProfilesById(map)
+      }
     } catch (err) {
       console.error(err.message)
     }
@@ -1982,6 +2005,15 @@ function ShareLinksView({ staffUserId, onBack }) {
     try {
       await revokeShareLink(linkId)
       load()
+    } catch (err) {
+      showToast(err.message)
+    }
+  }
+
+  const handleAcknowledge = async (linkId) => {
+    try {
+      await acknowledgeShareLinkInterest(linkId)
+      setLinks(prev => prev.map(l => l.id === linkId ? { ...l, interest_acknowledged_at: new Date().toISOString() } : l))
     } catch (err) {
       showToast(err.message)
     }
@@ -2010,11 +2042,18 @@ function ShareLinksView({ staffUserId, onBack }) {
             const isExpired = new Date(l.expires_at) < new Date()
             const status = l.revoked ? 'Revoked' : isExpired ? 'Expired' : 'Active'
             const statusColor = l.revoked ? '#8e8e8e' : isExpired ? '#b45309' : '#16a34a'
+            const shownProfile = profilesById[l.profile_id]
+            const client = l.client_profile_id ? profilesById[l.client_profile_id] : null
+            const interestPending = l.interested_at && !l.interest_acknowledged_at
             return (
-              <div key={l.id} className="list-row">
+              <div key={l.id} className="list-row" style={interestPending ? { borderColor: '#16a34a', background: '#f0fdf4' } : {}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                   <div>
-                    <div style={{fontSize:12,fontFamily:'monospace',color:'#8e8e8e'}}>/{l.token.slice(0,12)}...</div>
+                    <div style={{fontSize:13,fontWeight:600}}>
+                      {shownProfile ? shownProfile.full_name : 'Profile'}
+                      {client && <span style={{fontWeight:400,color:'#8e8e8e'}}> · for {client.full_name}</span>}
+                    </div>
+                    <div style={{fontSize:12,fontFamily:'monospace',color:'#8e8e8e',marginTop:2}}>/{l.token.slice(0,12)}...</div>
                     <div style={{fontSize:13,color:statusColor,fontWeight:600,marginTop:2}}>{status}</div>
                   </div>
                   <div style={{textAlign:'right'}}>
@@ -2024,6 +2063,21 @@ function ShareLinksView({ staffUserId, onBack }) {
                     </div>
                   </div>
                 </div>
+                {/* Client tapped "👍 Interested" on this profile — previously
+                    there was no way for a share-link client to signal this at
+                    all, and no record of which client a link was even for
+                    (audit gap, 2026-10-05). */}
+                {l.interested_at && (
+                  <div style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
+                    <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5}}>
+                      <ThumbsUp size={12} /> Interested · {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                    </div>
+                    {!l.interest_acknowledged_at && (
+                      <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12}}
+                        onClick={()=>handleAcknowledge(l.id)}>Mark as noted</button>
+                    )}
+                  </div>
+                )}
                 <div style={{display:'flex',gap:8,marginTop:10}}>
                   <button className="btn btn-outline btn-sm" onClick={()=>copyLink(l.token)}><Copy size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Copy Link</button>
                   {!l.revoked && !isExpired && (
@@ -2731,7 +2785,7 @@ function ReportsQueueView({ staffUser, onBack }) {
 
 // ===== MY QUEUE — "what needs me today" view (Shaadi/SmartMatchApp RM
 // dashboard pattern), existing tables se compute, koi naya data model nahi.
-function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination }) {
+function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, onOpenShareLinks }) {
   const [loading, setLoading] = useState(true)
   const [overdueFollowUps, setOverdueFollowUps] = useState([])
   const [assignedPending, setAssignedPending] = useState([])
@@ -2739,6 +2793,10 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
   const [upcomingMeetings, setUpcomingMeetings] = useState([])
   const [meetingsTotal, setMeetingsTotal] = useState(0) // true count in the 7-day window — the list itself is capped at 20 (scale audit #7)
   const [pendingCoordination, setPendingCoordination] = useState([])
+  // Share-link clients (no login) who tapped "👍 Interested" and admin
+  // hasn't acted on yet — audit gap, 2026-10-05: this signal didn't exist
+  // before, and there was no way to tell which client a link was even for.
+  const [shareInterest, setShareInterest] = useState([])
   // Admin-only: how much pending work each staff member is carrying, so a
   // bulk burst of new profiles/requests can be spread out instead of
   // landing on whoever happens to click first (scale audit #8).
@@ -2751,7 +2809,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
     const nowIso = new Date().toISOString()
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
     const weekFromNow = new Date(Date.now() + 7*24*60*60*1000).toISOString()
-    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes] = await Promise.all([
+    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes] = await Promise.all([
       supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code, client_phone)').lte('follow_up_at', nowIso).order('follow_up_at', { ascending: true }).limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, profile_status, client_phone').eq('managed_by_staff_id', staffUser.user_id).eq('profile_status', 'pending').limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, created_at, client_phone').eq('profile_status', 'pending').gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(20),
@@ -2762,6 +2820,8 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
       // Coordination requests awaiting the receiver's accept/decline — previously
       // invisible to admin anywhere. Folded in here per Aryan's ask (2026-10-03).
       supabase.from('introductions').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
+      // Share-link clients who tapped "👍 Interested" — audit gap, 2026-10-05.
+      supabase.from('share_links').select('*').not('interested_at', 'is', null).is('interest_acknowledged_at', null).order('interested_at', { ascending: false }).limit(20),
     ])
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
@@ -2770,7 +2830,8 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
 
     const meetings = meetingsRes.data || []
     const pendingReqs = pendingCoordRes.data || []
-    const ids = [...new Set([...meetings, ...pendingReqs].flatMap(m => [m.from_profile, m.to_profile]))]
+    const shareInterestRows = shareInterestRes.data || []
+    const ids = [...new Set([...meetings, ...pendingReqs].flatMap(m => [m.from_profile, m.to_profile]).concat(shareInterestRows.flatMap(s => [s.profile_id, s.client_profile_id])).filter(Boolean))]
     let profilesById = {}
     if (ids.length > 0) {
       const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
@@ -2778,6 +2839,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
     }
     setUpcomingMeetings(meetings.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setPendingCoordination(pendingReqs.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
+    setShareInterest(shareInterestRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id], clientProfile: s.client_profile_id ? profilesById[s.client_profile_id] : null })))
 
     // Team workload — admin-only (list_staff_with_email RPC is admin-gated).
     // Small number of staff, so one count query per staff member is fine
@@ -2796,6 +2858,15 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
       }
     }
     setLoading(false)
+  }
+
+  const handleAcknowledgeShareInterest = async (linkId) => {
+    try {
+      await acknowledgeShareLinkInterest(linkId)
+      setShareInterest(prev => prev.filter(s => s.id !== linkId))
+    } catch (err) {
+      console.error(err.message)
+    }
   }
 
   const updatePendingContact = (profileId, phone) => {
@@ -2834,6 +2905,31 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
       ) : (
         <>
+          <Section icon={ThumbsUp} title="Clients interested in shared matches" items={shareInterest}
+            empty="No unread interest from share links right now."
+            renderItem={s => (
+              <div key={s.id} className="list-row" style={{borderColor:'#16a34a',background:'#f0fdf4'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                  <div style={{fontSize:13,fontWeight:600}}>
+                    {s.shownProfile?.full_name || 'Profile'}
+                    {s.clientProfile && <span style={{fontWeight:400,color:'#8e8e8e'}}> · for {s.clientProfile.full_name}</span>}
+                  </div>
+                  {onOpenShareLinks && (
+                    <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
+                      onClick={onOpenShareLinks}>Open</button>
+                  )}
+                </div>
+                <div style={{fontSize:12,color:'#16a34a',marginTop:2}}>
+                  Interested {new Date(s.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                </div>
+                <div style={{display:'flex',gap:8,marginTop:8}}>
+                  {s.clientProfile?.client_phone && (
+                    <ContactButtons phone={s.clientProfile.client_phone} logProfile={s.clientProfile} />
+                  )}
+                  <button className="btn btn-outline btn-sm" onClick={()=>handleAcknowledgeShareInterest(s.id)}>Mark as noted</button>
+                </div>
+              </div>
+            )} />
           <Section icon={Handshake} title="Coordination requests awaiting response" items={pendingCoordination}
             empty="Nothing waiting on a member right now."
             renderItem={r => (
