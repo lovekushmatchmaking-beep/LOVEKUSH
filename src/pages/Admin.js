@@ -873,11 +873,11 @@ export default function Admin({ staffUser }) {
       )}
 
       {view === 'casteSuggestions' && (
-        <CasteSuggestionsView onBack={()=>setView('list')} />
+        <CasteSuggestionsView staffUser={staffUser} onBack={()=>setView('list')} />
       )}
 
       {view === 'coordinationRequests' && (
-        <CoordinationRequestsView onBack={()=>setView('list')} focusId={coordFocusId} onConsumeFocus={()=>setCoordFocusId(null)} />
+        <CoordinationRequestsView staffUser={staffUser} onBack={()=>setView('list')} focusId={coordFocusId} onConsumeFocus={()=>setCoordFocusId(null)} />
       )}
 
       {view === 'verificationQueue' && (
@@ -914,6 +914,7 @@ export default function Admin({ staffUser }) {
           results={matchResults}
           loading={matchesLoading}
           staffUserId={staffUser.user_id}
+          staffUser={staffUser}
           onBack={()=>{setView('list'); setMatchesFor(null); setMatchResults([])}}
         />
       )}
@@ -1205,7 +1206,7 @@ export default function Admin({ staffUser }) {
 
                     {/* Quick contact — client_phone par seedha Call / WhatsApp */}
                     <div className="admin-section-header"><Phone size={13} />Contact</div>
-                    <ProfileContact key={p.id + (p.client_phone || '')} profile={p}
+                    <ProfileContact key={p.id + (p.client_phone || '')} profile={p} staffUser={staffUser}
                       onSaved={phone => updateClientPhone(p.id, phone)}
                       onAction={kind => startContactLog(p, kind)} />
 
@@ -1760,7 +1761,7 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
 }
 
 // ===== FIND MATCHES VIEW — reuses existing matching.js, adds masked sharing =====
-function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
+function FindMatchesView({ profile, results, loading, staffUserId, staffUser, onBack }) {
   const [expandedId, setExpandedId] = useState(null)
   const [linkFor, setLinkFor] = useState({}) // otherId -> { url, generating, error }
   // Kai matches ek saath ek hi link mein bhejne ke liye (jaise ek client
@@ -1779,6 +1780,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, onBack }) {
     if (digits.length < 10) { setPhoneError('Enter a valid number (10 digits, or with country code)'); return }
     const { error } = await supabase.from('profiles').update({ client_phone: phoneDraft.trim() }).eq('id', profile.id)
     if (error) { setPhoneError('Could not save: ' + error.message); return }
+    await writeAuditLog(staffUser, 'client_phone_edit', profile.id, { new_phone: phoneDraft.trim() })
     setClientPhone(phoneDraft.trim()); setPhoneDraft(''); setPhoneError('')
   }
 
@@ -2109,7 +2111,7 @@ function ShareLinksView({ staffUserId, onBack }) {
   )
 }
 
-function CasteSuggestionsView({ onBack }) {
+function CasteSuggestionsView({ onBack, staffUser }) {
   const [suggestions, setSuggestions] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -2135,10 +2137,14 @@ function CasteSuggestionsView({ onBack }) {
 
   const visibleSuggestions = suggestions.filter(s => matchesSearch(query, s.suggested_name, s.religion, s.denomination, s.field_type))
 
-  const handleAction = async (id, status) => {
+  const handleAction = async (id, status, suggestion) => {
     try {
       const { error } = await supabase.from('caste_suggestions').update({ status }).eq('id', id)
       if (error) throw error
+      // Approve/reject kahin audit log nahi likhta tha — Aryan ka audit gap #7.
+      await writeAuditLog(staffUser, 'caste_suggestion_' + status, id, {
+        suggested_name: suggestion?.suggested_name, field_type: suggestion?.field_type,
+      })
       load()
     } catch (err) {
       showToast(err.message)
@@ -2180,9 +2186,9 @@ function CasteSuggestionsView({ onBack }) {
               </div>
               <div style={{display:'flex',gap:8,marginTop:10}}>
                 <button className="btn btn-outline btn-sm" style={{color:'#16a34a',borderColor:'#16a34a'}}
-                  onClick={()=>handleAction(s.id, 'approved')}>✅ Approve</button>
+                  onClick={()=>handleAction(s.id, 'approved', s)}>✅ Approve</button>
                 <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
-                  onClick={()=>handleAction(s.id, 'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
+                  onClick={()=>handleAction(s.id, 'rejected', s)}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
               </div>
             </div>
           ))}
@@ -2199,7 +2205,7 @@ function CasteSuggestionsView({ onBack }) {
 const COORD_ALL_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'meeting_done', 'closed']
 const COORD_OPEN_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'meeting_done']
 
-function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
+function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }) {
   const [showToast, ToastView] = useToast()
   const [requests, setRequests] = useState([])
   const [profilesById, setProfilesById] = useState({})
@@ -2307,6 +2313,9 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
     try {
       const { error } = await supabase.from('introductions').update({ status }).eq('id', id)
       if (error) throw error
+      // Coordination status change kahin audit log nahi likhta tha — Aryan
+      // ka audit gap #7. entity_id = introduction id.
+      await writeAuditLog(staffUser, 'coordination_status_change', id, { new_status: status })
       setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r))
       refreshPendingCount()
     } catch (err) {
@@ -2346,6 +2355,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
       }
       const { error } = await supabase.from('introductions').update({ scheduled_at: newWhen }).eq('id', id)
       if (error) throw error
+      await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: newWhen, previous: prevScheduledAt || null })
       setScheduleDraft(prev => ({ ...prev, [id]: undefined }))
       setRequests(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: newWhen } : r))
     } catch (err) {
@@ -2368,6 +2378,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
     try {
       const { error } = await supabase.from('introductions').update(fb).eq('id', id)
       if (error) throw error
+      await writeAuditLog(staffUser, 'coordination_feedback_saved', id, fb)
       setRequests(prev => prev.map(r => r.id === id ? { ...r, ...fb } : r))
     } catch (err) {
       showToast(err.message)
@@ -2436,7 +2447,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus }) {
                         <div style={{fontSize:13,color:'#8e8e8e',marginBottom:2,display:'flex',alignItems:'center',gap:6}}>
                           {x.full_name} <AddNoteButton profile={x} introductionId={r.id} />
                         </div>
-                        <ProfileContact profile={x} logCalls introductionId={r.id}
+                        <ProfileContact profile={x} logCalls introductionId={r.id} staffUser={staffUser}
                           onSaved={(phone)=>setProfilesById(prev=>({ ...prev, [x.id]: { ...prev[x.id], client_phone: phone } }))} />
                         {/* No automated reminder yet (no WhatsApp vendor
                             chosen — see docs/product/future-whatsapp-plan.md);
@@ -2746,6 +2757,11 @@ function ReportsQueueView({ staffUser, onBack }) {
       status, resolved_at: new Date().toISOString(), resolved_by: staffUser.user_id,
     }).eq('id', id)
     if (error) { showToast(error.message); return }
+    // Report resolve/dismiss khud kabhi audit log nahi likhta tha (sirf
+    // "also block" ka block action likhta tha) — Aryan ka audit gap #12.
+    // entity_id = reported profile (audit_logs.entity_type abhi hamesha
+    // 'profile' hai), report id metadata mein.
+    await writeAuditLog(staffUser, 'report_resolved', reportedProfileId, { status, report_id: id })
     // Resolved/dismissed reports leave this (pending-only) queue — drop it
     // locally instead of a full reload, so any already-"Load More"-d rows
     // further down the list stay in place.
@@ -2964,7 +2980,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                   {[r.fromProfile, r.toProfile].filter(Boolean).map(x => (
                     <div key={x.id}>
                       <div style={{fontSize:13,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
-                      <ProfileContact profile={x} logCalls introductionId={r.id} onSaved={(phone)=>updatePendingContact(x.id, phone)} />
+                      <ProfileContact profile={x} logCalls introductionId={r.id} staffUser={staffUser} onSaved={(phone)=>updatePendingContact(x.id, phone)} />
                     </div>
                   ))}
                 </div>

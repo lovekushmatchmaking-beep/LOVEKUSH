@@ -820,6 +820,13 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     if(!form.first_name || !form.last_name || !form.date_of_birth) {
       showToast('Please fill required fields (First Name, Last Name, Date of Birth)'); return
     }
+    // Aryan ka audit (gap 3): Profile Photo "*" required likha tha but
+    // photo ke bina bhi submit ho jaata tha. Sirf self-signup ke liye
+    // enforce karte hain — admin kabhi photo haath mein aane se pehle hi
+    // client ki profile bana leta hai, usse block nahi karna.
+    if (!adminMode && !photos[0]) {
+      showToast('Please upload a profile photo to continue'); return
+    }
 
     const ageCheck = validateAge(form.date_of_birth, form.gender)
     if (!ageCheck.valid) {

@@ -38,6 +38,7 @@ import DualRangeSlider from '../components/DualRangeSlider'
 import CheckboxDropdown from '../components/CheckboxDropdown'
 import { TrinityLogo } from '../components/BrandLogo'
 import { compressImage } from '../utils/compressImage'
+import { normalizePhone } from '../utils/shareProfile'
 
 const DASHBOARD_TABS = ['home', 'matches', 'matchsearch', 'activity', 'requests', 'profile', 'searchid',
   'editphotos', 'editprofile', 'accountsettings', 'privacy', 'help', 'biodata', 'disliked', 'visits']
@@ -1362,6 +1363,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     last_name: guessedLast,
     gender: profile.gender || 'Male',
     date_of_birth: profile.date_of_birth || '',
+    client_phone: profile.client_phone || '',
     city: profile.city || '',
     state: profile.state || '',
     country: profile.country || 'India',
@@ -1555,6 +1557,9 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     if(!form.first_name || !form.last_name || !form.date_of_birth || !form.city) {
       showToast('First Name, Last Name, Date of Birth aur City zaroori hai'); return
     }
+    if (!profile.is_admin_managed && form.client_phone && !normalizePhone(form.client_phone)) {
+      showToast('Please enter a valid phone number'); return
+    }
     const ageCheck = validateAge(form.date_of_birth, form.gender)
     if (!ageCheck.valid) {
       showToast(ageCheck.message)
@@ -1662,6 +1667,14 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <FormLabel>Profile Created For</FormLabel>
           <ChipSelect options={PROFILE_FOR_OPTIONS} value={form.profile_for} onChange={v=>set('profile_for',v)} includeEmpty />
         </div>
+        {!profile.is_admin_managed && (
+          <div className="form-group">
+            <FormLabel>Phone / WhatsApp Number</FormLabel>
+            <input className="form-input" placeholder="9876543210" value={form.client_phone}
+              onChange={e=>set('client_phone',e.target.value)} />
+            <div className="form-hint">Used only by our matchmaking team to coordinate with you — never shown on your public profile.</div>
+          </div>
+        )}
         <div className="form-group">
           <FormLabel>First Name *</FormLabel>
           <input className="form-input" value={form.first_name} onChange={e=>set('first_name',e.target.value)} />

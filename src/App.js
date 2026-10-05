@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import { SplashScreen } from './components/BrandLogo'
+import { SUPPORT_EMAIL } from './components/ui'
 import { supabase } from './supabase'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -25,6 +26,11 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [staffUser, setStaffUser] = useState(null) // null = not staff, undefined = still checking
   const [loading, setLoading] = useState(true)
+  // Blocked clients — admin "blocked" karta hai to sirf profiles.profile_status
+  // flag set hota tha, login ko koi farq nahi padta tha (Aryan ka audit, gap 1).
+  // Ab har login/session-restore par apna profile_status check karte hain;
+  // blocked ho to turant sign-out karke yeh screen dikha dete hain.
+  const [blocked, setBlocked] = useState(false)
   // Splash — har app-open par ek baar (session mein), kam se kam itni der
   // dikhta hai taaki logo flash na ho; phir smooth fade-out.
   const [splash, setSplash] = useState(() => {
@@ -74,10 +80,41 @@ export default function App() {
       .eq('active', true)
       .maybeSingle()
     setStaffUser(data || null)
+    // Staff ko block check se exempt rakhte hain (woh khud hi blocking karte
+    // hain) — sirf member profile check karte hain jab user staff na ho.
+    if (!data) await checkBlockedStatus(userId)
+    else setLoading(false)
+  }
+
+  const checkBlockedStatus = async (userId) => {
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('profile_status')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (prof?.profile_status === 'blocked') {
+      await supabase.auth.signOut()
+      setUser(null)
+      setBlocked(true)
+    } else {
+      setBlocked(false)
+    }
     setLoading(false)
   }
 
   if (loading || splash === 'on' || splash === 'min-done') return <SplashScreen />
+
+  if (blocked) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, textAlign: 'center', padding: 20 }}>
+        <div className="empty-state-icon" style={{ margin: 0 }}><Lock size={28} /></div>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>Account Blocked</div>
+        <div style={{ fontSize: 13, color: '#8e8e8e', maxWidth: 320 }}>Aapka account LOVEKUSH team ne block kar diya hai. Please support se sampark karein.</div>
+        <a className="btn btn-black btn-sm" style={{ textDecoration: 'none', marginTop: 8 }} href={`mailto:${SUPPORT_EMAIL}`}>Contact Support</a>
+        <button className="btn btn-outline btn-sm" onClick={() => setBlocked(false)}>Back to Login</button>
+      </div>
+    )
+  }
 
   return (
     <>

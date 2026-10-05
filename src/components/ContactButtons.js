@@ -147,7 +147,7 @@ function QuickCallLog({ profile, kind, introductionId, onClose }) {
 // Expanded profile ke liye — number + Call/WhatsApp, aur number na ho ya
 // galat ho to wahin save/edit (same client_phone column jo CreateProfile
 // aur Find Matches pehle se use karte hain).
-export function ProfileContact({ profile, onSaved, onAction, logCalls = false, introductionId }) {
+export function ProfileContact({ profile, onSaved, onAction, logCalls = false, introductionId, staffUser }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(profile.client_phone || '')
   const [error, setError] = useState('')
@@ -161,6 +161,16 @@ export function ProfileContact({ profile, onSaved, onAction, logCalls = false, i
     const { error: err } = await supabase.from('profiles').update({ client_phone: draft.trim() }).eq('id', profile.id)
     setSaving(false)
     if (err) { setError('Could not save: ' + err.message); return }
+    // Client phone edit kahin audit log nahi likhta tha — Aryan ka audit
+    // gap #7. staffUser prop na ho (ab jo call-site pass nahi karte) to
+    // bhi fail nahi hota, bas log skip ho jaata hai.
+    if (staffUser) {
+      supabase.from('audit_logs').insert({
+        actor_user_id: staffUser.user_id, actor_role: staffUser.role,
+        action: 'client_phone_edit', entity_type: 'profile', entity_id: profile.id,
+        metadata: { new_phone: draft.trim() },
+      }).then(({ error: logErr }) => { if (logErr) console.warn('Audit log failed (non-critical):', logErr.message) })
+    }
     setError(''); setEditing(false)
     onSaved && onSaved(draft.trim())
   }
