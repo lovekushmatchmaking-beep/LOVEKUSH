@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Lock } from 'lucide-react'
+import { Lock, ThumbsUp, Check } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { BrandLockup } from '../components/BrandLogo'
+import { markShareLinkInterest } from '../utils/shareLinks'
 
 // Ek hi link mein kai matches (Admin "Find Matches" se chune hue) — bina
 // login ke khulta hai. SharedProfile jaisa hi: data "get_shared_bundle"
@@ -14,6 +15,21 @@ export default function SharedMatches() {
   const [profiles, setProfiles] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  // token -> 'sending' | 'done' | error message — client (no login) ke
+  // "👍 Interested" tap ko server mein likhta hai (audit gap, 2026-10-05):
+  // pehle yahan koi action hi nahi tha, sirf "Profile ID reply karo" text.
+  const [interest, setInterest] = useState({})
+
+  const markInterested = async (token) => {
+    if (interest[token]) return
+    setInterest(prev => ({ ...prev, [token]: 'sending' }))
+    try {
+      await markShareLinkInterest(token)
+      setInterest(prev => ({ ...prev, [token]: 'done' }))
+    } catch (err) {
+      setInterest(prev => ({ ...prev, [token]: 'error' }))
+    }
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -83,6 +99,25 @@ export default function SharedMatches() {
                     <span style={{fontWeight:500,textAlign:'right'}}>{v}</span>
                   </div>
                 ))}
+                <button
+                  onClick={()=>markInterested(p.token)}
+                  disabled={interest[p.token] === 'sending' || interest[p.token] === 'done'}
+                  style={{
+                    marginTop:14, width:'100%', padding:'11px 0', borderRadius:10, border:'none',
+                    fontSize:13, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                    background: interest[p.token] === 'done' ? '#ecfdf5' : '#111',
+                    color: interest[p.token] === 'done' ? '#16a34a' : '#fff',
+                    cursor: interest[p.token] === 'done' ? 'default' : 'pointer',
+                  }}>
+                  {interest[p.token] === 'done'
+                    ? (<><Check size={14} /> Marked as Interested — we'll be in touch</>)
+                    : (<><ThumbsUp size={14} /> {interest[p.token] === 'sending' ? 'Sending...' : 'Interested'}</>)}
+                </button>
+                {interest[p.token] === 'error' && (
+                  <div style={{marginTop:6,fontSize:11,color:'#dc2626',textAlign:'center'}}>
+                    Could not send. Please try again, or reply with the Profile ID.
+                  </div>
+                )}
               </div>
             )
           })}
@@ -90,7 +125,7 @@ export default function SharedMatches() {
 
         <div style={{marginTop:20,fontSize:12,color:'#8e8e8e',textAlign:'center',lineHeight:1.6}}>
           Contact details, photos and full information are shared confidentially.<br/>
-          To take any of these forward, reply to LOVEKUSH with the Profile ID.
+          Tap "Interested" on a profile, or reply to LOVEKUSH with the Profile ID.
         </div>
 
         {expiresAt && (

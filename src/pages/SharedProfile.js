@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Lock } from 'lucide-react'
+import { Lock, ThumbsUp, Check } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { BrandLockup } from '../components/BrandLogo'
+import { markShareLinkInterest } from '../utils/shareLinks'
 
 // Yeh page KISI KO BHI (bina login ke) khulti hai jab woh secure share
 // link kholega. Data seedha "get_shared_profile" Postgres function se
@@ -15,6 +16,18 @@ export default function SharedProfile() {
   const [profile, setProfile] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [interestState, setInterestState] = useState(null) // null | 'sending' | 'done' | 'error'
+
+  const markInterested = async () => {
+    if (interestState) return
+    setInterestState('sending')
+    try {
+      await markShareLinkInterest(token)
+      setInterestState('done')
+    } catch (err) {
+      setInterestState('error')
+    }
+  }
 
   useEffect(() => {
     loadSharedProfile()
@@ -79,6 +92,26 @@ export default function SharedProfile() {
               <span style={{fontWeight:500}}>{v}</span>
             </div>
           ))}
+
+          <button
+            onClick={markInterested}
+            disabled={interestState === 'sending' || interestState === 'done'}
+            style={{
+              marginTop:16, width:'100%', padding:'12px 0', borderRadius:10, border:'none',
+              fontSize:14, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+              background: interestState === 'done' ? '#ecfdf5' : '#111',
+              color: interestState === 'done' ? '#16a34a' : '#fff',
+              cursor: interestState === 'done' ? 'default' : 'pointer',
+            }}>
+            {interestState === 'done'
+              ? (<><Check size={14} /> Marked as Interested — we'll be in touch</>)
+              : (<><ThumbsUp size={14} /> {interestState === 'sending' ? 'Sending...' : 'Interested'}</>)}
+          </button>
+          {interestState === 'error' && (
+            <div style={{marginTop:6,fontSize:11,color:'#dc2626',textAlign:'center'}}>
+              Could not send. Please try again, or contact LOVEKUSH directly.
+            </div>
+          )}
         </div>
 
         <div style={{marginTop:20,fontSize:12,color:'#8e8e8e',textAlign:'center',lineHeight:1.6}}>
