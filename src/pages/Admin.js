@@ -185,7 +185,7 @@ export default function Admin({ staffUser }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
-  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0 })
+  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0, overdueFollowUps: 0 })
   const [statsUpdatedAt, setStatsUpdatedAt] = useState(null)
   const [listUpdatedAt, setListUpdatedAt] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
@@ -196,9 +196,15 @@ export default function Admin({ staffUser }) {
   const [selected, setSelected] = useState(null)
   const [idMetadata, setIdMetadata] = useState({}) // profile_id -> {created_at, source, created_by} — admin-only, staff_users RLS gated
   const [notesByProfile, setNotesByProfile] = useState({}) // profile_id -> [{id, note, follow_up_at, call_outcome, created_at, staff_user_id}]
-  const [newNote, setNewNote] = useState('')
-  const [newNoteFollowUp, setNewNoteFollowUp] = useState('')
-  const [newNoteOutcome, setNewNoteOutcome] = useState('')
+  // Note draft, keyed per-profile (Aryan's audit, 2026-10-05): used to be
+  // three flat strings shared by whichever profile happened to be
+  // `selected` — switching to another client mid-type silently discarded
+  // whatever was typed, with no warning. Now each profile keeps its own
+  // draft, so interrupting a note to handle another client never loses it.
+  const [noteDrafts, setNoteDrafts] = useState({}) // profile_id -> {note, followUp, outcome}
+  const getNoteDraft = (profileId) => noteDrafts[profileId] || { note: '', followUp: '', outcome: '' }
+  const setNoteDraft = (profileId, patch) => setNoteDrafts(prev => ({ ...prev, [profileId]: { ...(prev[profileId] || { note: '', followUp: '', outcome: '' }), ...patch } }))
+  const clearNoteDraft = (profileId) => setNoteDrafts(prev => { const next = { ...prev }; delete next[profileId]; return next })
   // Coordination requests involving the expanded profile — so "has this
   // client got any Talk/Meeting requests" doesn't need a trip to the
   // separate Coordination Requests screen (Aryan's audit, gap #5).
@@ -380,6 +386,10 @@ export default function Admin({ staffUser }) {
       // Pending coordination requests — dono members ne abhi accept/decline nahi
       // kiya, isliye yeh koi list mein nahi dikhte the. Ab count + queue mein visible.
       supabase.from('introductions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      // Overdue follow-ups — strictly before today (not just "due", which also
+      // includes today's) so My Queue's nav badge only fires on the ones that
+      // actually got missed (Aryan's audit, 2026-10-05, gap #4).
+      supabase.from('profile_notes').select('*', { count: 'exact', head: true }).not('follow_up_at', 'is', null).lt('follow_up_at', startOfToday.toISOString()),
     ])
     setStats({
       total: counts[0].count || 0,
@@ -393,6 +403,7 @@ export default function Admin({ staffUser }) {
       newWeek: counts[8].count || 0,
       newToday: counts[9].count || 0,
       pendingCoordination: counts[10].count || 0,
+      overdueFollowUps: counts[11].count || 0,
     })
     setStatsUpdatedAt(new Date())
     setStatsLoading(false)
@@ -604,18 +615,17 @@ export default function Admin({ staffUser }) {
   }
 
   const addNote = async (profileId) => {
-    if (!newNote.trim() && !newNoteOutcome) return
+    const draft = getNoteDraft(profileId)
+    if (!draft.note.trim() && !draft.outcome) return
     const { error } = await supabase.from('profile_notes').insert({
       profile_id: profileId,
       staff_user_id: staffUser.user_id,
-      note: newNote.trim() || CALL_OUTCOME_LABELS[newNoteOutcome],
-      follow_up_at: newNoteFollowUp || null,
-      call_outcome: newNoteOutcome || null,
+      note: draft.note.trim() || CALL_OUTCOME_LABELS[draft.outcome],
+      follow_up_at: draft.followUp || null,
+      call_outcome: draft.outcome || null,
     })
     if (error) { showToast('Could not save note: ' + error.message); return }
-    setNewNote('')
-    setNewNoteFollowUp('')
-    setNewNoteOutcome('')
+    clearNoteDraft(profileId)
     loadNotesFor(profileId)
   }
 
@@ -623,8 +633,8 @@ export default function Admin({ staffUser }) {
   // ki shuruaat aa jaati hai — baat khatam karke outcome chip daba ke + Add.
   const startContactLog = (p, kind) => {
     if (selected?.id !== p.id) setSelected(p)
-    setNewNote(prev => (selected?.id === p.id && prev.trim()) ? prev
-      : contactLogPrefix(kind))
+    const existing = getNoteDraft(p.id).note
+    setNoteDraft(p.id, { note: existing.trim() ? existing : contactLogPrefix(kind) })
   }
 
   const updateClientPhone = (id, phone) => {
@@ -710,6 +720,10 @@ export default function Admin({ staffUser }) {
   }
 
   // ===== FIND MATCHES (reuses existing matching.js — koi naya algorithm nahi) =====
+  // Candidate limit matched to Dashboard's client-side fallback path (500 —
+  // see MATCH_CANDIDATE_BUCKET_SIZE/limit(500) in Dashboard.js) so admin never
+  // sees fewer candidates for a client than that client would see themselves
+  // (Aryan's audit, 2026-10-05, gap #5).
   const findMatchesForProfile = async (profile) => {
     setMatchesFor(profile)
     setView('findMatches')
@@ -720,7 +734,7 @@ export default function Admin({ staffUser }) {
       .select('*')
       .neq('id', profile.id)
       .eq('gender', oppositeGender)
-      .limit(150)
+      .limit(500)
 
     if (error) {
       showToast('Could not load candidates: ' + error.message)
@@ -1086,6 +1100,11 @@ export default function Admin({ staffUser }) {
                       {p.verification_status === 'verified' && p.profile_status !== 'active' && <div className="badge" style={{ fontSize: 12, background: '#f0fdf4', color: '#16a34a' }} title="Selfie/ID verified by staff">✓ Verified</div>}
                       {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 12, background: '#eff6ff', color: '#2563eb' }} title="Member sent a selfie — needs comparing to their photo">Selfie received</div>}
                       {SHOW_PREMIUM_TOGGLE && p.is_premium && <div className="badge" style={{ fontSize: 12, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }} title="Marked Premium"><Crown size={10} />Premium</div>}
+                      {/* Note draft keyed per-profile now (Aryan's audit, 2026-10-05) so it
+                          survives switching to another client — this badge just surfaces
+                          that an unsaved draft is still sitting here, waiting to be finished. */}
+                      {selected?.id !== p.id && (getNoteDraft(p.id).note.trim() || getNoteDraft(p.id).outcome) &&
+                        <div className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#c2410c' }} title="You have an unsaved note draft for this profile">✎ Draft note</div>}
                     </div>
                     <div style={{ fontSize: 12, color: '#8e8e8e', fontFamily: 'monospace' }}>{p.profile_code}</div>
                   </div>
@@ -1269,17 +1288,17 @@ export default function Admin({ staffUser }) {
                           <button key={key} type="button"
                             className="btn btn-outline btn-sm"
                             style={{ padding: '6px 12px', fontSize: 13,
-                              ...((selected?.id === p.id && newNoteOutcome === key) ? { background: CALL_OUTCOME_COLORS[key].bg, color: CALL_OUTCOME_COLORS[key].fg, borderColor: CALL_OUTCOME_COLORS[key].fg } : {}) }}
-                            onClick={() => { if (selected?.id !== p.id) setSelected(p); setNewNoteOutcome(prev => (selected?.id === p.id && prev === key) ? '' : key) }}>
+                              ...(getNoteDraft(p.id).outcome === key ? { background: CALL_OUTCOME_COLORS[key].bg, color: CALL_OUTCOME_COLORS[key].fg, borderColor: CALL_OUTCOME_COLORS[key].fg } : {}) }}
+                            onClick={() => setNoteDraft(p.id, { outcome: getNoteDraft(p.id).outcome === key ? '' : key })}>
                             {label}
                           </button>
                         ))}
                       </div>
                       <div className="admin-tight-controls" style={{ marginTop: 10 }}>
-                        <input className="form-input" placeholder="Add a note (call log, decision, etc.)" value={selected?.id === p.id ? newNote : ''}
-                          onChange={e => setNewNote(e.target.value)} style={{ flex: '1 1 200px', fontSize: 12 }} />
-                        <input className="form-input" type="date" value={selected?.id === p.id ? newNoteFollowUp : ''}
-                          onChange={e => setNewNoteFollowUp(e.target.value)} style={{ fontSize: 12, width: 140 }} />
+                        <input className="form-input" placeholder="Add a note (call log, decision, etc.)" value={getNoteDraft(p.id).note}
+                          onChange={e => setNoteDraft(p.id, { note: e.target.value })} style={{ flex: '1 1 200px', fontSize: 12 }} />
+                        <input className="form-input" type="date" value={getNoteDraft(p.id).followUp}
+                          onChange={e => setNoteDraft(p.id, { followUp: e.target.value })} style={{ fontSize: 12, width: 140 }} />
                         <button className="btn btn-outline btn-sm" onClick={() => addNote(p.id)}>+ Add</button>
                       </div>
                     </div>
@@ -1420,7 +1439,7 @@ export default function Admin({ staffUser }) {
       <div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500, marginBottom: 20 }}>Queues</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
-          <AdminNavCard icon={ListChecks} label="My Queue" onClick={()=>setView('myQueue')} />
+          <AdminNavCard icon={ListChecks} label="My Queue" badge={stats.overdueFollowUps} onClick={()=>setView('myQueue')} />
           <AdminNavCard icon={ShieldAlert} label="Verification" badge={stats.needsVerification} onClick={()=>setView('verificationQueue')} />
           <AdminNavCard icon={Flag} label="Reports" badge={stats.openReports} onClick={()=>setView('reportsQueue')} />
           <AdminNavCard icon={Copy} label="Duplicate Leads" onClick={()=>setView('duplicateLeads')} />
@@ -2871,16 +2890,28 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination })
               </div>
             )} />
           <Section icon={Clock} title="Follow-ups due" items={overdueFollowUps} empty="Nothing due."
-            renderItem={n => (
-              <div key={n.id} className="list-row clickable" onClick={()=>n.profiles && onOpenProfile(n.profiles)}>
+            renderItem={n => {
+              // Overdue = before today, not just "due" (today counts as on-time
+              // still) — a distinct red flag so a missed one doesn't blend into
+              // today's to-dos (Aryan's audit, 2026-10-05, gap #4).
+              const isOverdue = new Date(n.follow_up_at) < new Date(new Date().setHours(0,0,0,0))
+              return (
+              <div key={n.id} className="list-row clickable" onClick={()=>n.profiles && onOpenProfile(n.profiles)}
+                style={isOverdue ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-                  <div style={{fontSize:13,fontWeight:600}}>{n.profiles?.full_name || 'Profile'}</div>
+                  <div style={{fontSize:13,fontWeight:600,display:'flex',alignItems:'center',gap:6}}>
+                    {n.profiles?.full_name || 'Profile'}
+                    {isOverdue && <span className="badge" style={{fontSize:11,background:'#dc2626',color:'#fff'}}>Overdue</span>}
+                  </div>
                   <ContactButtons phone={n.profiles?.client_phone} logProfile={n.profiles} />
                 </div>
                 <div style={{fontSize:12,color:'#555',marginTop:2}}>{n.note}</div>
-                <div style={{fontSize:12,color:'#bbb',marginTop:4}}>Due {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</div>
+                <div style={{fontSize:12,color: isOverdue ? '#dc2626' : '#bbb',marginTop:4,fontWeight:isOverdue?600:400}}>
+                  {isOverdue ? 'Overdue since' : 'Due'} {new Date(n.follow_up_at).toLocaleDateString('en-IN')}
+                </div>
               </div>
-            )} />
+              )
+            }} />
           <Section icon={ListChecks} title="Your pending profiles (to-do)" items={assignedPending} empty="No pending profiles assigned to you."
             hint="Only your assigned profiles still pending approval (up to 20). For everything assigned to you, use Profiles → Filters → Assigned to me."
             renderItem={p => (
