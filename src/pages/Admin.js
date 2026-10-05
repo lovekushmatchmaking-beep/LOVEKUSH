@@ -20,6 +20,7 @@ import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/sha
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest } from '../utils/shareLinks'
 import { WhatsAppReminderButton } from '../components/WhatsAppReminder'
+import NotificationBell from '../components/NotificationBell'
 import { EVENT_LABELS, fillTemplate, logNotification } from '../utils/notifications'
 import { useToast } from '../components/ui'
 
@@ -778,6 +779,14 @@ export default function Admin({ staffUser }) {
   const effectiveSection = view === 'list' ? section : (sectionForView[view] || section)
   const switchSection = (s) => { if (view !== 'list') navigate(-1); setSectionOnly(s) }
 
+  // Tapping a notification in the bell dropdown jumps straight to the
+  // queue it's about.
+  const handleNotifNavigate = (n) => {
+    if (n.type === 'selfie_submitted') goToSectionView('queues', 'verificationQueue')
+    else if (n.type === 'report_filed') goToSectionView('queues', 'reportsQueue')
+    else if (n.type === 'share_link_interest') goToSectionView('tools', 'shareLinks')
+  }
+
   return (
     <div className="admin-shell">
       <ToastView />
@@ -794,6 +803,9 @@ export default function Admin({ staffUser }) {
             {!!it.badge && <span className="chip chip-primary" style={{ marginLeft: 'auto' }}>{it.badge}</span>}
           </button>
         ))}
+        <div style={{ padding: '0 14px 10px' }}>
+          <NotificationBell userId={staffUser.user_id} onNavigate={handleNotifNavigate} align="left" />
+        </div>
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: 12, color: 'var(--gray3)', padding: '8px 14px' }}>
           {staffUser.role === 'admin' ? 'Administrator' : 'Relationship Manager'}
@@ -808,7 +820,10 @@ export default function Admin({ staffUser }) {
         {/* Mobile top bar */}
         <nav className="navbar admin-topbar">
           <span className="gradient-text" style={{ fontFamily:'var(--font-display)', fontSize: 15, fontWeight:500, letterSpacing:'0.35em' }}>ADMIN</span>
-          <span className="chip chip-muted" style={{ textTransform: 'none' }}>{staffUser.role === 'admin' ? 'Admin' : 'RM'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <NotificationBell userId={staffUser.user_id} onNavigate={handleNotifNavigate} />
+            <span className="chip chip-muted" style={{ textTransform: 'none' }}>{staffUser.role === 'admin' ? 'Admin' : 'RM'}</span>
+          </div>
         </nav>
 
         <div className="admin-page">

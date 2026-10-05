@@ -6,22 +6,36 @@ import {
 import SignedImage from './SignedImage'
 import { SUPPORT_EMAIL } from './ui'
 import { BrandLockup } from './BrandLogo'
+import NotificationBell from './NotificationBell'
 
-// Top bar — brand left, Notifications (bell) + hamburger right.
-export function TopBar({ onBell, bellDot, onMenu }) {
+// Top bar — brand left, Notifications (bell) + hamburger right. The bell
+// now opens the real notification center (profile approved/blocked,
+// selfie requested, photo requests, coordination/meeting, etc. — see
+// NotificationBell); `bellDot` still covers the one thing that isn't in
+// that table (unseen Activity-tab likes/interests, Dashboard.js's own
+// localStorage-based "seen" tracking) and is folded into the same dot.
+export function TopBar({ userId, onNotifNavigate, bellDot, onMenu }) {
   return (
     <nav className="navbar">
       <BrandLockup size={28} />
       <div className="nav-right">
-        <button className="icon-btn" onClick={onBell} aria-label="Notifications">
-          <Bell size={22} />
-          {bellDot && <span className="nav-dot" style={{ top: 8, right: 9 }} />}
-        </button>
+        <NotificationBellWithExtraDot userId={userId} onNavigate={onNotifNavigate} extraDot={bellDot} />
         <button className="icon-btn" onClick={onMenu} aria-label="Menu">
           <Menu size={22} />
         </button>
       </div>
     </nav>
+  )
+}
+
+// Thin wrapper so TopBar can still surface the pre-existing "unseen
+// interest" dot without NotificationBell needing to know about it.
+function NotificationBellWithExtraDot({ userId, onNavigate, extraDot }) {
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <NotificationBell userId={userId} onNavigate={onNavigate} />
+      {extraDot && <span className="nav-dot" style={{ top: 8, right: 9, background: 'var(--gold, #b45309)' }} />}
+    </span>
   )
 }
 

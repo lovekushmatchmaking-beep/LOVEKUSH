@@ -44,6 +44,19 @@ const DASHBOARD_TABS = ['home', 'matches', 'matchsearch', 'activity', 'requests'
 
 const SIBLING_COUNT_OPTIONS = Array.from({length:11}, (_,i)=>i) // 0-10
 
+// Tapping a notification in the new bell dropdown jumps straight to the
+// tab it's about, instead of just marking it read and sitting there.
+const NOTIF_TYPE_TO_TAB = {
+  profile_approved: 'home',
+  profile_blocked: 'home',
+  selfie_requested: 'home',
+  photo_request_received: 'requests',
+  photo_request_approved: 'requests',
+  coordination_request_received: 'requests',
+  meeting_scheduled: 'requests',
+  caste_suggestion_reviewed: 'home',
+}
+
 // Single-choice fields render as a native <select> dropdown — keeps the
 // screen compact instead of spreading every option out as chips. Multi-
 // select fields (MultiSelectChips/CheckboxDropdown) stay as checklists.
@@ -401,7 +414,8 @@ export default function Dashboard({ user }) {
 
   return (
     <div style={{minHeight:'100vh',background:'var(--bg)',paddingBottom:96}}>
-      <TopBar onBell={()=>setActiveTab('activity')} bellDot={activeTab!=='activity' && receivedActions.some(r => new Date(r.updated_at || r.created_at).getTime() > activitySeenAt)}
+      <TopBar userId={user.id} onNotifNavigate={(n)=>setActiveTab(NOTIF_TYPE_TO_TAB[n.type] || 'home')}
+        bellDot={activeTab!=='activity' && receivedActions.some(r => new Date(r.updated_at || r.created_at).getTime() > activitySeenAt)}
         onMenu={()=>setDrawerOpen(true)} />
       <SideDrawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} profile={profile}
         avatarPath={primaryPhoto?.storage_path} onNavigate={setActiveTab} onLogout={logout} />
