@@ -55,7 +55,7 @@ export default function AccountSettings({ profile, user, onProfileUpdate, onBack
       )}
 
       {view === 'password' && (
-        <ChangePasswordView showToast={showToast} />
+        <ChangePasswordView showToast={showToast} userEmail={user?.email} />
       )}
 
       {view === 'hidedelete' && (
@@ -112,18 +112,31 @@ function PrivacySettingsView({ profile, onSave, showToast }) {
   )
 }
 
-function ChangePasswordView({ showToast }) {
+function ChangePasswordView({ showToast, userEmail }) {
+  const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Aryan ka audit (gap 2): pehle current password re-enter kiye bina seedha
+  // naya password set ho jaata tha. Ab Supabase ka apna re-login current
+  // password verify karta hai (signInWithPassword), tabhi updateUser chalta
+  // hai — koi nayi table/column nahi chahiye.
   const handleSave = async () => {
+    if (!currentPassword) { showToast('Enter your current password'); return }
     if (password.length < 6) { showToast('Password must be at least 6 characters'); return }
     if (password !== confirm) { showToast('Passwords do not match'); return }
     setSaving(true)
+    const { error: verifyError } = await supabase.auth.signInWithPassword({ email: userEmail, password: currentPassword })
+    if (verifyError) {
+      setSaving(false)
+      showToast('Current password is incorrect')
+      return
+    }
     const { error } = await supabase.auth.updateUser({ password })
     setSaving(false)
     if (error) { showToast('Could not change password: ' + error.message); return }
+    setCurrentPassword('')
     setPassword('')
     setConfirm('')
     showToast('Password changed successfully!')
@@ -132,6 +145,10 @@ function ChangePasswordView({ showToast }) {
   return (
     <div>
       <div className="card" style={{marginBottom:16}}>
+        <div className="form-group">
+          <FormLabel>Current Password</FormLabel>
+          <input className="form-input" type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)} placeholder="Enter current password" />
+        </div>
         <div className="form-group">
           <FormLabel>New Password</FormLabel>
           <input className="form-input" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters" />
@@ -183,23 +200,16 @@ function HideDeleteView({ profile, user, onProfileUpdate, onDeleted, showToast }
       const paths = (photoRows || []).map(p => p.storage_path).filter(Boolean)
       if (paths.length > 0) await supabase.storage.from('lovekush-photos').remove(paths)
 
-      await supabase.from('photos').delete().eq('profile_id', profile.id)
-      await supabase.from('match_actions').delete().eq('actor_profile_id', profile.id)
-      await supabase.from('match_actions').delete().eq('target_profile_id', profile.id)
-      await supabase.from('introductions').delete().eq('from_profile', profile.id)
-      await supabase.from('introductions').delete().eq('to_profile', profile.id)
-      // profile_requests, profile_views, profile_reports, profile_notes,
-      // profile_id_metadata, profile_blocks, share_links, caste_suggestions
-      // aur subscriptions sab ON DELETE CASCADE hain (20261003 migration),
-      // isliye profile delete hote hi apne aap saaf ho jaate hain.
-      const { error: delErr } = await supabase.from('profiles').delete().eq('id', profile.id)
-      if (delErr) throw delErr
+      // Aryan ka audit (gap #8): delete pehle sirf profiles row delete
+      // karta tha (jo FK constraint se kabhi fail bhi ho jaata tha — ab
+      // saare profiles.id FKs CASCADE hain, migration 20261005), aur login
+      // credentials (auth.users) kabhi delete nahi hote the — client ke
+      // paas service-role key nahi hota. Ab "delete-account" edge function
+      // (service-role) auth.users delete karta hai, jo profiles row +
+      // uske saath cascade hone wala sab kuch khud saaf kar deta hai.
+      const { error: fnError } = await supabase.functions.invoke('delete-account')
+      if (fnError) throw fnError
 
-      // NOTE: isse sirf profile ka data delete hota hai — Supabase Auth
-      // account (login email/password) client se delete nahi ho sakta,
-      // usko admin.deleteUser() chahiye jo service-role key maangta hai
-      // (ek server/edge function ke bina abhi possible nahi). User isi
-      // email se dobara naya profile bana sakta hai.
       await supabase.auth.signOut()
       onDeleted()
     } catch (err) {
