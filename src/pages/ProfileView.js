@@ -32,6 +32,21 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
   const isClickScrolling = useRef(false)
   const touchStartX = useRef(null)
 
+  // Employer/College — profiles_public_view ne ab yeh columns bhejna band
+  // kar diya hai (Aryan ka privacy audit: pehle sirf CSS blur tha, DevTools
+  // se asli value dikh jaati thi). Asli value (ya sirf "field hai ya nahi"
+  // flag, jab premium nahi hai) ek SECURITY DEFINER RPC se aati hai.
+  const [careerPrivacy, setCareerPrivacy] = useState(null)
+  useEffect(() => {
+    let active = true
+    setCareerPrivacy(null)
+    if (!m?.id) return
+    supabase.rpc('get_career_privacy_fields', { p_profile_id: m.id }).then(({ data }) => {
+      if (active && data && data[0]) setCareerPrivacy(data[0])
+    })
+    return () => { active = false }
+  }, [m?.id])
+
   // Profile Visits — ek baar record karte hain jab yeh profile khula
   // (Activity tab ke "Profile Visits" stat ke liye). Fire-and-forget,
   // rendering ko block nahi karta. unique(profile_id, viewer_profile_id)
@@ -318,7 +333,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
         <div ref={setSectionRef('Career')} data-tab="Career" style={{scrollMarginTop:TAB_BAR_OFFSET}}>
           <FactCard title="Career" fields={[
-            ['Company', viewerIsPremium ? m.employer : (m.employer ? 'Premium only' : null)],
+            ['Company', careerPrivacy?.employer || (careerPrivacy?.has_employer ? 'Premium only' : null)],
             ['Annual Income', m.annual_income],
           ]} />
         </div>
@@ -326,7 +341,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
         <div ref={setSectionRef('Education')} data-tab="Education" style={{scrollMarginTop:TAB_BAR_OFFSET}}>
           <FactCard title="Education" fields={[
             ['Highest Education', m.education],
-            ['College', viewerIsPremium ? m.college_name : (m.college_name ? 'Premium only' : null)],
+            ['College', careerPrivacy?.college_name || (careerPrivacy?.has_college ? 'Premium only' : null)],
           ]} />
         </div>
 
