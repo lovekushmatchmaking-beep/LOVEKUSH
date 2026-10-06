@@ -1177,75 +1177,36 @@ export default function Admin({ staffUser }) {
                       onSaved={phone => updateClientPhone(p.id, phone)}
                       onAction={kind => startContactLog(p, kind)} />
 
-                    {/* RM assignment — profiles.managed_by_staff_id, already in DB */}
-                    <div className="admin-section-header"><UserCheck size={13} />RM Assignment</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 12 }}>
-                      <UserCheck size={14} color="#8e8e8e" />
-                      {p.managed_by_staff_id ? (
-                        <>
-                          <span style={{ color: '#8e8e8e' }}>
-                            {p.managed_by_staff_id === staffUser.user_id ? 'Assigned to you' : 'Assigned to another staff member'}
-                          </span>
-                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13 }}
-                            onClick={e => { e.stopPropagation(); unassign(p.id) }}>Unassign</button>
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ color: '#8e8e8e' }}>Unassigned</span>
-                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13 }}
-                            onClick={e => { e.stopPropagation(); assignToMe(p.id) }}>Assign to me</button>
-                        </>
+                    {/* Verification — compact: just icon + inline action buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14, fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                      {p.verification_status === 'verified'
+                        ? <ShieldCheck size={14} color="#16a34a" title="Verified" />
+                        : <ShieldAlert size={14} color="#2563eb" title={VERIFICATION_LABELS[p.verification_status] || 'Not verified'} />}
+                      <span style={{ color: '#8e8e8e' }}>
+                        {p.verification_status === 'verified' ? 'Verified' : (VERIFICATION_LABELS[p.verification_status] || 'Not verified')}
+                      </span>
+                      {p.verification_status !== 'verified' && !['selfie_requested', 'selfie_submitted'].includes(p.verification_status) && !p.is_admin_managed && (
+                        <button className="btn btn-outline btn-sm" style={{ padding: '4px 10px', fontSize: 12 }}
+                          onClick={() => setVerificationStatus(p.id, 'selfie_requested')}><Camera size={12} /></button>
+                      )}
+                      {p.verification_status !== 'verified' && (
+                        <button className="btn btn-outline btn-sm" style={{ padding: '4px 10px', fontSize: 12, color: '#16a34a', borderColor: '#16a34a' }}
+                          onClick={() => setVerificationStatus(p.id, 'verified')}><ShieldCheck size={12} /></button>
+                      )}
+                      {(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) && (
+                        <button className="btn btn-outline btn-sm" style={{ padding: '4px 10px', fontSize: 12, color: '#dc2626', borderColor: '#dc2626' }}
+                          onClick={() => setVerificationStatus(p.id, 'rejected')}><X size={12} /></button>
+                      )}
+                      {p.verification_status === 'selfie_requested' && (
+                        <WhatsAppReminderButton profile={p} eventType="selfie_requested" staffUserId={staffUser.user_id} label="Remind on WhatsApp" />
+                      )}
+                      {p.verification_status === 'verified' && (
+                        <WhatsAppReminderButton profile={p} eventType="profile_approved" staffUserId={staffUser.user_id} label="Notify on WhatsApp" />
                       )}
                     </div>
-
-                    {/* Lead source — profiles.lead_source, business-owner audit (2026-10-04) */}
-                    <div className="admin-section-header"><Tag size={13} />Lead Source</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                      <select className="form-select" value={p.lead_source || ''} style={{ maxWidth: 180, fontSize: 12 }}
-                        onChange={e => updateLeadSource(p.id, e.target.value)}>
-                        <option value="">Not set</option>
-                        {LEAD_SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Verification — selfie request / compare / verify (profiles.verification_status) */}
-                    <div className="admin-section-header"><ShieldAlert size={13} />Verification</div>
-                    <div style={{ marginBottom: 14, fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        {p.verification_status === 'verified'
-                          ? <ShieldCheck size={14} color="#16a34a" />
-                          : <ShieldAlert size={14} color="#2563eb" />}
-                        <span style={{ color: '#8e8e8e' }}>
-                          {VERIFICATION_LABELS[p.verification_status] || 'Not verified'}
-                          {p.id_document_uploaded && p.verification_status !== 'verified' ? ' · ID document uploaded' : ''}
-                          {p.is_admin_managed && p.verification_status !== 'verified' ? ' · created by staff, no selfie needed' : ''}
-                        </span>
-                        {p.verification_status !== 'verified' && !['selfie_requested', 'selfie_submitted'].includes(p.verification_status) && !p.is_admin_managed && (
-                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13 }}
-                            onClick={() => setVerificationStatus(p.id, 'selfie_requested')}><Camera size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Request Selfie</button>
-                        )}
-                        {p.verification_status !== 'verified' && (
-                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13, color: '#16a34a', borderColor: '#16a34a' }}
-                            onClick={() => setVerificationStatus(p.id, 'verified')}><ShieldCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Verify &amp; Make Live</button>
-                        )}
-                        {(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) && (
-                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13, color: '#dc2626', borderColor: '#dc2626' }}
-                            onClick={() => setVerificationStatus(p.id, 'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
-                        )}
-                        {/* No automated WhatsApp/push exists yet (no vendor
-                            chosen — see docs/product/future-whatsapp-plan.md);
-                            this is the one-tap reminder until that's decided. */}
-                        {p.verification_status === 'selfie_requested' && (
-                          <WhatsAppReminderButton profile={p} eventType="selfie_requested" staffUserId={staffUser.user_id} label="Remind on WhatsApp" />
-                        )}
-                        {p.verification_status === 'verified' && (
-                          <WhatsAppReminderButton profile={p} eventType="profile_approved" staffUserId={staffUser.user_id} label="Notify on WhatsApp" />
-                        )}
-                      </div>
-                      {p.selfie_path && p.verification_status !== 'verified' && (
-                        <SelfieCompare selfiePath={p.selfie_path} photoPath={photos[p.id]} />
-                      )}
-                    </div>
+                    {p.selfie_path && p.verification_status !== 'verified' && (
+                      <SelfieCompare selfiePath={p.selfie_path} photoPath={photos[p.id]} />
+                    )}
 
                     {/* Notes / follow-up — naya chhota profile_notes table */}
                     <div className="admin-section-header"><StickyNote size={13} />Notes &amp; Follow-ups</div>
@@ -1328,32 +1289,14 @@ export default function Admin({ staffUser }) {
                         </div>
                       </>
                     )}
-                    <div className="admin-section-header"><ListChecks size={13} />Actions</div>
+                    {/* Quick links — View/Edit/Matches inline with top actions */}
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {p.profile_status !== 'active' && (
-                        <button className="btn btn-black btn-sm" onClick={e => { e.stopPropagation(); updateStatus(p.id, 'active') }}><CheckCircle2 size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve</button>
-                      )}
-                      {p.profile_status !== 'blocked' && (
-                        <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }}
-                          onClick={e => { e.stopPropagation(); updateStatus(p.id, 'blocked') }}><ShieldX size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block</button>
-                      )}
-                      {p.profile_status !== 'pending' && (
-                        <button className="btn btn-outline btn-sm"
-                          onClick={e => { e.stopPropagation(); updateStatus(p.id, 'pending') }}><RotateCcw size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Set Pending</button>
-                      )}
-                      <button className="btn btn-outline btn-sm"
-                        onClick={e => { e.stopPropagation(); setViewingProfile(p); setView('fullProfile') }}><Eye size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />View Full Profile</button>
-                      <button className="btn btn-outline btn-sm"
-                        onClick={e => { e.stopPropagation(); setEditingProfile(p); setView('editProfile') }}><Pencil size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Edit</button>
-                      <button className="btn btn-outline btn-sm"
-                        onClick={e => { e.stopPropagation(); findMatchesForProfile(p) }}><Search size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Find Matches</button>
-                      {SHOW_PREMIUM_TOGGLE && (
-                        <button className="btn btn-outline btn-sm"
-                          style={p.is_premium ? { color: '#b45309', borderColor: '#b45309' } : {}}
-                          onClick={e => { e.stopPropagation(); togglePremium(p.id, p.is_premium) }}>
-                          <><Crown size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />{p.is_premium ? 'Remove Premium' : 'Make Premium'}</>
-                        </button>
-                      )}
+                      <button className="btn btn-outline btn-sm" style={{ padding: '5px 10px', fontSize: 12 }}
+                        onClick={e => { e.stopPropagation(); setViewingProfile(p); setView('fullProfile') }}><Eye size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />View</button>
+                      <button className="btn btn-outline btn-sm" style={{ padding: '5px 10px', fontSize: 12 }}
+                        onClick={e => { e.stopPropagation(); setEditingProfile(p); setView('editProfile') }}><Pencil size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />Edit</button>
+                      <button className="btn btn-outline btn-sm" style={{ padding: '5px 10px', fontSize: 12 }}
+                        onClick={e => { e.stopPropagation(); findMatchesForProfile(p) }}><Search size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />Matches</button>
                     </div>
                   </div>
                 )}
@@ -1412,7 +1355,7 @@ export default function Admin({ staffUser }) {
             </div>
           ))}
         </div>
-        {statsUpdatedAt && <div style={{ fontSize: 13, color: 'var(--gray3)', marginBottom: 16 }}>Last updated {statsUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>}
+{/* Stats timestamp removed — visual clutter */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <button className="btn btn-outline btn-sm" onClick={() => setShowBreakdown(v => !v)}>
             <BarChart3 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showBreakdown ? 'Hide breakdown' : 'Breakdown (age, height, religion...)'}
@@ -2455,23 +2398,20 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                       onClick={()=>handleUnschedule(r.id)}>Clear</button>
                   )}
                 </div>
-                <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
+                <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap',alignItems:'center'}}>
                   {!r.viewed_at && (
-                    <button className="btn btn-outline btn-sm" onClick={()=>handleMarkViewed(r.id)}>👁 Mark Viewed</button>
+                    <button className="btn btn-outline btn-sm" style={{padding:'4px 10px',fontSize:12}} onClick={()=>handleMarkViewed(r.id)}><Eye size={12} style={{marginRight:3}} />Viewed</button>
                   )}
-                  {/* "Call done" aur "Meeting done" ab alag stages hain — pehle
-                      dono ek hi "contacted" status the, admin ko exact pata
-                      nahi chalta tha kya hua (audit gap #3). */}
                   {!['contacted', 'meeting_done', 'closed'].includes(r.status) && (
-                    <button className="btn btn-outline btn-sm" style={{color:'#b45309',borderColor:'#b45309'}}
-                      onClick={()=>handleAction(r.id, 'contacted')}>📞 Mark Call Done</button>
+                    <button className="btn btn-outline btn-sm" style={{padding:'4px 10px',fontSize:12,color:'#b45309',borderColor:'#b45309'}}
+                      onClick={()=>handleAction(r.id, 'contacted')}><Phone size={12} style={{marginRight:3}} />Called</button>
                   )}
                   {r.status !== 'meeting_done' && r.status !== 'closed' && (
-                    <button className="btn btn-outline btn-sm" style={{color:'#7c3aed',borderColor:'#7c3aed'}}
-                      onClick={()=>handleAction(r.id, 'meeting_done')}>🤝 Mark Meeting Done</button>
+                    <button className="btn btn-outline btn-sm" style={{padding:'4px 10px',fontSize:12,color:'#7c3aed',borderColor:'#7c3aed'}}
+                      onClick={()=>handleAction(r.id, 'meeting_done')}><Handshake size={12} style={{marginRight:3}} />Met</button>
                   )}
                   {r.status !== 'closed' && (
-                    <button className="btn btn-outline btn-sm" onClick={()=>handleAction(r.id, 'closed')}>Close</button>
+                    <button className="btn btn-outline btn-sm" style={{padding:'4px 10px',fontSize:12}} onClick={()=>handleAction(r.id, 'closed')}>Close</button>
                   )}
                 </div>
                 {r.viewed_at && <div style={{fontSize:12,color:'#bbb',marginTop:6}}>Viewed {new Date(r.viewed_at).toLocaleString('en-IN')}</div>}
