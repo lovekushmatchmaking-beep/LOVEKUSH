@@ -5,7 +5,7 @@ import {
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, Tag, TrendingUp, Trash2,
-  ThumbsUp, MoreVertical,
+  ThumbsUp, MoreVertical, MapPin,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -2182,6 +2182,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
   const [hasMore, setHasMore] = useState(false)
   const [pendingCount, setPendingCount] = useState(0) // badge ke liye — loaded rows se independent, poore table ka sahi count
   const [scheduleDraft, setScheduleDraft] = useState({}) // request id -> datetime-local string being edited
+  const [locationDraft, setLocationDraft] = useState({}) // request id -> meeting location text being edited (audit gap #6)
   // Pending (not yet accepted/declined by the receiver) requests were never
   // shown here before — admin had no visibility until both members acted.
   // Now included by default so admin can see/coordinate proactively.
@@ -2273,13 +2274,36 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
 
   const handleAction = async (id, status) => {
     try {
-      const { error } = await supabase.from('introductions').update({ status }).eq('id', id)
+      // Meeting closes → a 48hr decision window opens (audit gap #5,
+      // 2026-10-06): no field or reminder existed for "haan/na batana hai
+      // itne ghante mein". Cleared again once a decision is actually
+      // recorded (handleSetDecision below).
+      const patch = status === 'meeting_done'
+        ? { status, decision_deadline: new Date(Date.now() + 48*60*60*1000).toISOString() }
+        : { status }
+      const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
       // Coordination status change kahin audit log nahi likhta tha — Aryan
       // ka audit gap #7. entity_id = introduction id.
       await writeAuditLog(staffUser, 'coordination_status_change', id, { new_status: status })
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r))
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
       refreshPendingCount()
+    } catch (err) {
+      showToast(err.message)
+    }
+  }
+
+  // Clean Interested/Not-interested binary (audit gap #7) — separate from
+  // the existing free-text positive/neutral/negative feedback rating,
+  // which stays as-is for "how did the meeting go". Recording a decision
+  // closes the 24/48hr window.
+  const handleSetDecision = async (id, decision) => {
+    try {
+      const patch = { decision, decision_at: new Date().toISOString(), decision_deadline: null }
+      const { error } = await supabase.from('introductions').update(patch).eq('id', id)
+      if (error) throw error
+      await writeAuditLog(staffUser, 'coordination_decision_recorded', id, { decision })
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
     } catch (err) {
       showToast(err.message)
     }
@@ -2301,7 +2325,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
   // meetings" (My Queue) ko yahin se data milta hai. Reschedule ka purana
   // time overwrite hone se pehle profile_notes mein log hota hai, taaki
   // "pehle kab rakha tha, kyun badla" ki history na gayab ho (audit gap #4).
-  const handleSchedule = async (id, datetimeLocal, prevScheduledAt, fromProfileId) => {
+  const handleSchedule = async (id, datetimeLocal, location, prevScheduledAt, fromProfileId) => {
     if (!datetimeLocal) return
     try {
       const newWhen = new Date(datetimeLocal).toISOString()
@@ -2315,11 +2339,14 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
         }).select('*').single()
         if (noteRow) setNotesByIntroduction(prev => ({ ...prev, [id]: [noteRow, ...(prev[id] || [])] }))
       }
-      const { error } = await supabase.from('introductions').update({ scheduled_at: newWhen }).eq('id', id)
+      // Location field (audit gap #6) — only Date/Time could be scheduled before.
+      const patch = { scheduled_at: newWhen, location: (location || '').trim() || null }
+      const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
-      await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: newWhen, previous: prevScheduledAt || null })
+      await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: newWhen, location: patch.location, previous: prevScheduledAt || null })
       setScheduleDraft(prev => ({ ...prev, [id]: undefined }))
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: newWhen } : r))
+      setLocationDraft(prev => ({ ...prev, [id]: undefined }))
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
     } catch (err) {
       showToast(err.message)
     }
@@ -2430,20 +2457,39 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                       {coordStatusLabel(r.status)}
                     </div>
                     {r.scheduled_at && (
-                      <div style={{fontSize:12,color:'#2563eb',display:'flex',alignItems:'center',gap:4}}>
+                      <div style={{fontSize:12,color:'#2563eb',display:'flex',alignItems:'center',gap:4,textAlign:'right'}}>
                         <CalendarClock size={11} /> {new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                        {r.location && <span>· <MapPin size={11} style={{verticalAlign:'-1px'}} /> {r.location}</span>}
+                      </div>
+                    )}
+                    {/* 24/48hr decision window (audit gap #5) — opens when a
+                        meeting is marked Met, clears once a decision is recorded. */}
+                    {r.decision_deadline && !r.decision && (
+                      <div style={{fontSize:12,fontWeight:600,color: new Date(r.decision_deadline) < new Date() ? '#dc2626' : '#b45309'}}>
+                        {new Date(r.decision_deadline) < new Date() ? 'Decision overdue since ' : 'Decision due by '}
+                        {new Date(r.decision_deadline).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                      </div>
+                    )}
+                    {r.decision && (
+                      <div style={{fontSize:12,fontWeight:600,color: r.decision === 'interested' ? '#16a34a' : '#8e8e8e'}}>
+                        {r.decision === 'interested' ? '👍 Interested' : '👎 Not interested'}
                       </div>
                     )}
                   </div>
                 </div>
-                {/* Schedule a call/meeting time — My Queue ke "Today" section mein dikhta hai */}
+                {/* Schedule a call/meeting — Date/Time + Location (audit gap
+                    #6: only Date/Time could be scheduled before). My Queue
+                    ke "Today" section mein dikhta hai */}
                 <div style={{display:'flex',alignItems:'center',gap:6,marginTop:8,flexWrap:'wrap'}} onClick={e=>e.stopPropagation()}>
                   <CalendarClock size={13} color="#8e8e8e" />
                   <input type="datetime-local" className="form-input" style={{fontSize:12,padding:'7px 12px',width:190}}
                     value={scheduleDraft[r.id] ?? ''}
                     onChange={e=>setScheduleDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
+                  <input type="text" className="form-input" placeholder="Location (optional)" style={{fontSize:12,padding:'7px 12px',width:160}}
+                    value={locationDraft[r.id] ?? r.location ?? ''}
+                    onChange={e=>setLocationDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
                   <button className="btn btn-outline btn-sm" style={{padding:'7px 14px',fontSize:13}}
-                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id], r.scheduled_at, r.from_profile)}>
+                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id], locationDraft[r.id] ?? r.location, r.scheduled_at, r.from_profile)}>
                     {r.scheduled_at ? 'Reschedule' : 'Schedule'}
                   </button>
                   {r.scheduled_at && (
@@ -2451,13 +2497,22 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                       onClick={()=>handleUnschedule(r.id)}>Clear</button>
                   )}
                 </div>
-                <div style={{display:'flex',gap:6,marginTop:8,alignItems:'center'}}>
+                <div style={{display:'flex',gap:6,marginTop:8,alignItems:'center',flexWrap:'wrap'}}>
                   <OverflowMenu items={[
                     { label: 'Mark viewed', icon: Eye, onClick: () => handleMarkViewed(r.id), hidden: !!r.viewed_at },
                     { label: 'Called', icon: Phone, color: '#b45309', onClick: () => handleAction(r.id, 'contacted'), hidden: ['contacted', 'meeting_done', 'closed'].includes(r.status) },
                     { label: 'Met', icon: Handshake, color: '#7c3aed', onClick: () => handleAction(r.id, 'meeting_done'), hidden: r.status === 'meeting_done' || r.status === 'closed' },
                     { label: 'Close', icon: X, onClick: () => handleAction(r.id, 'closed'), hidden: r.status === 'closed' },
                   ]} />
+                  {/* Clean Interested/Not-interested decision (audit gap #7)
+                      — kept separate from the free-text feedback below. */}
+                  {['meeting_done', 'closed'].includes(r.status) && !r.decision && (
+                    <>
+                      <button className="btn btn-outline btn-sm" style={{color:'#16a34a',borderColor:'#16a34a'}}
+                        onClick={()=>handleSetDecision(r.id,'interested')}>👍 Interested</button>
+                      <button className="btn btn-outline btn-sm" onClick={()=>handleSetDecision(r.id,'not_interested')}>👎 Not interested</button>
+                    </>
+                  )}
                 </div>
                 {r.viewed_at && <div style={{fontSize:12,color:'#bbb',marginTop:6}}>Viewed {new Date(r.viewed_at).toLocaleString('en-IN')}</div>}
 
@@ -2807,6 +2862,9 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   // hasn't acted on yet — audit gap, 2026-10-05: this signal didn't exist
   // before, and there was no way to tell which client a link was even for.
   const [shareInterest, setShareInterest] = useState([])
+  // 24/48hr post-meeting decision window (audit gap #5, 2026-10-06) —
+  // same "overdue reminder" idea as profile_notes.follow_up_at above.
+  const [decisionsDue, setDecisionsDue] = useState([])
   // Admin-only: how much pending work each staff member is carrying, so a
   // bulk burst of new profiles/requests can be spread out instead of
   // landing on whoever happens to click first (scale audit #8).
@@ -2819,7 +2877,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     const nowIso = new Date().toISOString()
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
     const weekFromNow = new Date(Date.now() + 7*24*60*60*1000).toISOString()
-    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes] = await Promise.all([
+    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes, decisionsRes] = await Promise.all([
       supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code, client_phone)').lte('follow_up_at', nowIso).order('follow_up_at', { ascending: true }).limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, profile_status, client_phone').eq('managed_by_staff_id', staffUser.user_id).eq('profile_status', 'pending').limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, created_at, client_phone').eq('profile_status', 'pending').gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(20),
@@ -2832,6 +2890,8 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       supabase.from('introductions').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
       // Share-link clients who tapped "👍 Interested" — audit gap, 2026-10-05.
       supabase.from('share_links').select('*').not('interested_at', 'is', null).is('interest_acknowledged_at', null).order('interested_at', { ascending: false }).limit(20),
+      // 24/48hr decision window due/overdue — audit gap #5, 2026-10-06.
+      supabase.from('introductions').select('*').lte('decision_deadline', new Date(Date.now() + 48*60*60*1000).toISOString()).is('decision', null).not('decision_deadline', 'is', null).order('decision_deadline', { ascending: true }).limit(20),
     ])
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
@@ -2841,7 +2901,8 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     const meetings = meetingsRes.data || []
     const pendingReqs = pendingCoordRes.data || []
     const shareInterestRows = shareInterestRes.data || []
-    const ids = [...new Set([...meetings, ...pendingReqs].flatMap(m => [m.from_profile, m.to_profile]).concat(shareInterestRows.flatMap(s => [s.profile_id, s.client_profile_id])).filter(Boolean))]
+    const decisions = decisionsRes.data || []
+    const ids = [...new Set([...meetings, ...pendingReqs, ...decisions].flatMap(m => [m.from_profile, m.to_profile]).concat(shareInterestRows.flatMap(s => [s.profile_id, s.client_profile_id])).filter(Boolean))]
     let profilesById = {}
     if (ids.length > 0) {
       const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
@@ -2850,6 +2911,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     setUpcomingMeetings(meetings.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setPendingCoordination(pendingReqs.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setShareInterest(shareInterestRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id], clientProfile: s.client_profile_id ? profilesById[s.client_profile_id] : null })))
+    setDecisionsDue(decisions.map(d => ({ ...d, fromProfile: profilesById[d.from_profile], toProfile: profilesById[d.to_profile] })))
 
     // Team workload — admin-only (list_staff_with_email RPC is admin-gated).
     // Small number of staff, so one count query per staff member is fine
@@ -2874,6 +2936,18 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     try {
       await acknowledgeShareLinkInterest(linkId)
       setShareInterest(prev => prev.filter(s => s.id !== linkId))
+    } catch (err) {
+      console.error(err.message)
+    }
+  }
+
+  // Clean Interested/Not-interested decision (audit gap #7), same action
+  // as CoordinationRequestsView's handleSetDecision.
+  const handleRecordDecision = async (id, decision) => {
+    try {
+      const { error } = await supabase.from('introductions').update({ decision, decision_at: new Date().toISOString(), decision_deadline: null }).eq('id', id)
+      if (error) throw error
+      setDecisionsDue(prev => prev.filter(d => d.id !== id))
     } catch (err) {
       console.error(err.message)
     }
@@ -2940,6 +3014,32 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                 </div>
               </div>
             )} />
+          <Section icon={CalendarClock} title="Decision window due/overdue" items={decisionsDue}
+            empty="Nothing waiting on a 24/48hr decision right now."
+            renderItem={d => {
+              const overdue = new Date(d.decision_deadline) < new Date()
+              return (
+                <div key={d.id} className="list-row" style={overdue ? {borderColor:'#dc2626',background:'#fef2f2'} : {}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                    <div style={{fontSize:13,fontWeight:600}}>
+                      {d.fromProfile?.full_name || 'Unknown'} ↔ {d.toProfile?.full_name || 'Unknown'}
+                    </div>
+                    {onManageCoordination && (
+                      <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
+                        onClick={()=>onManageCoordination(d.id)}>Manage</button>
+                    )}
+                  </div>
+                  <div style={{fontSize:12,color:overdue?'#dc2626':'#b45309',marginTop:2,fontWeight:600}}>
+                    {overdue ? 'Overdue since ' : 'Due by '}{new Date(d.decision_deadline).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                  </div>
+                  <div style={{display:'flex',gap:8,marginTop:8}}>
+                    <button className="btn btn-outline btn-sm" style={{color:'#16a34a',borderColor:'#16a34a'}}
+                      onClick={()=>handleRecordDecision(d.id,'interested')}>👍 Interested</button>
+                    <button className="btn btn-outline btn-sm" onClick={()=>handleRecordDecision(d.id,'not_interested')}>👎 Not interested</button>
+                  </div>
+                </div>
+              )
+            }} />
           <Section icon={Handshake} title="Coordination requests awaiting response" items={pendingCoordination}
             empty="Nothing waiting on a member right now."
             renderItem={r => (
