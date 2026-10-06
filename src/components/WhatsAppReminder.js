@@ -21,10 +21,10 @@ export function WhatsAppReminderButton({ profile, eventType, vars, staffUserId, 
   return (
     <>
       <button type="button" className="btn btn-outline btn-sm"
-        style={{ padding: pad, fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: '#16a34a', borderColor: '#16a34a' }}
-        title={phone ? 'Send a WhatsApp reminder' : 'No phone number saved for this profile'}
+        style={{ padding: '5px 8px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 0, color: '#16a34a', borderColor: '#16a34a' }}
+        title={phone ? (label || 'Send a WhatsApp reminder') : 'No phone number saved for this profile'}
         onClick={(e) => { e.stopPropagation(); setOpen(true) }}>
-        <MessageCircle size={13} /> {label || 'Remind'}
+        <MessageCircle size={13} />
       </button>
       {open && (
         <ReminderSheet profile={profile} eventType={eventType} vars={vars} staffUserId={staffUserId}

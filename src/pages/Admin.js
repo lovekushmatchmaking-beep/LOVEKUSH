@@ -5,7 +5,7 @@ import {
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, Tag, TrendingUp, Trash2,
-  ThumbsUp,
+  ThumbsUp, MoreVertical,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -99,6 +99,42 @@ async function writeAuditLogs(staffUser, action, entityIds, metadata) {
 }
 async function writeAuditLog(staffUser, action, entityId, metadata) {
   return writeAuditLogs(staffUser, action, [entityId], metadata)
+}
+
+// ===== OVERFLOW MENU — three-dot (⋮) menu for condensing action buttons
+function OverflowMenu({ items }) {
+  const [open, setOpen] = useState(false)
+  const ref = React.useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [open])
+  const visible = items.filter(i => !i.hidden)
+  if (visible.length === 0) return null
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button type="button" className="btn btn-outline btn-sm" style={{ padding: '5px 6px', lineHeight: 1 }}
+        onClick={e => { e.stopPropagation(); setOpen(v => !v) }} title="More actions"><MoreVertical size={14} /></button>
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#fff', border: '1px solid #ededed',
+          borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.10)', zIndex: 50, minWidth: 150, overflow: 'hidden' }}
+          onClick={e => e.stopPropagation()}>
+          {visible.map((item, i) => (
+            <button key={i} type="button" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px',
+              fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', color: item.color || '#333', textAlign: 'left' }}
+              onClick={() => { setOpen(false); item.onClick() }}
+              onPointerEnter={e => e.currentTarget.style.background = '#f5f5f5'}
+              onPointerLeave={e => e.currentTarget.style.background = 'none'}>
+              {item.icon && <item.icon size={14} />}
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ===== COORDINATION STATUS — shared between CoordinationRequestsView,
@@ -927,28 +963,17 @@ export default function Admin({ staffUser }) {
             <Plus size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Create Client
           </button>
         </div>
-        {/* SEARCH & FILTER — ek hi combined control: search box, status aur
-            baaki filters (Religion/City/Age/...) sab isi box mein. Status ab
-            alag "tabs" mechanism nahi, balki ek filter field hai (pills isi
-            box ki pehli filter row hain); Filters badge, active-filter chips
-            aur "Clear all" teeno search + status + panel filters ko saath
-            gin te/hatate hain. Query logic bilkul same hai. */}
-        <div style={{ background: '#fafafa', border: '1px solid #ededed', borderRadius: 'var(--radius)', padding: 12, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Search &amp; Filter</div>
-          <button className="btn btn-outline btn-sm" style={{ flex: '0 0 auto', padding: '7px 14px', fontSize: 13 }} onClick={() => runQuery(0)}>
-            {loading ? 'Loading...' : <><RefreshCw size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />Refresh</>}
-          </button>
-        </div>
+        <div style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input
             type="text"
-            placeholder="Search by Profile ID (e.g. LK-FH26-1073), name or phone number..."
+            placeholder="Search name, Profile ID, or phone..."
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             style={{
               flex: 1, minWidth: 0, padding: '10px 14px', borderRadius: 'var(--radius)',
               border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, outline: 'none',
+              background: '#fafafa',
             }}
           />
           <button
@@ -956,12 +981,14 @@ export default function Admin({ staffUser }) {
             onClick={() => setShowFilters(!showFilters)}
             style={{ position: 'relative', flex: '0 0 auto' }}
           >
-            <SlidersHorizontal size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showFilters ? 'Less' : 'More filters'} {activeFilterCount > 0 && `(${activeFilterCount})`}
+            <SlidersHorizontal size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+          </button>
+          <button className="btn btn-outline btn-sm" style={{ flex: '0 0 auto' }} onClick={() => runQuery(0)}>
+            {loading ? '...' : <RefreshCw size={14} />}
           </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: (showFilters || activeFilterChips.length) ? 10 : 0 }}>
-          <span style={{ fontSize: 13, color: '#8e8e8e', flex: '0 0 auto' }}>Status</span>
           <div className="pill-tabs" style={{ flex: '1 1 auto', minWidth: 0 }}>
             {['all', 'pending', 'active', 'blocked'].map(t => (
               <button key={t} className={'pill-tab ' + (activeTab === t ? 'active' : '')} onClick={() => setActiveTab(t)}>
@@ -1036,11 +1063,7 @@ export default function Admin({ staffUser }) {
         )}
 
         </div>
-        {listUpdatedAt && (
-          <div style={{ fontSize: 13, color: 'var(--gray3)', marginTop: -4, marginBottom: 10 }}>
-            Last refreshed {listUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </div>
-        )}
+{/* Last-refreshed timestamp removed — visual clutter */}
 
         {isNarrowed && !loading && (
           <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 10 }}>
@@ -1049,28 +1072,19 @@ export default function Admin({ staffUser }) {
           </div>
         )}
 
-        {profiles.length > 0 && (
+        {/* Selection mode activates on long-press — no explicit Select button */}
+        {selectionMode && profiles.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, fontSize: 12, color: '#8e8e8e', flexWrap: 'wrap' }}>
-            {!selectionMode ? (
-              // Checkbox-free default view — tap a row to expand it like
-              // before; a long-press (or this button, for mouse/desktop use)
-              // turns selection mode on (Aryan's ask, 2026-10-04: checkboxes
-              // were always-on before and "wasted screen space").
-              <button className="btn btn-outline btn-sm" onClick={() => setSelectionMode(true)}>Select</button>
-            ) : (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={profiles.length > 0 && profiles.every(p => selectedIds.has(p.id))} onChange={toggleSelectAll} />
+              Select all ({profiles.length})
+            </label>
+            <button className="btn btn-outline btn-sm" onClick={exitSelectionMode}>Cancel</button>
+            {selectedIds.size > 0 && (
               <>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={profiles.length > 0 && profiles.every(p => selectedIds.has(p.id))} onChange={toggleSelectAll} />
-                  Select all loaded ({profiles.length})
-                </label>
-                <button className="btn btn-outline btn-sm" onClick={exitSelectionMode}>Cancel</button>
-                {selectedIds.size > 0 && (
-                  <>
-                    <span>{selectedIds.size} selected</span>
-                    <button className="btn btn-black btn-sm" disabled={bulkWorking} onClick={() => bulkUpdateStatus('active')}><CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve Selected</button>
-                    <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }} disabled={bulkWorking} onClick={() => bulkUpdateStatus('blocked')}><ShieldX size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block Selected</button>
-                  </>
-                )}
+                <span>{selectedIds.size} selected</span>
+                <button className="btn btn-black btn-sm" disabled={bulkWorking} onClick={() => bulkUpdateStatus('active')}><CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve</button>
+                <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }} disabled={bulkWorking} onClick={() => bulkUpdateStatus('blocked')}><ShieldX size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block</button>
               </>
             )}
           </div>
@@ -1133,22 +1147,7 @@ export default function Admin({ staffUser }) {
                   </div>
                 </div>
 
-                {/* Quick actions right in the row, no expand needed — Aryan's
-                    #1 priority fix: Call/WhatsApp (with text labels now) and,
-                    for a pending profile, Approve, directly here. Reuses
-                    updateStatus (same confirm/audit-log path as the expanded
-                    view's Approve button) — no new logic. */}
-                {selected?.id !== p.id && (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }} onClick={e => e.stopPropagation()}>
-                    <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} />
-                    {p.profile_status !== 'active' && (
-                      <button className="btn btn-black btn-sm" style={{ padding: '7px 14px', fontSize: 12 }}
-                        onClick={() => updateStatus(p.id, 'active')}>
-                        <CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve
-                      </button>
-                    )}
-                  </div>
-                )}
+{/* Call/WhatsApp/Approve moved to expanded view only — collapsed rows stay clean */}
 
                 {selected?.id === p.id && (
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
@@ -1156,29 +1155,18 @@ export default function Admin({ staffUser }) {
                         action row is still at the bottom, but a 50-profile
                         review day shouldn't need a full scroll just to tap
                         Approve/Block (Aryan's audit, gap #10). */}
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }} onClick={e => e.stopPropagation()}>
                       <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} />
-                      {p.profile_status !== 'active' && (
-                        <button className="btn btn-black btn-sm" style={{ padding: '7px 14px', fontSize: 12 }}
-                          onClick={() => updateStatus(p.id, 'active')}><CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve</button>
-                      )}
-                      {p.profile_status !== 'blocked' && (
-                        <button className="btn btn-outline btn-sm" style={{ padding: '7px 14px', fontSize: 12, color: '#dc2626', borderColor: '#dc2626' }}
-                          onClick={() => updateStatus(p.id, 'blocked')}><ShieldX size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block</button>
-                      )}
+                      <OverflowMenu items={[
+                        { label: 'View profile', icon: Eye, onClick: () => { setViewingProfile(p); setView('fullProfile') } },
+                        { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
+                        { label: 'Find matches', icon: Search, onClick: () => findMatchesForProfile(p) },
+                        { label: 'Approve', icon: CheckCircle2, onClick: () => updateStatus(p.id, 'active'), hidden: p.profile_status === 'active' },
+                        { label: 'Block', icon: ShieldX, color: '#dc2626', onClick: () => updateStatus(p.id, 'blocked'), hidden: p.profile_status === 'blocked' },
+                      ]} />
                     </div>
 
-                    {/* Legend — what each badge color above means, so it
-                        doesn't need to be memorized fresh every day
-                        (Aryan's audit, gap #2). */}
-                    <div className="admin-legend">
-                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#16a34a' }} />Active / Verified</span>
-                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#b45309' }} />Pending</span>
-                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#dc2626' }} />Blocked</span>
-                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#2563eb' }} />Selfie received / Coordination</span>
-                      {SHOW_PREMIUM_TOGGLE && <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#b45309' }} />Premium</span>}
-                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#9333ea' }} />Report</span>
-                    </div>
+{/* Status legend removed — badge colors are self-explanatory */}
 
                     <div className="admin-section-header"><UserRound size={13} />Profile Details</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14, fontSize: 13 }}>
@@ -1202,7 +1190,12 @@ export default function Admin({ staffUser }) {
                         </div>
                       ))}
                     </div>
-                    {p.about_me && <div style={{ fontSize: 13, color: '#555', background: '#f9f9f9', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>{p.about_me}</div>}
+                    {p.about_me && (() => {
+                      const raw = p.about_me;
+                      const isPipeData = (raw.match(/\|/g) || []).length > 3;
+                      const display = isPipeData ? raw.split('|').filter(Boolean).slice(0, 4).join(' · ') + (raw.split('|').filter(Boolean).length > 4 ? ' …' : '') : raw;
+                      return <div style={{ fontSize: 13, color: '#555', background: '#f9f9f9', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>{display}</div>;
+                    })()}
 
                     {/* Quick contact — client_phone par seedha Call / WhatsApp */}
                     <div className="admin-section-header"><Phone size={13} />Contact</div>
@@ -1210,75 +1203,36 @@ export default function Admin({ staffUser }) {
                       onSaved={phone => updateClientPhone(p.id, phone)}
                       onAction={kind => startContactLog(p, kind)} />
 
-                    {/* RM assignment — profiles.managed_by_staff_id, already in DB */}
-                    <div className="admin-section-header"><UserCheck size={13} />RM Assignment</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 12 }}>
-                      <UserCheck size={14} color="#8e8e8e" />
-                      {p.managed_by_staff_id ? (
-                        <>
-                          <span style={{ color: '#8e8e8e' }}>
-                            {p.managed_by_staff_id === staffUser.user_id ? 'Assigned to you' : 'Assigned to another staff member'}
-                          </span>
-                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13 }}
-                            onClick={e => { e.stopPropagation(); unassign(p.id) }}>Unassign</button>
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ color: '#8e8e8e' }}>Unassigned</span>
-                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13 }}
-                            onClick={e => { e.stopPropagation(); assignToMe(p.id) }}>Assign to me</button>
-                        </>
+                    {/* Verification — compact: just icon + inline action buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14, fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                      {p.verification_status === 'verified'
+                        ? <ShieldCheck size={14} color="#16a34a" title="Verified" />
+                        : <ShieldAlert size={14} color="#2563eb" title={VERIFICATION_LABELS[p.verification_status] || 'Not verified'} />}
+                      <span style={{ color: '#8e8e8e' }}>
+                        {p.verification_status === 'verified' ? 'Verified' : (VERIFICATION_LABELS[p.verification_status] || 'Not verified')}
+                      </span>
+                      {p.verification_status !== 'verified' && !['selfie_requested', 'selfie_submitted'].includes(p.verification_status) && !p.is_admin_managed && (
+                        <button className="btn btn-outline btn-sm" style={{ padding: '4px 10px', fontSize: 12 }}
+                          onClick={() => setVerificationStatus(p.id, 'selfie_requested')}><Camera size={12} /></button>
+                      )}
+                      {p.verification_status !== 'verified' && (
+                        <button className="btn btn-outline btn-sm" style={{ padding: '4px 10px', fontSize: 12, color: '#16a34a', borderColor: '#16a34a' }}
+                          onClick={() => setVerificationStatus(p.id, 'verified')}><ShieldCheck size={12} /></button>
+                      )}
+                      {(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) && (
+                        <button className="btn btn-outline btn-sm" style={{ padding: '4px 10px', fontSize: 12, color: '#dc2626', borderColor: '#dc2626' }}
+                          onClick={() => setVerificationStatus(p.id, 'rejected')}><X size={12} /></button>
+                      )}
+                      {p.verification_status === 'selfie_requested' && (
+                        <WhatsAppReminderButton profile={p} eventType="selfie_requested" staffUserId={staffUser.user_id} label="Remind on WhatsApp" />
+                      )}
+                      {p.verification_status === 'verified' && (
+                        <WhatsAppReminderButton profile={p} eventType="profile_approved" staffUserId={staffUser.user_id} label="Notify on WhatsApp" />
                       )}
                     </div>
-
-                    {/* Lead source — profiles.lead_source, business-owner audit (2026-10-04) */}
-                    <div className="admin-section-header"><Tag size={13} />Lead Source</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                      <select className="form-select" value={p.lead_source || ''} style={{ maxWidth: 180, fontSize: 12 }}
-                        onChange={e => updateLeadSource(p.id, e.target.value)}>
-                        <option value="">Not set</option>
-                        {LEAD_SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Verification — selfie request / compare / verify (profiles.verification_status) */}
-                    <div className="admin-section-header"><ShieldAlert size={13} />Verification</div>
-                    <div style={{ marginBottom: 14, fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        {p.verification_status === 'verified'
-                          ? <ShieldCheck size={14} color="#16a34a" />
-                          : <ShieldAlert size={14} color="#2563eb" />}
-                        <span style={{ color: '#8e8e8e' }}>
-                          {VERIFICATION_LABELS[p.verification_status] || 'Not verified'}
-                          {p.id_document_uploaded && p.verification_status !== 'verified' ? ' · ID document uploaded' : ''}
-                          {p.is_admin_managed && p.verification_status !== 'verified' ? ' · created by staff, no selfie needed' : ''}
-                        </span>
-                        {p.verification_status !== 'verified' && !['selfie_requested', 'selfie_submitted'].includes(p.verification_status) && !p.is_admin_managed && (
-                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13 }}
-                            onClick={() => setVerificationStatus(p.id, 'selfie_requested')}><Camera size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Request Selfie</button>
-                        )}
-                        {p.verification_status !== 'verified' && (
-                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13, color: '#16a34a', borderColor: '#16a34a' }}
-                            onClick={() => setVerificationStatus(p.id, 'verified')}><ShieldCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Verify &amp; Make Live</button>
-                        )}
-                        {(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) && (
-                          <button className="btn btn-outline btn-sm" style={{ padding: '6px 14px', fontSize: 13, color: '#dc2626', borderColor: '#dc2626' }}
-                            onClick={() => setVerificationStatus(p.id, 'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
-                        )}
-                        {/* No automated WhatsApp/push exists yet (no vendor
-                            chosen — see docs/product/future-whatsapp-plan.md);
-                            this is the one-tap reminder until that's decided. */}
-                        {p.verification_status === 'selfie_requested' && (
-                          <WhatsAppReminderButton profile={p} eventType="selfie_requested" staffUserId={staffUser.user_id} label="Remind on WhatsApp" />
-                        )}
-                        {p.verification_status === 'verified' && (
-                          <WhatsAppReminderButton profile={p} eventType="profile_approved" staffUserId={staffUser.user_id} label="Notify on WhatsApp" />
-                        )}
-                      </div>
-                      {p.selfie_path && p.verification_status !== 'verified' && (
-                        <SelfieCompare selfiePath={p.selfie_path} photoPath={photos[p.id]} />
-                      )}
-                    </div>
+                    {p.selfie_path && p.verification_status !== 'verified' && (
+                      <SelfieCompare selfiePath={p.selfie_path} photoPath={photos[p.id]} />
+                    )}
 
                     {/* Notes / follow-up — naya chhota profile_notes table */}
                     <div className="admin-section-header"><StickyNote size={13} />Notes &amp; Follow-ups</div>
@@ -1296,7 +1250,7 @@ export default function Admin({ staffUser }) {
                               {CALL_OUTCOME_LABELS[n.call_outcome]}
                             </span>
                           )}
-                          <div style={{ display: 'inline' }}>{n.note}</div>
+                          {n.note && n.note !== (CALL_OUTCOME_LABELS[n.call_outcome] || '') && <div style={{ display: 'inline' }}>{n.note}</div>}
                           <div style={{ fontSize: 12, color: '#bbb', marginTop: 4 }}>
                             {new Date(n.created_at).toLocaleString('en-IN')}
                             {n.follow_up_at && <> · Follow up: {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</>}
@@ -1361,33 +1315,7 @@ export default function Admin({ staffUser }) {
                         </div>
                       </>
                     )}
-                    <div className="admin-section-header"><ListChecks size={13} />Actions</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {p.profile_status !== 'active' && (
-                        <button className="btn btn-black btn-sm" onClick={e => { e.stopPropagation(); updateStatus(p.id, 'active') }}><CheckCircle2 size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve</button>
-                      )}
-                      {p.profile_status !== 'blocked' && (
-                        <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }}
-                          onClick={e => { e.stopPropagation(); updateStatus(p.id, 'blocked') }}><ShieldX size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block</button>
-                      )}
-                      {p.profile_status !== 'pending' && (
-                        <button className="btn btn-outline btn-sm"
-                          onClick={e => { e.stopPropagation(); updateStatus(p.id, 'pending') }}><RotateCcw size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Set Pending</button>
-                      )}
-                      <button className="btn btn-outline btn-sm"
-                        onClick={e => { e.stopPropagation(); setViewingProfile(p); setView('fullProfile') }}><Eye size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />View Full Profile</button>
-                      <button className="btn btn-outline btn-sm"
-                        onClick={e => { e.stopPropagation(); setEditingProfile(p); setView('editProfile') }}><Pencil size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Edit</button>
-                      <button className="btn btn-outline btn-sm"
-                        onClick={e => { e.stopPropagation(); findMatchesForProfile(p) }}><Search size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Find Matches</button>
-                      {SHOW_PREMIUM_TOGGLE && (
-                        <button className="btn btn-outline btn-sm"
-                          style={p.is_premium ? { color: '#b45309', borderColor: '#b45309' } : {}}
-                          onClick={e => { e.stopPropagation(); togglePremium(p.id, p.is_premium) }}>
-                          <><Crown size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />{p.is_premium ? 'Remove Premium' : 'Make Premium'}</>
-                        </button>
-                      )}
-                    </div>
+                    {/* View/Edit/Matches now in overflow menu at top */}
                   </div>
                 )}
               </div>
@@ -1407,45 +1335,30 @@ export default function Admin({ staffUser }) {
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Dashboard</div>
-          <button className="btn btn-outline btn-sm" onClick={loadStats} disabled={statsLoading}>
-            <RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />
-            {statsLoading ? 'Refreshing...' : 'Refresh'}
+          <button className="btn btn-outline btn-sm" style={{ padding: '6px 10px' }} onClick={loadStats} disabled={statsLoading} title="Refresh stats">
+            {statsLoading ? '...' : <RefreshCw size={14} />}
           </button>
         </div>
         {/* Stat tiles */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(90px,1fr))', gap: 6, marginBottom: 16 }}>
           {[
-            { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555', Icon: Users },
-            { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#4f46e5', Icon: Users },
-            { label: 'Female', val: stats.female, bg: '#fdf2f8', fg: '#db2777', Icon: Users },
-            { label: 'New (7d)', val: stats.newWeek, sub: `Today ${stats.newToday}`, bg: '#ecfeff', fg: '#0891b2', Icon: UserPlus },
-            { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309', Icon: Clock },
-            { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a', Icon: CheckCircle2 },
-            { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626', Icon: ShieldX },
-            // Verify/Reports tiles ab navigate nahi karte — Queues tab ke
-            // cards aur sidebar badge se hi queue khulti hai (3 jagah same
-            // shortcut tha, 2 kaafi hain). Number yahan sirf context ke
-            // liye dikhta hai.
-            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert },
-            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag },
+            { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555' },
+            { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#4f46e5' },
+            { label: 'Female', val: stats.female, bg: '#fdf2f8', fg: '#db2777' },
+            { label: 'New 7d', val: stats.newWeek, bg: '#ecfeff', fg: '#0891b2' },
+            { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309' },
+            { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a' },
+            { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626' },
+            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb' },
+            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea' },
           ].map(s => (
-            // None of these tiles navigate anywhere (s.onClick is always
-            // undefined here) — they're pure counts. Hover-lift removed:
-            // it was making them look like a shortcut when they aren't,
-            // which is exactly the "same destination, different look"
-            // confusion Aryan's audit flagged (gap #5) — Queues tab's
-            // cards + the sidebar badge are the only real entry points now.
-            <div key={s.label} className="list-row" style={{ background: s.bg, padding: '16px 14px', cursor: 'default' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontFamily:'var(--font-display)', fontSize: 26, fontWeight:600 }}>{s.val}</div>
-                <s.Icon size={18} color={s.fg} style={{ opacity: 0.7 }} />
-              </div>
-              <div style={{ fontSize: 13, color: '#8e8e8e', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 4 }}>{s.label}</div>
-              {s.sub && <div style={{ fontSize: 13, color: s.fg, marginTop: 2 }}>{s.sub}</div>}
+            <div key={s.label} style={{ background: s.bg, borderRadius: 10, padding: '10px 10px', textAlign: 'center', cursor: 'default' }}>
+              <div style={{ fontFamily:'var(--font-display)', fontSize: 20, fontWeight:600, color: s.fg }}>{s.val}</div>
+              <div style={{ fontSize: 11, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
             </div>
           ))}
         </div>
-        {statsUpdatedAt && <div style={{ fontSize: 13, color: 'var(--gray3)', marginBottom: 16 }}>Last updated {statsUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>}
+{/* Stats timestamp removed — visual clutter */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <button className="btn btn-outline btn-sm" onClick={() => setShowBreakdown(v => !v)}>
             <BarChart3 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showBreakdown ? 'Hide breakdown' : 'Breakdown (age, height, religion...)'}
@@ -2488,24 +2401,13 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                       onClick={()=>handleUnschedule(r.id)}>Clear</button>
                   )}
                 </div>
-                <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
-                  {!r.viewed_at && (
-                    <button className="btn btn-outline btn-sm" onClick={()=>handleMarkViewed(r.id)}>👁 Mark Viewed</button>
-                  )}
-                  {/* "Call done" aur "Meeting done" ab alag stages hain — pehle
-                      dono ek hi "contacted" status the, admin ko exact pata
-                      nahi chalta tha kya hua (audit gap #3). */}
-                  {!['contacted', 'meeting_done', 'closed'].includes(r.status) && (
-                    <button className="btn btn-outline btn-sm" style={{color:'#b45309',borderColor:'#b45309'}}
-                      onClick={()=>handleAction(r.id, 'contacted')}>📞 Mark Call Done</button>
-                  )}
-                  {r.status !== 'meeting_done' && r.status !== 'closed' && (
-                    <button className="btn btn-outline btn-sm" style={{color:'#7c3aed',borderColor:'#7c3aed'}}
-                      onClick={()=>handleAction(r.id, 'meeting_done')}>🤝 Mark Meeting Done</button>
-                  )}
-                  {r.status !== 'closed' && (
-                    <button className="btn btn-outline btn-sm" onClick={()=>handleAction(r.id, 'closed')}>Close</button>
-                  )}
+                <div style={{display:'flex',gap:6,marginTop:8,alignItems:'center'}}>
+                  <OverflowMenu items={[
+                    { label: 'Mark viewed', icon: Eye, onClick: () => handleMarkViewed(r.id), hidden: !!r.viewed_at },
+                    { label: 'Called', icon: Phone, color: '#b45309', onClick: () => handleAction(r.id, 'contacted'), hidden: ['contacted', 'meeting_done', 'closed'].includes(r.status) },
+                    { label: 'Met', icon: Handshake, color: '#7c3aed', onClick: () => handleAction(r.id, 'meeting_done'), hidden: r.status === 'meeting_done' || r.status === 'closed' },
+                    { label: 'Close', icon: X, onClick: () => handleAction(r.id, 'closed'), hidden: r.status === 'closed' },
+                  ]} />
                 </div>
                 {r.viewed_at && <div style={{fontSize:12,color:'#bbb',marginTop:6}}>Viewed {new Date(r.viewed_at).toLocaleString('en-IN')}</div>}
 

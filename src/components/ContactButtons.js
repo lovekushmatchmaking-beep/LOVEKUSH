@@ -57,11 +57,11 @@ export function ContactButtons({ phone, onAction, logProfile, introductionId, si
     <span style={{ display: 'inline-flex', gap: 6 }}>
       <a href={tel} onClick={stop('call')} className="btn btn-outline btn-sm" title={'Call ' + phone}
         style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-        <Phone size={14} /> Call
+        <Phone size={14} />
       </a>
       <a href={wa} onClick={stop('whatsapp')} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" title={'WhatsApp ' + phone}
         style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: WA_GREEN, borderColor: WA_GREEN }}>
-        <MessageCircle size={14} /> WhatsApp
+        <MessageCircle size={14} />
       </a>
       {logKind && <QuickCallLog profile={logProfile} kind={logKind} introductionId={introductionId} onClose={() => setLogKind(null)} />}
     </span>
@@ -72,13 +72,13 @@ export function ContactButtons({ phone, onAction, logProfile, introductionId, si
 // logging something that wasn't a call/WhatsApp tap (a meeting outcome, a
 // reschedule reason, anything mid-coordination). Used inside Coordination
 // Requests so the back-and-forth isn't only captured at final Close/Feedback.
-export function AddNoteButton({ profile, introductionId, label = '📝 Add note' }) {
+export function AddNoteButton({ profile, introductionId, label }) {
   const [open, setOpen] = useState(false)
   if (!profile?.id) return null
   return (
     <>
-      <button type="button" className="btn btn-outline btn-sm" style={{ padding: '3px 10px', fontSize: 11 }}
-        onClick={(e) => { e.stopPropagation(); setOpen(true) }}>{label}</button>
+      <button type="button" className="btn btn-outline btn-sm" style={{ padding: '3px 8px', fontSize: 11 }}
+        title="Add note" onClick={(e) => { e.stopPropagation(); setOpen(true) }}><Pencil size={12} /></button>
       {open && <QuickCallLog profile={profile} kind="note" introductionId={introductionId} onClose={() => setOpen(false)} />}
     </>
   )
