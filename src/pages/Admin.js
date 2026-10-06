@@ -1036,28 +1036,19 @@ export default function Admin({ staffUser }) {
           </div>
         )}
 
-        {profiles.length > 0 && (
+        {/* Selection mode activates on long-press — no explicit Select button */}
+        {selectionMode && profiles.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, fontSize: 12, color: '#8e8e8e', flexWrap: 'wrap' }}>
-            {!selectionMode ? (
-              // Checkbox-free default view — tap a row to expand it like
-              // before; a long-press (or this button, for mouse/desktop use)
-              // turns selection mode on (Aryan's ask, 2026-10-04: checkboxes
-              // were always-on before and "wasted screen space").
-              <button className="btn btn-outline btn-sm" onClick={() => setSelectionMode(true)}>Select</button>
-            ) : (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={profiles.length > 0 && profiles.every(p => selectedIds.has(p.id))} onChange={toggleSelectAll} />
+              Select all ({profiles.length})
+            </label>
+            <button className="btn btn-outline btn-sm" onClick={exitSelectionMode}>Cancel</button>
+            {selectedIds.size > 0 && (
               <>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={profiles.length > 0 && profiles.every(p => selectedIds.has(p.id))} onChange={toggleSelectAll} />
-                  Select all loaded ({profiles.length})
-                </label>
-                <button className="btn btn-outline btn-sm" onClick={exitSelectionMode}>Cancel</button>
-                {selectedIds.size > 0 && (
-                  <>
-                    <span>{selectedIds.size} selected</span>
-                    <button className="btn btn-black btn-sm" disabled={bulkWorking} onClick={() => bulkUpdateStatus('active')}><CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve Selected</button>
-                    <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }} disabled={bulkWorking} onClick={() => bulkUpdateStatus('blocked')}><ShieldX size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block Selected</button>
-                  </>
-                )}
+                <span>{selectedIds.size} selected</span>
+                <button className="btn btn-black btn-sm" disabled={bulkWorking} onClick={() => bulkUpdateStatus('active')}><CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve</button>
+                <button className="btn btn-outline btn-sm" style={{ color: '#dc2626', borderColor: '#dc2626' }} disabled={bulkWorking} onClick={() => bulkUpdateStatus('blocked')}><ShieldX size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block</button>
               </>
             )}
           </div>
@@ -1317,41 +1308,26 @@ export default function Admin({ staffUser }) {
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Dashboard</div>
-          <button className="btn btn-outline btn-sm" onClick={loadStats} disabled={statsLoading}>
-            <RefreshCw size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />
-            {statsLoading ? 'Refreshing...' : 'Refresh'}
+          <button className="btn btn-outline btn-sm" style={{ padding: '6px 10px' }} onClick={loadStats} disabled={statsLoading} title="Refresh stats">
+            {statsLoading ? '...' : <RefreshCw size={14} />}
           </button>
         </div>
         {/* Stat tiles */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(90px,1fr))', gap: 6, marginBottom: 16 }}>
           {[
-            { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555', Icon: Users },
-            { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#4f46e5', Icon: Users },
-            { label: 'Female', val: stats.female, bg: '#fdf2f8', fg: '#db2777', Icon: Users },
-            { label: 'New (7d)', val: stats.newWeek, sub: `Today ${stats.newToday}`, bg: '#ecfeff', fg: '#0891b2', Icon: UserPlus },
-            { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309', Icon: Clock },
-            { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a', Icon: CheckCircle2 },
-            { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626', Icon: ShieldX },
-            // Verify/Reports tiles ab navigate nahi karte — Queues tab ke
-            // cards aur sidebar badge se hi queue khulti hai (3 jagah same
-            // shortcut tha, 2 kaafi hain). Number yahan sirf context ke
-            // liye dikhta hai.
-            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb', Icon: ShieldAlert },
-            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea', Icon: Flag },
+            { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555' },
+            { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#4f46e5' },
+            { label: 'Female', val: stats.female, bg: '#fdf2f8', fg: '#db2777' },
+            { label: 'New 7d', val: stats.newWeek, bg: '#ecfeff', fg: '#0891b2' },
+            { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309' },
+            { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a' },
+            { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626' },
+            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb' },
+            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea' },
           ].map(s => (
-            // None of these tiles navigate anywhere (s.onClick is always
-            // undefined here) — they're pure counts. Hover-lift removed:
-            // it was making them look like a shortcut when they aren't,
-            // which is exactly the "same destination, different look"
-            // confusion Aryan's audit flagged (gap #5) — Queues tab's
-            // cards + the sidebar badge are the only real entry points now.
-            <div key={s.label} className="list-row" style={{ background: s.bg, padding: '16px 14px', cursor: 'default' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontFamily:'var(--font-display)', fontSize: 26, fontWeight:600 }}>{s.val}</div>
-                <s.Icon size={18} color={s.fg} style={{ opacity: 0.7 }} />
-              </div>
-              <div style={{ fontSize: 13, color: '#8e8e8e', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 4 }}>{s.label}</div>
-              {s.sub && <div style={{ fontSize: 13, color: s.fg, marginTop: 2 }}>{s.sub}</div>}
+            <div key={s.label} style={{ background: s.bg, borderRadius: 10, padding: '10px 10px', textAlign: 'center', cursor: 'default' }}>
+              <div style={{ fontFamily:'var(--font-display)', fontSize: 20, fontWeight:600, color: s.fg }}>{s.val}</div>
+              <div style={{ fontSize: 11, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
             </div>
           ))}
         </div>
