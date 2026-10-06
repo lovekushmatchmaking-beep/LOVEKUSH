@@ -65,6 +65,20 @@ export async function acknowledgeShareLinkInterest(linkId) {
   if (error) throw new Error('Could not update: ' + error.message)
 }
 
+// Ab tak "Interested" sirf admin ke liye dikhta tha ("Mark as noted") —
+// jiss profile ko dikhaya gaya use kabhi pata nahi chalta tha ki kisi ne
+// usse interest dikhaya hai (Model 2 ka sabse bada gap, audit 2026-10-06).
+// Server-side RPC: client_profile_id maujood ho to ek real Talk/Meet
+// request (introductions row) bana deta hai — Coordination Requests mein
+// seedha dikhega; nahi to seedha us profile ko in-app notification bhej
+// deta hai. Idempotent — dobara call karne par wahi introduction id lautata
+// hai, dobara forward nahi hota.
+export async function forwardShareLinkInterest(linkId) {
+  const { data, error } = await supabase.rpc('forward_share_link_interest', { p_link_id: linkId })
+  if (error) throw new Error(error.message)
+  return data // introduction id, ya null (anonymous client — seedha notify hua)
+}
+
 // Phone par native share sheet kholta hai (WhatsApp ke recent chats sabse
 // upar dikhte hain — wahi jo Paytm/UPI receipt share karte waqt dikhta
 // hai). Jahan share sheet nahi hai (desktop), false return karta hai taaki

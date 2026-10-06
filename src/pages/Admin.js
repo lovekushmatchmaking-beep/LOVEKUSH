@@ -18,7 +18,7 @@ import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, co
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
-import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest } from '../utils/shareLinks'
+import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, forwardShareLinkInterest } from '../utils/shareLinks'
 import { WhatsAppReminderButton } from '../components/WhatsAppReminder'
 import NotificationBell from '../components/NotificationBell'
 import { EVENT_LABELS, fillTemplate, logNotification } from '../utils/notifications'
@@ -905,7 +905,7 @@ export default function Admin({ staffUser }) {
       )}
 
       {view === 'shareLinks' && (
-        <ShareLinksView staffUserId={staffUser.user_id} onBack={()=>setView('list')} />
+        <ShareLinksView staffUserId={staffUser.user_id} onBack={()=>setView('list')} onManageCoordination={goToCoordination} />
       )}
 
       {view === 'casteSuggestions' && (
@@ -1897,7 +1897,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
 }
 
 // ===== SHARE LINKS MANAGEMENT — view kitni baar khula, revoke karo =====
-function ShareLinksView({ staffUserId, onBack }) {
+function ShareLinksView({ staffUserId, onBack, onManageCoordination }) {
   const [links, setLinks] = useState([])
   const [profilesById, setProfilesById] = useState({}) // shown-profile id + client_profile_id -> {full_name, profile_code}
   const [loading, setLoading] = useState(true)
@@ -1947,6 +1947,24 @@ function ShareLinksView({ staffUserId, onBack }) {
     } catch (err) {
       showToast(err.message)
     }
+  }
+
+  // "Yeh profile ne aapko like kiya hai, meeting ke liye interested ho?" —
+  // ab tak sirf admin ko interest pata chalta tha, matched profile ko kabhi
+  // nahi (Model 2 ka sabse bada gap, audit 2026-10-06). client_profile_id
+  // maujood ho to ek Talk/Meet request ban jaati hai (Coordination Requests
+  // mein dikhegi); nahi to profile ko seedha notify kar diya jaata hai.
+  const [forwarding, setForwarding] = useState({})
+  const handleForward = async (linkId) => {
+    setForwarding(prev => ({ ...prev, [linkId]: true }))
+    try {
+      const introId = await forwardShareLinkInterest(linkId)
+      setLinks(prev => prev.map(l => l.id === linkId ? { ...l, forwarded_at: new Date().toISOString(), forwarded_introduction_id: introId } : l))
+      showToast(introId ? 'Forwarded — a meeting request was created.' : 'Profile notified.')
+    } catch (err) {
+      showToast(err.message)
+    }
+    setForwarding(prev => ({ ...prev, [linkId]: false }))
   }
 
   const copyLink = (token) => {
@@ -2002,10 +2020,25 @@ function ShareLinksView({ staffUserId, onBack }) {
                     <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5}}>
                       <ThumbsUp size={12} /> Interested · {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                     </div>
-                    {!l.interest_acknowledged_at && (
-                      <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12}}
-                        onClick={()=>handleAcknowledge(l.id)}>Mark as noted</button>
-                    )}
+                    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                      {!l.interest_acknowledged_at && (
+                        <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12}}
+                          onClick={()=>handleAcknowledge(l.id)}>Mark as noted</button>
+                      )}
+                      {l.forwarded_at ? (
+                        l.forwarded_introduction_id && onManageCoordination ? (
+                          <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12,color:'#16a34a',borderColor:'#16a34a'}}
+                            onClick={()=>onManageCoordination(l.forwarded_introduction_id)}>✓ Forwarded — Manage</button>
+                        ) : (
+                          <span style={{fontSize:12,color:'#16a34a',fontWeight:600}}>✓ Profile notified</span>
+                        )
+                      ) : (
+                        <button className="btn btn-black btn-sm" style={{padding:'5px 10px',fontSize:12}}
+                          disabled={forwarding[l.id]} onClick={()=>handleForward(l.id)}>
+                          {forwarding[l.id] ? 'Forwarding...' : '→ Tell this profile'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
                 <div style={{display:'flex',gap:8,marginTop:10}}>
@@ -2337,10 +2370,11 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                   <div>
                     <div style={{fontSize:14,fontWeight:600}}>
-                      {from ? from.full_name : 'Unknown'} → {to ? to.full_name : 'Unknown'}
+                      {from ? from.full_name : (r.source === 'share_link' ? 'Share-link client' : 'Unknown')} → {to ? to.full_name : 'Unknown'}
                     </div>
                     <div style={{fontSize:12,color:'#8e8e8e',marginTop:2,textTransform:'capitalize'}}>
                       {r.request_type === 'meeting' ? 'Meeting request' : 'Talk request'}
+                      {r.source === 'share_link' && <span style={{marginLeft:6,color:'#16a34a'}}>· forwarded from a shared link</span>}
                     </div>
                     <div style={{fontSize:12,color:'#bbb',marginTop:2}}>
                       {new Date(r.created_at).toLocaleDateString('en-IN')}
