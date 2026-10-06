@@ -927,28 +927,17 @@ export default function Admin({ staffUser }) {
             <Plus size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Create Client
           </button>
         </div>
-        {/* SEARCH & FILTER — ek hi combined control: search box, status aur
-            baaki filters (Religion/City/Age/...) sab isi box mein. Status ab
-            alag "tabs" mechanism nahi, balki ek filter field hai (pills isi
-            box ki pehli filter row hain); Filters badge, active-filter chips
-            aur "Clear all" teeno search + status + panel filters ko saath
-            gin te/hatate hain. Query logic bilkul same hai. */}
-        <div style={{ background: '#fafafa', border: '1px solid #ededed', borderRadius: 'var(--radius)', padding: 12, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Search &amp; Filter</div>
-          <button className="btn btn-outline btn-sm" style={{ flex: '0 0 auto', padding: '7px 14px', fontSize: 13 }} onClick={() => runQuery(0)}>
-            {loading ? 'Loading...' : <><RefreshCw size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />Refresh</>}
-          </button>
-        </div>
+        <div style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input
             type="text"
-            placeholder="Search by Profile ID (e.g. LK-FH26-1073), name or phone number..."
+            placeholder="Search name, Profile ID, or phone..."
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             style={{
               flex: 1, minWidth: 0, padding: '10px 14px', borderRadius: 'var(--radius)',
               border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, outline: 'none',
+              background: '#fafafa',
             }}
           />
           <button
@@ -956,12 +945,14 @@ export default function Admin({ staffUser }) {
             onClick={() => setShowFilters(!showFilters)}
             style={{ position: 'relative', flex: '0 0 auto' }}
           >
-            <SlidersHorizontal size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showFilters ? 'Less' : 'More filters'} {activeFilterCount > 0 && `(${activeFilterCount})`}
+            <SlidersHorizontal size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+          </button>
+          <button className="btn btn-outline btn-sm" style={{ flex: '0 0 auto' }} onClick={() => runQuery(0)}>
+            {loading ? '...' : <RefreshCw size={14} />}
           </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: (showFilters || activeFilterChips.length) ? 10 : 0 }}>
-          <span style={{ fontSize: 13, color: '#8e8e8e', flex: '0 0 auto' }}>Status</span>
           <div className="pill-tabs" style={{ flex: '1 1 auto', minWidth: 0 }}>
             {['all', 'pending', 'active', 'blocked'].map(t => (
               <button key={t} className={'pill-tab ' + (activeTab === t ? 'active' : '')} onClick={() => setActiveTab(t)}>
@@ -1036,11 +1027,7 @@ export default function Admin({ staffUser }) {
         )}
 
         </div>
-        {listUpdatedAt && (
-          <div style={{ fontSize: 13, color: 'var(--gray3)', marginTop: -4, marginBottom: 10 }}>
-            Last refreshed {listUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </div>
-        )}
+{/* Last-refreshed timestamp removed — visual clutter */}
 
         {isNarrowed && !loading && (
           <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 10 }}>
@@ -1133,22 +1120,7 @@ export default function Admin({ staffUser }) {
                   </div>
                 </div>
 
-                {/* Quick actions right in the row, no expand needed — Aryan's
-                    #1 priority fix: Call/WhatsApp (with text labels now) and,
-                    for a pending profile, Approve, directly here. Reuses
-                    updateStatus (same confirm/audit-log path as the expanded
-                    view's Approve button) — no new logic. */}
-                {selected?.id !== p.id && (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }} onClick={e => e.stopPropagation()}>
-                    <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} />
-                    {p.profile_status !== 'active' && (
-                      <button className="btn btn-black btn-sm" style={{ padding: '7px 14px', fontSize: 12 }}
-                        onClick={() => updateStatus(p.id, 'active')}>
-                        <CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve
-                      </button>
-                    )}
-                  </div>
-                )}
+{/* Call/WhatsApp/Approve moved to expanded view only — collapsed rows stay clean */}
 
                 {selected?.id === p.id && (
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
@@ -1168,17 +1140,7 @@ export default function Admin({ staffUser }) {
                       )}
                     </div>
 
-                    {/* Legend — what each badge color above means, so it
-                        doesn't need to be memorized fresh every day
-                        (Aryan's audit, gap #2). */}
-                    <div className="admin-legend">
-                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#16a34a' }} />Active / Verified</span>
-                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#b45309' }} />Pending</span>
-                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#dc2626' }} />Blocked</span>
-                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#2563eb' }} />Selfie received / Coordination</span>
-                      {SHOW_PREMIUM_TOGGLE && <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#b45309' }} />Premium</span>}
-                      <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#9333ea' }} />Report</span>
-                    </div>
+{/* Status legend removed — badge colors are self-explanatory */}
 
                     <div className="admin-section-header"><UserRound size={13} />Profile Details</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14, fontSize: 13 }}>
@@ -1202,7 +1164,12 @@ export default function Admin({ staffUser }) {
                         </div>
                       ))}
                     </div>
-                    {p.about_me && <div style={{ fontSize: 13, color: '#555', background: '#f9f9f9', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>{p.about_me}</div>}
+                    {p.about_me && (() => {
+                      const raw = p.about_me;
+                      const isPipeData = (raw.match(/\|/g) || []).length > 3;
+                      const display = isPipeData ? raw.split('|').filter(Boolean).slice(0, 4).join(' · ') + (raw.split('|').filter(Boolean).length > 4 ? ' …' : '') : raw;
+                      return <div style={{ fontSize: 13, color: '#555', background: '#f9f9f9', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>{display}</div>;
+                    })()}
 
                     {/* Quick contact — client_phone par seedha Call / WhatsApp */}
                     <div className="admin-section-header"><Phone size={13} />Contact</div>
@@ -1296,7 +1263,7 @@ export default function Admin({ staffUser }) {
                               {CALL_OUTCOME_LABELS[n.call_outcome]}
                             </span>
                           )}
-                          <div style={{ display: 'inline' }}>{n.note}</div>
+                          {n.note && n.note !== (CALL_OUTCOME_LABELS[n.call_outcome] || '') && <div style={{ display: 'inline' }}>{n.note}</div>}
                           <div style={{ fontSize: 12, color: '#bbb', marginTop: 4 }}>
                             {new Date(n.created_at).toLocaleString('en-IN')}
                             {n.follow_up_at && <> · Follow up: {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</>}
