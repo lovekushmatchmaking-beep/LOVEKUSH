@@ -1070,29 +1070,39 @@ export default function Admin({ staffUser }) {
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Profiles</div>
-          <button className="btn btn-black btn-sm" onClick={()=>setView('createClient')}>
-            <Plus size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Create Client
+          <button className="btn btn-black btn-sm" style={{ padding: '7px 10px' }} onClick={()=>setView('createClient')} title="Create Client">
+            <Plus size={16} />
           </button>
         </div>
         <div style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          <input
-            type="text"
-            placeholder="Search name, Profile ID, or phone..."
-            value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            style={{
-              flex: 1, minWidth: 0, padding: '10px 14px', borderRadius: 'var(--radius)',
-              border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, outline: 'none',
-              background: '#fafafa',
-            }}
-          />
+          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+            <Search size={14} color="#8e8e8e" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            <input
+              type="text"
+              placeholder="Search name or phone..."
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              style={{
+                width: '100%', minWidth: 0, padding: '10px 14px 10px 34px', borderRadius: 'var(--radius)',
+                border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, outline: 'none',
+                background: '#fafafa', boxSizing: 'border-box',
+              }}
+            />
+          </div>
           <button
             className={'btn btn-sm ' + (showFilters ? 'btn-black' : 'btn-outline')}
             onClick={() => setShowFilters(!showFilters)}
-            style={{ position: 'relative', flex: '0 0 auto' }}
+            style={{ position: 'relative', flex: '0 0 auto', padding: '7px 10px' }}
+            title="Filters"
           >
-            <SlidersHorizontal size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+            <SlidersHorizontal size={14} />
+            {activeFilterCount > 0 && (
+              <span style={{ position: 'absolute', top: -4, right: -4, background: '#dc2626', color: '#fff', borderRadius: 10,
+                fontSize: 10, fontWeight: 600, minWidth: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                {activeFilterCount}
+              </span>
+            )}
           </button>
           <button className="btn btn-outline btn-sm" style={{ flex: '0 0 auto' }} onClick={() => runQuery(0)}>
             {loading ? '...' : <RefreshCw size={14} />}
@@ -1425,13 +1435,10 @@ export default function Admin({ staffUser }) {
                     </div>
 
                     {idMetadata[p.id] && (
-                      <>
-                        <div className="admin-section-header"><Info size={13} />Metadata</div>
-                        <div style={{ fontSize: 13, color: '#8e8e8e', background: '#f5f5f5', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
-                          🔒 Admin only — Profile ID <strong style={{ fontFamily: 'monospace' }}>{p.profile_code}</strong> generated {new Date(idMetadata[p.id].created_at).toLocaleString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
-                          {idMetadata[p.id].created_by && <> (staff id: {idMetadata[p.id].created_by.slice(0, 8)})</>}
-                        </div>
-                      </>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#bbb', marginBottom: 10 }}>
+                        <Info size={11} />
+                        {new Date(idMetadata[p.id].created_at).toLocaleDateString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
+                      </div>
                     )}
                     {/* View/Edit/Matches now in overflow menu at top */}
                   </div>
