@@ -645,7 +645,8 @@ export default function Dashboard({ user }) {
                   )}
                 </div>
 
-                {(profile.profile_status !== 'active' || ['selfie_requested','rejected'].includes(profile.verification_status)) && (
+                {(profile.profile_status !== 'active' || ['selfie_requested','rejected'].includes(profile.verification_status)
+                  || ['not_submitted','rejected'].includes(profile.id_document_status || 'not_submitted')) && (
                   <VerificationNotice profile={profile} userId={user.id} onUpdated={setProfile} onToast={showToast} />
                 )}
               </>
@@ -931,21 +932,93 @@ function VerificationNotice({ profile, userId, onUpdated, onToast }) {
     setUploading(false)
   }
 
-  if (status === 'selfie_requested' || status === 'rejected') {
+  const selfieNotice = (status === 'selfie_requested' || status === 'rejected') ? (
+    <div className="notice" style={{display:'flex',flexDirection:'column',gap:10}}>
+      <div style={{display:'flex',gap:10,alignItems:'center'}}>
+        <Camera size={18} style={{color:'var(--primary)',flexShrink:0}} />
+        <span>
+          <strong>{status === 'rejected' ? 'Please send a new selfie' : 'Selfie needed for your Verified badge'}</strong>
+          {' · '}we'll match it with your uploaded photo, then your profile goes live
+        </span>
+      </div>
+      <label className="btn btn-primary btn-sm" style={{alignSelf:'flex-start',cursor:uploading?'default':'pointer',opacity:uploading?0.6:1}}>
+        <Camera size={14} /> {uploading ? 'Uploading...' : 'Take selfie'}
+        <input type="file" accept="image/*" capture="user" hidden disabled={uploading}
+          onChange={e => { uploadSelfie(e.target.files?.[0]); e.target.value = '' }} />
+      </label>
+    </div>
+  ) : (
+    <div className="notice" style={{display:'flex',gap:10,alignItems:'center'}}>
+      <ShieldCheck size={18} style={{color:'var(--primary)',flexShrink:0}} />
+      {status === 'selfie_submitted'
+        ? <span><strong>Selfie received</strong> · we're matching it with your photo. Matches start once you're verified</span>
+        : <span><strong>Under review</strong> · we'll ask for a quick selfie to verify you, then your profile goes live</span>}
+    </div>
+  )
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:10}}>
+      {selfieNotice}
+      <IdDocumentNotice profile={profile} userId={userId} onUpdated={onUpdated} onToast={onToast} />
+    </div>
+  )
+}
+
+// ID-proof (Aadhar/PAN/etc) upload — ab tak profiles.id_document_uploaded
+// sirf ek dead checkbox tha, kabhi set hi nahi hota tha aur koi real
+// document kahin dikhta nahi tha (audit gap 2026-10-06). Selfie jaisa hi
+// pattern: member apna document upload karta hai, admin Verification Queue
+// mein usse dekh ke Approve/Reject karta hai.
+const ID_DOCUMENT_TYPE_LABELS = { aadhar: 'Aadhar Card', pan: 'PAN Card', passport: 'Passport', voter_id: 'Voter ID', driving_license: 'Driving License' }
+function IdDocumentNotice({ profile, userId, onUpdated, onToast }) {
+  const [uploading, setUploading] = useState(false)
+  const [docType, setDocType] = useState('aadhar')
+  const status = profile.id_document_status || 'not_submitted'
+
+  const uploadIdDocument = async (file) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) { onToast('Please choose a photo of your document'); return }
+    setUploading(true)
+    try {
+      const compressed = await compressImage(file)
+      const path = userId + '/iddoc-' + Date.now() + '.jpg'
+      const { error: upErr } = await supabase.storage.from('lovekush-photos').upload(path, compressed, { contentType: 'image/jpeg' })
+      if (upErr) throw new Error('Upload failed: ' + upErr.message)
+      const { data, error } = await supabase.from('profiles')
+        .update({
+          id_document_path: path, id_document_type: docType, id_document_uploaded: true,
+          id_document_submitted_at: new Date().toISOString(), id_document_status: 'submitted',
+        })
+        .eq('id', profile.id).select().single()
+      if (error) throw new Error('Could not save document: ' + error.message)
+      onUpdated(data)
+      onToast('ID document sent for verification')
+    } catch (e) {
+      alert(e.message)
+    }
+    setUploading(false)
+  }
+
+  if (status === 'not_submitted' || status === 'rejected') {
     return (
       <div className="notice" style={{display:'flex',flexDirection:'column',gap:10}}>
         <div style={{display:'flex',gap:10,alignItems:'center'}}>
-          <Camera size={18} style={{color:'var(--primary)',flexShrink:0}} />
+          <ShieldCheck size={18} style={{color:'var(--primary)',flexShrink:0}} />
           <span>
-            <strong>{status === 'rejected' ? 'Please send a new selfie' : 'Selfie needed for your Verified badge'}</strong>
-            {' · '}we'll match it with your uploaded photo, then your profile goes live
+            <strong>{status === 'rejected' ? 'Please upload a clearer ID document' : 'Upload an ID proof'}</strong>
+            {' · '}Aadhar, PAN, Passport, Voter ID or Driving License
           </span>
         </div>
-        <label className="btn btn-primary btn-sm" style={{alignSelf:'flex-start',cursor:uploading?'default':'pointer',opacity:uploading?0.6:1}}>
-          <Camera size={14} /> {uploading ? 'Uploading...' : 'Take selfie'}
-          <input type="file" accept="image/*" capture="user" hidden disabled={uploading}
-            onChange={e => { uploadSelfie(e.target.files?.[0]); e.target.value = '' }} />
-        </label>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+          <select className="form-select" value={docType} onChange={e=>setDocType(e.target.value)} style={{fontSize:13,width:160}}>
+            {Object.entries(ID_DOCUMENT_TYPE_LABELS).map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+          <label className="btn btn-primary btn-sm" style={{cursor:uploading?'default':'pointer',opacity:uploading?0.6:1}}>
+            {uploading ? 'Uploading...' : 'Upload photo'}
+            <input type="file" accept="image/*" hidden disabled={uploading}
+              onChange={e => { uploadIdDocument(e.target.files?.[0]); e.target.value = '' }} />
+          </label>
+        </div>
       </div>
     )
   }
@@ -953,9 +1026,9 @@ function VerificationNotice({ profile, userId, onUpdated, onToast }) {
   return (
     <div className="notice" style={{display:'flex',gap:10,alignItems:'center'}}>
       <ShieldCheck size={18} style={{color:'var(--primary)',flexShrink:0}} />
-      {status === 'selfie_submitted'
-        ? <span><strong>Selfie received</strong> · we're matching it with your photo. Matches start once you're verified</span>
-        : <span><strong>Under review</strong> · we'll ask for a quick selfie to verify you, then your profile goes live</span>}
+      {status === 'approved'
+        ? <span><strong>ID verified</strong> · {ID_DOCUMENT_TYPE_LABELS[profile.id_document_type] || 'Document'} confirmed</span>
+        : <span><strong>ID document received</strong> · {ID_DOCUMENT_TYPE_LABELS[profile.id_document_type] || 'Document'}, under review</span>}
     </div>
   )
 }

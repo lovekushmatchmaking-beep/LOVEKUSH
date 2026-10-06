@@ -59,6 +59,10 @@ export const VERIFICATION_LABELS = {
   rejected: 'Selfie rejected — waiting for a new one',
 }
 
+// Real ID-proof upload (audit gap 2026-10-06) — same type list the member
+// picks from in Dashboard.js's IdDocumentNotice.
+const ID_DOCUMENT_TYPE_LABELS = { aadhar: 'Aadhar Card', pan: 'PAN Card', passport: 'Passport', voter_id: 'Voter ID', driving_license: 'Driving License' }
+
 const verificationPatch = (status, currentProfileStatus) => {
   if (status === 'verified') {
     return { verification_status: 'verified', is_verified: true, profile_status: currentProfileStatus === 'blocked' ? 'blocked' : 'active' }
@@ -163,6 +167,18 @@ async function applyVerificationStatus(staffUser, profile, status, notify = cons
   const { error } = await supabase.from('profiles').update(patch).eq('id', profile.id)
   if (error) { notify('Update failed: ' + error.message); return null }
   await writeAuditLog(staffUser, 'verification_status_change', profile.id, { new_status: status })
+  return patch
+}
+
+// ID document (Aadhar/PAN/etc) Approve/Reject — separate from the overall
+// selfie-based verification_status (a profile can go live on its selfie
+// while its ID document review is handled on its own track, audit gap
+// 2026-10-06).
+async function applyIdDocumentStatus(staffUser, profileId, status, notify = console.error) {
+  const patch = { id_document_status: status, id_document_reviewed_at: new Date().toISOString() }
+  const { error } = await supabase.from('profiles').update(patch).eq('id', profileId)
+  if (error) { notify('Update failed: ' + error.message); return null }
+  await writeAuditLog(staffUser, 'id_document_status_change', profileId, { new_status: status })
   return patch
 }
 
@@ -2541,10 +2557,12 @@ function VerificationQueueView({ staffUser, onBack }) {
 
   const buildQuery = (from, to) => supabase
     .from('profiles')
-    .select('id, full_name, profile_code, age, city, profile_status, verification_status, id_document_uploaded, is_admin_managed, selfie_path, selfie_requested_at, selfie_submitted_at, client_phone, created_at')
-    .neq('verification_status', 'verified')
+    .select('id, full_name, profile_code, age, city, profile_status, verification_status, id_document_uploaded, id_document_path, id_document_type, id_document_status, is_admin_managed, selfie_path, selfie_requested_at, selfie_submitted_at, client_phone, created_at')
     .neq('profile_status', 'blocked')
-    .or('verification_status.in.(selfie_submitted,selfie_requested),id_document_uploaded.eq.true,and(profile_status.eq.pending,is_admin_managed.eq.false)')
+    // id_document_status.eq.submitted ab alag se shamil hai (pehle sirf
+    // id_document_uploaded.eq.true tha, jo kabhi set hi nahi hota tha) —
+    // taaki ek already-verified profile ka naya ID document bhi dikhe.
+    .or('verification_status.in.(selfie_submitted,selfie_requested),id_document_status.eq.submitted,and(verification_status.neq.verified,profile_status.eq.pending,is_admin_managed.eq.false)')
     .order('created_at', { ascending: true })
     .range(from, to)
 
@@ -2574,13 +2592,24 @@ function VerificationQueueView({ staffUser, onBack }) {
   const act = async (p, status) => {
     const patch = await applyVerificationStatus(staffUser, p, status, showToast)
     if (!patch) return
-    if (status === 'verified') setProfiles(prev => prev.filter(x => x.id !== p.id)) // done — leaves the queue
+    if (status === 'verified') setProfiles(prev => prev.filter(x => x.id !== p.id && x.id_document_status !== 'submitted')) // done — leaves the queue unless an ID doc is still waiting
     else setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, ...patch } : x))
   }
 
+  // ID document Approve/Reject — its own track, doesn't touch the
+  // selfie-based verification_status (audit gap 2026-10-06).
+  const actIdDoc = async (p, status) => {
+    const patch = await applyIdDocumentStatus(staffUser, p.id, status, showToast)
+    if (!patch) return
+    setProfiles(prev => prev
+      .map(x => x.id === p.id ? { ...x, ...patch } : x)
+      .filter(x => !(x.id === p.id && x.verification_status === 'verified' && x.id_document_status !== 'submitted')))
+  }
+
   const sections = [
-    { key: 'review', title: 'Selfie received — compare & verify', items: profiles.filter(p => p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'selfie_requested')) },
-    { key: 'request', title: 'New sign-ups — request a selfie', items: profiles.filter(p => !p.is_admin_managed && ['not_started', 'rejected'].includes(p.verification_status || 'not_started') && !p.id_document_uploaded) },
+    { key: 'review', title: 'Selfie received — compare & verify', items: profiles.filter(p => p.verification_status === 'selfie_submitted') },
+    { key: 'iddoc', title: 'ID document received — review', items: profiles.filter(p => p.id_document_status === 'submitted') },
+    { key: 'request', title: 'New sign-ups — request a selfie', items: profiles.filter(p => !p.is_admin_managed && ['not_started', 'rejected'].includes(p.verification_status || 'not_started') && p.id_document_status !== 'submitted') },
     { key: 'waiting', title: 'Waiting for the user\'s selfie', items: profiles.filter(p => p.verification_status === 'selfie_requested') },
   ]
 
@@ -2607,20 +2636,34 @@ function VerificationQueueView({ staffUser, onBack }) {
                     <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
                   </div>
                   <div className="badge" style={{fontSize:12, background:'#eff6ff', color:'#2563eb'}}>
-                    {p.id_document_uploaded && p.verification_status !== 'selfie_submitted' ? 'ID document uploaded' : (VERIFICATION_LABELS[p.verification_status] || 'Not verified')}
+                    {sec.key === 'iddoc' ? (ID_DOCUMENT_TYPE_LABELS[p.id_document_type] || 'ID document') : (VERIFICATION_LABELS[p.verification_status] || 'Not verified')}
                   </div>
                 </div>
                 {p.selfie_path && sec.key === 'review' && <SelfieCompare selfiePath={p.selfie_path} photoPath={photoByProfile[p.id]} />}
+                {p.id_document_path && sec.key === 'iddoc' && (
+                  <div style={{marginTop:10, width:160, height:110, borderRadius:10, overflow:'hidden', background:'#f0f0f0'}}>
+                    <SignedImage path={p.id_document_path} alt="ID document" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+                  </div>
+                )}
                 <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
                   {sec.key === 'request' && (
                     <button className="btn btn-black btn-sm" onClick={()=>act(p,'selfie_requested')}><Camera size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Request Selfie</button>
                   )}
-                  <button className={'btn btn-sm ' + (sec.key === 'review' ? 'btn-black' : 'btn-outline')} onClick={()=>act(p,'verified')}><ShieldCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Verify &amp; Make Live</button>
-                  {sec.key === 'review' && (
-                    <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}} onClick={()=>act(p,'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
-                  )}
-                  {sec.key === 'waiting' && (
-                    <WhatsAppReminderButton profile={p} eventType="selfie_requested" staffUserId={staffUser.user_id} label="Remind on WhatsApp" />
+                  {sec.key === 'iddoc' ? (
+                    <>
+                      <button className="btn btn-black btn-sm" onClick={()=>actIdDoc(p,'approved')}><ShieldCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve ID</button>
+                      <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}} onClick={()=>actIdDoc(p,'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className={'btn btn-sm ' + (sec.key === 'review' ? 'btn-black' : 'btn-outline')} onClick={()=>act(p,'verified')}><ShieldCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Verify &amp; Make Live</button>
+                      {sec.key === 'review' && (
+                        <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}} onClick={()=>act(p,'rejected')}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
+                      )}
+                      {sec.key === 'waiting' && (
+                        <WhatsAppReminderButton profile={p} eventType="selfie_requested" staffUserId={staffUser.user_id} label="Remind on WhatsApp" />
+                      )}
+                    </>
                   )}
                 </div>
               </div>
