@@ -5,7 +5,7 @@ import {
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, Tag, TrendingUp, Trash2,
-  ThumbsUp,
+  ThumbsUp, MoreVertical,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -99,6 +99,42 @@ async function writeAuditLogs(staffUser, action, entityIds, metadata) {
 }
 async function writeAuditLog(staffUser, action, entityId, metadata) {
   return writeAuditLogs(staffUser, action, [entityId], metadata)
+}
+
+// ===== OVERFLOW MENU — three-dot (⋮) menu for condensing action buttons
+function OverflowMenu({ items }) {
+  const [open, setOpen] = useState(false)
+  const ref = React.useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [open])
+  const visible = items.filter(i => !i.hidden)
+  if (visible.length === 0) return null
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button type="button" className="btn btn-outline btn-sm" style={{ padding: '5px 6px', lineHeight: 1 }}
+        onClick={e => { e.stopPropagation(); setOpen(v => !v) }} title="More actions"><MoreVertical size={14} /></button>
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#fff', border: '1px solid #ededed',
+          borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.10)', zIndex: 50, minWidth: 150, overflow: 'hidden' }}
+          onClick={e => e.stopPropagation()}>
+          {visible.map((item, i) => (
+            <button key={i} type="button" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px',
+              fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', color: item.color || '#333', textAlign: 'left' }}
+              onClick={() => { setOpen(false); item.onClick() }}
+              onPointerEnter={e => e.currentTarget.style.background = '#f5f5f5'}
+              onPointerLeave={e => e.currentTarget.style.background = 'none'}>
+              {item.icon && <item.icon size={14} />}
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ===== COORDINATION STATUS — shared between CoordinationRequestsView,
@@ -1119,16 +1155,15 @@ export default function Admin({ staffUser }) {
                         action row is still at the bottom, but a 50-profile
                         review day shouldn't need a full scroll just to tap
                         Approve/Block (Aryan's audit, gap #10). */}
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }} onClick={e => e.stopPropagation()}>
                       <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} />
-                      {p.profile_status !== 'active' && (
-                        <button className="btn btn-black btn-sm" style={{ padding: '7px 14px', fontSize: 12 }}
-                          onClick={() => updateStatus(p.id, 'active')}><CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Approve</button>
-                      )}
-                      {p.profile_status !== 'blocked' && (
-                        <button className="btn btn-outline btn-sm" style={{ padding: '7px 14px', fontSize: 12, color: '#dc2626', borderColor: '#dc2626' }}
-                          onClick={() => updateStatus(p.id, 'blocked')}><ShieldX size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Block</button>
-                      )}
+                      <OverflowMenu items={[
+                        { label: 'View profile', icon: Eye, onClick: () => { setViewingProfile(p); setView('fullProfile') } },
+                        { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
+                        { label: 'Find matches', icon: Search, onClick: () => findMatchesForProfile(p) },
+                        { label: 'Approve', icon: CheckCircle2, onClick: () => updateStatus(p.id, 'active'), hidden: p.profile_status === 'active' },
+                        { label: 'Block', icon: ShieldX, color: '#dc2626', onClick: () => updateStatus(p.id, 'blocked'), hidden: p.profile_status === 'blocked' },
+                      ]} />
                     </div>
 
 {/* Status legend removed — badge colors are self-explanatory */}
@@ -1280,15 +1315,7 @@ export default function Admin({ staffUser }) {
                         </div>
                       </>
                     )}
-                    {/* Quick links — View/Edit/Matches inline with top actions */}
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button className="btn btn-outline btn-sm" style={{ padding: '5px 10px', fontSize: 12 }}
-                        onClick={e => { e.stopPropagation(); setViewingProfile(p); setView('fullProfile') }}><Eye size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />View</button>
-                      <button className="btn btn-outline btn-sm" style={{ padding: '5px 10px', fontSize: 12 }}
-                        onClick={e => { e.stopPropagation(); setEditingProfile(p); setView('editProfile') }}><Pencil size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />Edit</button>
-                      <button className="btn btn-outline btn-sm" style={{ padding: '5px 10px', fontSize: 12 }}
-                        onClick={e => { e.stopPropagation(); findMatchesForProfile(p) }}><Search size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />Matches</button>
-                    </div>
+                    {/* View/Edit/Matches now in overflow menu at top */}
                   </div>
                 )}
               </div>
@@ -2374,21 +2401,13 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                       onClick={()=>handleUnschedule(r.id)}>Clear</button>
                   )}
                 </div>
-                <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap',alignItems:'center'}}>
-                  {!r.viewed_at && (
-                    <button className="btn btn-outline btn-sm" style={{padding:'4px 10px',fontSize:12}} onClick={()=>handleMarkViewed(r.id)}><Eye size={12} style={{marginRight:3}} />Viewed</button>
-                  )}
-                  {!['contacted', 'meeting_done', 'closed'].includes(r.status) && (
-                    <button className="btn btn-outline btn-sm" style={{padding:'4px 10px',fontSize:12,color:'#b45309',borderColor:'#b45309'}}
-                      onClick={()=>handleAction(r.id, 'contacted')}><Phone size={12} style={{marginRight:3}} />Called</button>
-                  )}
-                  {r.status !== 'meeting_done' && r.status !== 'closed' && (
-                    <button className="btn btn-outline btn-sm" style={{padding:'4px 10px',fontSize:12,color:'#7c3aed',borderColor:'#7c3aed'}}
-                      onClick={()=>handleAction(r.id, 'meeting_done')}><Handshake size={12} style={{marginRight:3}} />Met</button>
-                  )}
-                  {r.status !== 'closed' && (
-                    <button className="btn btn-outline btn-sm" style={{padding:'4px 10px',fontSize:12}} onClick={()=>handleAction(r.id, 'closed')}>Close</button>
-                  )}
+                <div style={{display:'flex',gap:6,marginTop:8,alignItems:'center'}}>
+                  <OverflowMenu items={[
+                    { label: 'Mark viewed', icon: Eye, onClick: () => handleMarkViewed(r.id), hidden: !!r.viewed_at },
+                    { label: 'Called', icon: Phone, color: '#b45309', onClick: () => handleAction(r.id, 'contacted'), hidden: ['contacted', 'meeting_done', 'closed'].includes(r.status) },
+                    { label: 'Met', icon: Handshake, color: '#7c3aed', onClick: () => handleAction(r.id, 'meeting_done'), hidden: r.status === 'meeting_done' || r.status === 'closed' },
+                    { label: 'Close', icon: X, onClick: () => handleAction(r.id, 'closed'), hidden: r.status === 'closed' },
+                  ]} />
                 </div>
                 {r.viewed_at && <div style={{fontSize:12,color:'#bbb',marginTop:6}}>Viewed {new Date(r.viewed_at).toLocaleString('en-IN')}</div>}
 
