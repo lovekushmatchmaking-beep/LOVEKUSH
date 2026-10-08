@@ -82,6 +82,20 @@ export default function SharedProfile() {
           <BrandLockup size={30} />
         </div>
 
+        {/* "Suggested for" — share_links.client_profile_id already recorded
+            who a link was generated for (Model 2, 2026-10-06), it just
+            never showed here, so the page read as a stranger's bio with
+            no sense it was picked for this specific person (audit
+            2026-10-08, P1 #12). */}
+        {profile.client_masked_name && (
+          <div style={{fontSize:12,color:'#8e8e8e',textAlign:'center',marginBottom:14}}>
+            Suggested for <strong style={{color:'#111'}}>{profile.client_masked_name}</strong>
+            {(profile.client_age || profile.client_city) && (
+              <> · {[profile.client_age ? profile.client_age + ' years' : null, profile.client_city].filter(Boolean).join(', ')}</>
+            )}
+          </div>
+        )}
+
         <div style={{background:'#f9f9f9',borderRadius:16,padding:24}}>
           <div style={{fontSize:20,fontWeight:600,marginBottom:4}}>{profile.masked_name}</div>
           <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20,fontFamily:'monospace'}}>{profile.profile_code}</div>
@@ -116,7 +130,9 @@ export default function SharedProfile() {
 
         <div style={{marginTop:20,fontSize:12,color:'#8e8e8e',textAlign:'center',lineHeight:1.6}}>
           Contact details, photos and full information are shared confidentially.<br/>
-          For complete profile details, please contact LOVEKUSH Global Matchmaking Services.
+          {profile.rm_email
+            ? <>For complete profile details, please contact your Relationship Manager at <a href={`mailto:${profile.rm_email}`} style={{color:'inherit'}}>{profile.rm_email}</a>.</>
+            : 'For complete profile details, please contact LOVEKUSH Global Matchmaking Services.'}
         </div>
 
         <div style={{marginTop:16,fontSize:10,color:'#bbb',textAlign:'center'}}>

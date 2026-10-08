@@ -75,6 +75,18 @@ export default function SharedMatches() {
           {profiles.length} {profiles.length === 1 ? 'match' : 'matches'} handpicked for you
         </div>
 
+        {/* Same "suggested for" context as SharedProfile — every row in a
+            bundle carries the same client_profile_id, so this only needs
+            showing once (audit 2026-10-08, P1 #12). */}
+        {profiles[0]?.client_masked_name && (
+          <div style={{fontSize:12,color:'#8e8e8e',textAlign:'center',marginBottom:14}}>
+            Suggested for <strong style={{color:'#111'}}>{profiles[0].client_masked_name}</strong>
+            {(profiles[0].client_age || profiles[0].client_city) && (
+              <> · {[profiles[0].client_age ? profiles[0].client_age + ' years' : null, profiles[0].client_city].filter(Boolean).join(', ')}</>
+            )}
+          </div>
+        )}
+
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
           {profiles.map(p => {
             const rows = [
@@ -125,7 +137,9 @@ export default function SharedMatches() {
 
         <div style={{marginTop:20,fontSize:12,color:'#8e8e8e',textAlign:'center',lineHeight:1.6}}>
           Contact details, photos and full information are shared confidentially.<br/>
-          Tap "Interested" on a profile, or reply to LOVEKUSH with the Profile ID.
+          {profiles[0]?.rm_email
+            ? <>Tap "Interested" on a profile, or contact your Relationship Manager at <a href={`mailto:${profiles[0].rm_email}`} style={{color:'inherit'}}>{profiles[0].rm_email}</a>.</>
+            : 'Tap "Interested" on a profile, or reply to LOVEKUSH with the Profile ID.'}
         </div>
 
         {expiresAt && (
