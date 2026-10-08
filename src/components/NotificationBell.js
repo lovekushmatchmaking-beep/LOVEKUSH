@@ -28,6 +28,7 @@ const TYPE_EMOJI = {
   caste_suggestion_reviewed: '🏷️',
   share_link_interest: '👍',
   profile_liked: '❤️',
+  mutual_interest: '💞',
 }
 
 export default function NotificationBell({ userId, onNavigate, align = 'right' }) {
