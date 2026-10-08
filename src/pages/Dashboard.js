@@ -103,6 +103,7 @@ export default function Dashboard({ user }) {
   const [activityViewProfile, setActivityViewProfile] = useState(null) // set when a row in Activity tab is tapped, opens ProfileView
   const [searchViewProfile, setSearchViewProfile] = useState(null) // set when a Search-by-Profile-ID result is opened
   const [drawerOpen, setDrawerOpen] = useState(false) // top-right hamburger → slide-in settings drawer
+  const [notifFocusId, setNotifFocusId] = useState(null) // link_entity_id of a tapped notification — jumps Requests tab to the exact row
   // Bell dot sirf naye (unseen) interests par — Notifications tab kholte hi
   // "seen" ho jaate hain. Per-device localStorage, sirf UI convenience.
   const [activitySeenAt, setActivitySeenAt] = useState(() => {
@@ -415,7 +416,7 @@ export default function Dashboard({ user }) {
 
   return (
     <div style={{minHeight:'100vh',background:'var(--bg)',paddingBottom:96}}>
-      <TopBar userId={user.id} onNotifNavigate={(n)=>setActiveTab(NOTIF_TYPE_TO_TAB[n.type] || 'home')}
+      <TopBar userId={user.id} onNotifNavigate={(n)=>{ setActiveTab(NOTIF_TYPE_TO_TAB[n.type] || 'home'); setNotifFocusId(n.link_entity_id || null) }}
         bellDot={activeTab!=='activity' && receivedActions.some(r => new Date(r.updated_at || r.created_at).getTime() > activitySeenAt)}
         onMenu={()=>setDrawerOpen(true)} />
       <SideDrawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} profile={profile}
@@ -736,7 +737,8 @@ export default function Dashboard({ user }) {
         {/* REQUESTS TAB */}
         {activeTab === 'requests' && (
           <RequestsTab myProfile={profile} introductions={myIntroductions} onRespond={respondToIntroduction}
-            photoRequests={myPhotoRequests} onRespondPhoto={respondToPhotoRequest} />
+            photoRequests={myPhotoRequests} onRespondPhoto={respondToPhotoRequest}
+            focusId={notifFocusId} onConsumeFocus={()=>setNotifFocusId(null)} />
         )}
 
         {/* PROFILE TAB — Instagram-style header + icon list */}
@@ -1188,7 +1190,7 @@ function HelpView({ profileCode, onBack, onToast }) {
   )
 }
 
-function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], onRespondPhoto }) {
+function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], onRespondPhoto, focusId, onConsumeFocus }) {
   const [subTab, setSubTab] = useState('received') // 'received' | 'sent'
   const [profilesById, setProfilesById] = useState({})
   const [loading, setLoading] = useState(true)
@@ -1196,6 +1198,25 @@ function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], 
   useEffect(() => {
     loadProfileNames()
   }, [introductions, photoRequests])
+
+  // Tapping a notification should land on the exact request, not just the
+  // Requests tab in general (audit 2026-10-08, deep-linking sweep). The row
+  // carries its own DOM id (same pattern as Admin.js's coordination-request
+  // focus) so this can switch to whichever sub-tab actually has it and
+  // scroll straight to it.
+  useEffect(() => {
+    if (!focusId) return
+    const intro = introductions.find(i => i.id === focusId)
+    const photoReq = photoRequests.find(r => r.id === focusId)
+    const inReceived = (intro && intro.to_profile === myProfile.id) || (photoReq && photoReq.owner_profile_id === myProfile.id)
+    setSubTab(inReceived ? 'received' : 'sent')
+    const t = setTimeout(() => {
+      document.getElementById('req-' + focusId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      onConsumeFocus && onConsumeFocus()
+    }, 50)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId])
 
   const loadProfileNames = async () => {
     const ids = [...new Set([
@@ -1239,7 +1260,8 @@ function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], 
             <SectionLabel icon={Camera}>Photo requests</SectionLabel>
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
               {photoReceived.map(r => (
-                <div key={r.id} className="list-row">
+                <div key={r.id} id={'req-' + r.id} className="list-row"
+                  style={focusId === r.id ? { borderColor: '#2563eb', boxShadow: '0 0 0 2px rgba(37,99,235,0.25)' } : {}}>
                   <div style={{display:'flex',alignItems:'center',gap:12,marginBottom: r.status === 'pending' ? 12 : 6}}>
                     <div className="avatar" style={{width:42,height:42}}><Camera size={18} /></div>
                     <div style={{flex:1}}>
@@ -1274,7 +1296,8 @@ function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], 
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {received.map(i => (
-              <div key={i.id} className="list-row">
+              <div key={i.id} id={'req-' + i.id} className="list-row"
+                style={focusId === i.id ? { borderColor: '#2563eb', boxShadow: '0 0 0 2px rgba(37,99,235,0.25)' } : {}}>
                 <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:(!i.status || i.status === 'pending') ? 12 : 6}}>
                   <div className="avatar" style={{width:42,height:42}}>
                     {i.request_type === 'meeting' ? <CalendarIcon size={18} /> : <PhoneIcon size={18} />}
@@ -1312,7 +1335,8 @@ function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], 
             <SectionLabel icon={Camera}>Photo requests</SectionLabel>
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
               {photoSent.map(r => (
-                <div key={r.id} className="list-row" style={{display:'flex',alignItems:'center',gap:12}}>
+                <div key={r.id} id={'req-' + r.id} className="list-row"
+                  style={{display:'flex',alignItems:'center',gap:12, ...(focusId === r.id ? { borderColor: '#2563eb', boxShadow: '0 0 0 2px rgba(37,99,235,0.25)' } : {})}}>
                   <div className="avatar" style={{width:42,height:42}}><Camera size={18} /></div>
                   <div style={{flex:1,fontSize:15,fontWeight:600}}>{profilesById[r.owner_profile_id] || 'Profile'}</div>
                   <span className={'chip ' + (r.status==='approved' ? 'chip-success' : r.status==='declined' ? 'chip-muted' : 'chip-warning')}>
@@ -1329,7 +1353,8 @@ function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], 
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {sent.map(i => (
-              <div key={i.id} className="list-row" style={{display:'flex',alignItems:'center',gap:12}}>
+              <div key={i.id} id={'req-' + i.id} className="list-row"
+                style={{display:'flex',alignItems:'center',gap:12, ...(focusId === i.id ? { borderColor: '#2563eb', boxShadow: '0 0 0 2px rgba(37,99,235,0.25)' } : {})}}>
                 <div className="avatar" style={{width:42,height:42}}>
                   {i.request_type === 'meeting' ? <CalendarIcon size={18} /> : <PhoneIcon size={18} />}
                 </div>
