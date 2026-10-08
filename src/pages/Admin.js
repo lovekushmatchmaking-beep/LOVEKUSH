@@ -5,7 +5,7 @@ import {
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, Tag, TrendingUp, Trash2,
-  ThumbsUp, MoreVertical, MapPin,
+  ThumbsUp, MoreVertical, MapPin, BadgeCheck,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -16,12 +16,12 @@ import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
 import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, computeRmPerformance } from '../utils/adminStats'
 import { findDuplicateLeads } from '../utils/duplicateLeads'
-import { buildWaMeLink, buildMailtoLink, buildWaChooserLink } from '../utils/shareProfile'
+import { buildMailtoLink } from '../utils/shareProfile'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, forwardShareLinkInterest } from '../utils/shareLinks'
 import { WhatsAppReminderButton } from '../components/WhatsAppReminder'
 import NotificationBell from '../components/NotificationBell'
-import { EVENT_LABELS, fillTemplate, logNotification } from '../utils/notifications'
+import { EVENT_LABELS } from '../utils/notifications'
 import { gunaMilanFor } from '../utils/astrology'
 import { useToast } from '../components/ui'
 
@@ -1158,7 +1158,13 @@ export default function Admin({ staffUser }) {
                     }
                   </div>
                   <div style={{ flex: '1 1 140px', minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{p.full_name}</div>
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {p.full_name}
+                      {/* Blue-tick, Instagram/Twitter-style, instead of a
+                          separate "✓ Verified" badge taking up row space
+                          (Aryan's audit, 2026-10-08: compact verification). */}
+                      {p.verification_status === 'verified' && <BadgeCheck size={15} color="#2563eb" title="Selfie/ID verified by staff" />}
+                    </div>
                     <div style={{ fontSize: 12, color: '#8e8e8e' }}>{p.age}y · {p.city} · {p.religion}</div>
                   </div>
                   {/* Ek hi row mein wrap karo — pehle "active" + "✓ Verified" + "Premium"
@@ -1170,7 +1176,6 @@ export default function Admin({ staffUser }) {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 4 }}>
                       <div className={"badge badge-" + p.profile_status} style={{ fontSize: 12 }} title={'Profile status: ' + p.profile_status}>{p.profile_status}</div>
-                      {p.verification_status === 'verified' && p.profile_status !== 'active' && <div className="badge" style={{ fontSize: 12, background: '#f0fdf4', color: '#16a34a' }} title="Selfie/ID verified by staff">✓ Verified</div>}
                       {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 12, background: '#eff6ff', color: '#2563eb' }} title="Member sent a selfie — needs comparing to their photo">Selfie received</div>}
                       {SHOW_PREMIUM_TOGGLE && p.is_premium && <div className="badge" style={{ fontSize: 12, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }} title="Marked Premium"><Crown size={10} />Premium</div>}
                       {/* Note draft keyed per-profile now (Aryan's audit, 2026-10-05) so it
@@ -1233,11 +1238,14 @@ export default function Admin({ staffUser }) {
                       return <div style={{ fontSize: 13, color: '#555', background: '#f9f9f9', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>{display}</div>;
                     })()}
 
-                    {/* Quick contact — client_phone par seedha Call / WhatsApp */}
+                    {/* Quick contact — number + edit. Call/WhatsApp buttons
+                        already shown in the quick-actions row above, so
+                        this doesn't repeat them (audit 2026-10-08: duplicate
+                        Call/WhatsApp buttons). */}
                     <div className="admin-section-header"><Phone size={13} />Contact</div>
                     <ProfileContact key={p.id + (p.client_phone || '')} profile={p} staffUser={staffUser}
                       onSaved={phone => updateClientPhone(p.id, phone)}
-                      onAction={kind => startContactLog(p, kind)} />
+                      onAction={kind => startContactLog(p, kind)} showContactButtons={false} />
 
                     {/* Verification — compact: just icon + inline action buttons */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14, fontSize: 12 }} onClick={e => e.stopPropagation()}>
@@ -1763,12 +1771,6 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
     }
   }
 
-  const bundleMsg = bundle?.url
-    ? `Hi! LOVEKUSH has handpicked ${picked.length} ${picked.length === 1 ? 'match' : 'matches'} for you. View them here (link valid for 7 days):\n\n${bundle.url}`
-    : ''
-  const bundleWaLink = bundle?.url
-    ? (buildWaMeLink(clientPhone, bundleMsg) || buildWaChooserLink(bundleMsg))
-    : null
 
   const copyBundle = async () => {
     try { await navigator.clipboard.writeText(bundle.url); setBundle(b => ({ ...b, copied: true })) } catch {}
@@ -1827,11 +1829,12 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
             </button>
           ) : (
             <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-              <a href={bundleWaLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm"
-                onClick={()=>logNotification({ profileId: profile.id, eventType: 'match_shared', staffUserId, messagePreview: bundleMsg })}>📱 Send via WhatsApp</a>
+              <WhatsAppReminderButton profile={{ ...profile, client_phone: clientPhone }} eventType="match_shared"
+                vars={{ count: picked.length }} appendText={bundle.url} staffUserId={staffUserId}
+                label="Send via WhatsApp" size="md" />
               {navigator.share && (
                 <button className="btn btn-outline btn-sm"
-                  onClick={()=>nativeShare({ title:'Matches from LOVEKUSH', text: bundleMsg.replace(bundle.url, '').trim(), url: bundle.url })}>
+                  onClick={()=>nativeShare({ title:'Matches from LOVEKUSH', text: `LOVEKUSH has handpicked ${picked.length} ${picked.length === 1 ? 'match' : 'matches'} for you.`, url: bundle.url })}>
                   Share…
                 </button>
               )}
@@ -1855,8 +1858,6 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
             const other = r.profile
             const isExpanded = expandedId === other.id
             const linkState = linkFor[other.id]
-            const shareMsg = linkState?.url ? `Hi! Found a match for you on LOVEKUSH:\n\n${linkState.url}` : ''
-            const waLink = linkState?.url ? (buildWaMeLink(clientPhone, shareMsg) || buildWaChooserLink(shareMsg)) : null
             const mailLink = linkState?.url ? buildMailtoLink(profile.client_email, 'A match for you — LOVEKUSH', `Hi,\n\nWe found a match for you. View secure profile:\n${linkState.url}\n\n(This link expires in 7 days)\n\nRegards,\nLOVEKUSH Global Matchmaking Services`) : null
 
             return (
@@ -1912,8 +1913,9 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                         ✓ Link ready (expires in 7 days, one-click revoke available in "My Share Links")
                       </div>
                       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                        <a href={waLink} target="_blank" rel="noreferrer" className="btn btn-black btn-sm"
-                          onClick={()=>logNotification({ profileId: profile.id, eventType: 'match_shared', staffUserId, messagePreview: shareMsg })}>📱 Send via WhatsApp</a>
+                        <WhatsAppReminderButton profile={{ ...profile, client_phone: clientPhone }} eventType="match_shared"
+                          vars={{ otherName: other.full_name }} appendText={linkState.url} staffUserId={staffUserId}
+                          label="Send via WhatsApp" size="md" />
                         {!clientPhone && (
                           <span style={{fontSize:13,color:'#8e8e8e',alignSelf:'center'}}>No client phone saved, WhatsApp will ask which chat</span>
                         )}

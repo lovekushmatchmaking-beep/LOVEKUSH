@@ -147,7 +147,11 @@ function QuickCallLog({ profile, kind, introductionId, onClose }) {
 // Expanded profile ke liye — number + Call/WhatsApp, aur number na ho ya
 // galat ho to wahin save/edit (same client_phone column jo CreateProfile
 // aur Find Matches pehle se use karte hain).
-export function ProfileContact({ profile, onSaved, onAction, logCalls = false, introductionId, staffUser }) {
+// `showContactButtons`: false jahan screen already apna Call/WhatsApp pair
+// dikha chuki hai (Profiles list's own top quick-actions row) — number ko
+// phir bhi yahan hi edit kiya ja sakta hai, bas dusra Call/WhatsApp jodaa
+// nahi dikhta (Aryan's audit, 2026-10-08: duplicate Call/WhatsApp buttons).
+export function ProfileContact({ profile, onSaved, onAction, logCalls = false, introductionId, staffUser, showContactButtons = true }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(profile.client_phone || '')
   const [error, setError] = useState('')
@@ -190,9 +194,9 @@ export function ProfileContact({ profile, onSaved, onAction, logCalls = false, i
       ) : (
         <>
           <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{phone}</span>
-          {valid
-            ? <ContactButtons phone={phone} onAction={onAction} logProfile={logCalls ? profile : undefined} introductionId={introductionId} size="md" />
-            : <span style={{ color: '#dc2626' }}>Number looks incomplete</span>}
+          {!valid && <span style={{ color: '#dc2626' }}>Number looks incomplete</span>}
+          {valid && showContactButtons &&
+            <ContactButtons phone={phone} onAction={onAction} logProfile={logCalls ? profile : undefined} introductionId={introductionId} size="md" />}
           <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="Edit number"
             onClick={() => setEditing(true)}><Pencil size={12} /></button>
         </>
