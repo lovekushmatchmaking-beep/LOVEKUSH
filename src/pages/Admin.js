@@ -816,11 +816,20 @@ export default function Admin({ staffUser }) {
   const switchSection = (s) => { if (view !== 'list') navigate(-1); setSectionOnly(s) }
 
   // Tapping a notification in the bell dropdown jumps straight to the
-  // queue it's about.
-  const handleNotifNavigate = (n) => {
-    if (n.type === 'selfie_submitted') goToSectionView('queues', 'verificationQueue')
-    else if (n.type === 'report_filed') goToSectionView('queues', 'reportsQueue')
-    else if (n.type === 'share_link_interest') goToSectionView('tools', 'shareLinks')
+  // exact record it's about where we have one (link_entity_type='profile'),
+  // instead of a generic queue (audit gap, 2026-10-08: "do not send the
+  // admin to a generic tab when the exact record is known").
+  const handleNotifNavigate = async (n) => {
+    if (n.type === 'selfie_submitted') { goToSectionView('queues', 'verificationQueue'); return }
+    if (n.type === 'report_filed') { goToSectionView('queues', 'reportsQueue'); return }
+    if (n.type === 'share_link_interest') { goToSectionView('tools', 'shareLinks'); return }
+    // New (audit 2026-10-08): notification types with no dedicated queue
+    // view — e.g. profile_liked — open the exact profile instead of
+    // dropping the admin on a generic tab.
+    if (n.link_entity_type === 'profile' && n.link_entity_id) {
+      const { data } = await supabase.from('profiles').select('*').eq('id', n.link_entity_id).maybeSingle()
+      if (data) { switchSection('profiles'); setView('list'); setSelected(data) }
+    }
   }
 
   return (
