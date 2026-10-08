@@ -2001,7 +2001,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination }) {
                       {shownProfile ? shownProfile.full_name : 'Profile'}
                       {client && <span style={{fontWeight:400,color:'#8e8e8e'}}> · for {client.full_name}</span>}
                     </div>
-                    <div style={{fontSize:12,fontFamily:'monospace',color:'#8e8e8e',marginTop:2}}>/{l.token.slice(0,12)}...</div>
+                    <div style={{fontSize:12,fontFamily:'monospace',color:'#8e8e8e',marginTop:2}}>{l.share_id || '/' + l.token.slice(0,12) + '...'}</div>
                     <div style={{fontSize:13,color:statusColor,fontWeight:600,marginTop:2}}>{status}</div>
                   </div>
                   <div style={{textAlign:'right'}}>
@@ -2334,7 +2334,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
   // Tab filtering ab server-side ho gaya hai — yahan sirf search (loaded page par)
   const filteredRequests = requests.filter(r => {
     const a = profilesById[r.from_profile], b = profilesById[r.to_profile]
-    return matchesSearch(query, a?.full_name, a?.profile_code, b?.full_name, b?.profile_code)
+    return matchesSearch(query, a?.full_name, a?.profile_code, a?.client_phone, b?.full_name, b?.profile_code, b?.client_phone, r.request_id)
   })
 
   return (
@@ -2342,7 +2342,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:14}}>Coordination Requests</h2>
-      {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by member name or Profile ID..." />}
+      {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by name, Profile ID, mobile or Request ID..." />}
 
       <div className="pill-tabs" style={{marginBottom:16}}>
         {['open','pending','closed','all'].map(t => (
@@ -2376,8 +2376,9 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                       {r.request_type === 'meeting' ? 'Meeting request' : 'Talk request'}
                       {r.source === 'share_link' && <span style={{marginLeft:6,color:'#16a34a'}}>· forwarded from a shared link</span>}
                     </div>
-                    <div style={{fontSize:12,color:'#bbb',marginTop:2}}>
+                    <div style={{fontSize:12,color:'#bbb',marginTop:2,display:'flex',alignItems:'center',gap:8}}>
                       {new Date(r.created_at).toLocaleDateString('en-IN')}
+                      {r.request_id && <span style={{fontFamily:'monospace',color:'#8e8e8e'}}>{r.request_id}</span>}
                     </div>
                     {/* Dono families ko seedha call/WhatsApp — coordination yahin se.
                         Number missing ho to yahin inline add/save bhi ho sakta hai
