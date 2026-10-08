@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import {
-  House, Search, Heart, MessageCircle, UserRound, Bell, Menu, X, Settings, Lock,
+  House, Search, Heart, Inbox, UserRound, Bell, Menu, X, Settings, Lock,
   CircleHelp, LogOut, ScanSearch, Ban, FileText, Images,
 } from 'lucide-react'
 import SignedImage from './SignedImage'
@@ -45,7 +45,7 @@ export const NAV_ITEMS = [
   { id: 'home', icon: House, label: 'Home' },
   { id: 'matchsearch', icon: Search, label: 'Search' },
   { id: 'matches', icon: Heart, label: 'Matches' },
-  { id: 'requests', icon: MessageCircle, label: 'Messages' },
+  { id: 'requests', icon: Inbox, label: 'Requests' },
   { id: 'profile', icon: UserRound, label: 'Profile' },
 ]
 
