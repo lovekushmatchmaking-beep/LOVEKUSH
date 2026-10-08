@@ -687,6 +687,10 @@ export default function Admin({ staffUser }) {
     if (error) { showToast('Could not save note: ' + error.message); return }
     clearNoteDraft(profileId)
     loadNotesFor(profileId)
+    // Was missing — a new follow-up's effect on the My Queue badge/dashboard
+    // overdueFollowUps count only showed up after the hourly auto-refresh,
+    // not immediately (audit 2026-10-08, P1 #11).
+    loadStats()
   }
 
   // Call/WhatsApp tap karte hi profile khulti hai aur note box mein call-log
@@ -3117,6 +3121,60 @@ function ReportsQueueView({ staffUser, onBack }) {
   )
 }
 
+// Follow-ups grouped as Overdue / Today / Upcoming instead of one flat list
+// with just an inline "Overdue" flag (audit 2026-10-08, P1 #11 re-scope —
+// the flat list made it easy to miss that most of what was showing wasn't
+// actually due yet once "Upcoming" started being fetched at all).
+function FollowUpsSection({ items, onOpenProfile }) {
+  const now = new Date()
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
+  const endOfToday = new Date(now); endOfToday.setHours(23, 59, 59, 999)
+  const groups = { overdue: [], today: [], upcoming: [] }
+  items.forEach(n => {
+    const d = new Date(n.follow_up_at)
+    if (d < startOfToday) groups.overdue.push(n)
+    else if (d <= endOfToday) groups.today.push(n)
+    else groups.upcoming.push(n)
+  })
+
+  const renderFollowUp = (n, isOverdue) => (
+    <div key={n.id} className="list-row clickable" onClick={() => n.profiles && onOpenProfile(n.profiles)}
+      style={isOverdue ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+          {n.profiles?.full_name || 'Profile'}
+          {isOverdue && <span className="badge" style={{ fontSize: 11, background: '#dc2626', color: '#fff' }}>Overdue</span>}
+        </div>
+        <ContactButtons phone={n.profiles?.client_phone} logProfile={n.profiles} />
+      </div>
+      <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>{n.note}</div>
+      <div style={{ fontSize: 12, color: isOverdue ? '#dc2626' : '#bbb', marginTop: 4, fontWeight: isOverdue ? 600 : 400 }}>
+        {isOverdue ? 'Overdue since' : 'Due'} {new Date(n.follow_up_at).toLocaleDateString('en-IN')}
+      </div>
+    </div>
+  )
+  const groupLabel = (text) => (
+    <div style={{ fontSize: 11, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '4px 0' }}>{text}</div>
+  )
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+        <Clock size={14} /> Follow-ups {items.length > 0 && `(${items.length})`}
+      </div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 12, color: '#bbb' }}>Nothing due.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {groups.overdue.length > 0 && <>{groupLabel('Overdue')}{groups.overdue.map(n => renderFollowUp(n, true))}</>}
+          {groups.today.length > 0 && <>{groupLabel('Today')}{groups.today.map(n => renderFollowUp(n, false))}</>}
+          {groups.upcoming.length > 0 && <>{groupLabel('Upcoming')}{groups.upcoming.map(n => renderFollowUp(n, false))}</>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ===== MY QUEUE — "what needs me today" view (Shaadi/SmartMatchApp RM
 // dashboard pattern), existing tables se compute, koi naya data model nahi.
 function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, onOpenShareLinks }) {
@@ -3144,7 +3202,10 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
     const weekFromNow = new Date(Date.now() + 7*24*60*60*1000).toISOString()
     const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes] = await Promise.all([
-      supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code, client_phone)').lte('follow_up_at', nowIso).order('follow_up_at', { ascending: true }).limit(20),
+      // Was lte(nowIso) only — upcoming follow-ups (due later this week)
+      // never got fetched at all, so there was nothing to group into an
+      // "Upcoming" section (audit 2026-10-08, P1 #11 re-scope).
+      supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code, client_phone)').lte('follow_up_at', weekFromNow).order('follow_up_at', { ascending: true }).limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, profile_status, client_phone').eq('managed_by_staff_id', staffUser.user_id).eq('profile_status', 'pending').limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, created_at, client_phone').eq('profile_status', 'pending').gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(20),
       // Scheduled calls/meetings (introductions.scheduled_at) due in the next 7 days, soonest first
@@ -3324,29 +3385,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                 </div>
               </div>
             )} />
-          <Section icon={Clock} title="Follow-ups due" items={overdueFollowUps} empty="Nothing due."
-            renderItem={n => {
-              // Overdue = before today, not just "due" (today counts as on-time
-              // still) — a distinct red flag so a missed one doesn't blend into
-              // today's to-dos (Aryan's audit, 2026-10-05, gap #4).
-              const isOverdue = new Date(n.follow_up_at) < new Date(new Date().setHours(0,0,0,0))
-              return (
-              <div key={n.id} className="list-row clickable" onClick={()=>n.profiles && onOpenProfile(n.profiles)}
-                style={isOverdue ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-                  <div style={{fontSize:13,fontWeight:600,display:'flex',alignItems:'center',gap:6}}>
-                    {n.profiles?.full_name || 'Profile'}
-                    {isOverdue && <span className="badge" style={{fontSize:11,background:'#dc2626',color:'#fff'}}>Overdue</span>}
-                  </div>
-                  <ContactButtons phone={n.profiles?.client_phone} logProfile={n.profiles} />
-                </div>
-                <div style={{fontSize:12,color:'#555',marginTop:2}}>{n.note}</div>
-                <div style={{fontSize:12,color: isOverdue ? '#dc2626' : '#bbb',marginTop:4,fontWeight:isOverdue?600:400}}>
-                  {isOverdue ? 'Overdue since' : 'Due'} {new Date(n.follow_up_at).toLocaleDateString('en-IN')}
-                </div>
-              </div>
-              )
-            }} />
+          <FollowUpsSection items={overdueFollowUps} onOpenProfile={onOpenProfile} />
           <Section icon={ListChecks} title="Your pending profiles (to-do)" items={assignedPending} empty="No pending profiles assigned to you."
             hint="Only your assigned profiles still pending approval (up to 20). For everything assigned to you, use Profiles → Filters → Assigned to me."
             renderItem={p => (
