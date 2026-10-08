@@ -1911,6 +1911,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination }) {
   const [profilesById, setProfilesById] = useState({}) // shown-profile id + client_profile_id -> {full_name, profile_code}
   const [loading, setLoading] = useState(true)
   const [showToast, ToastView] = useToast()
+  const [expandedBundles, setExpandedBundles] = useState(new Set())
 
   useEffect(() => { load() }, [])
 
@@ -2002,6 +2003,14 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination }) {
             const shownProfile = profilesById[l.profile_id]
             const client = l.client_profile_id ? profilesById[l.client_profile_id] : null
             const interestPending = l.interested_at && !l.interest_acknowledged_at
+            // Bulk match share = one matching cycle (audit 2026-10-08,
+            // P0 #4): several profiles shared to the same client in one
+            // bundle, each with its own independent status. Admin should
+            // see them as one cycle; siblings are found by bundle_token
+            // (never shown to the client — each client's own token/page
+            // only ever returns their own interaction, untouched here).
+            const bundleSiblings = l.bundle_token ? links.filter(x => x.bundle_token === l.bundle_token && x.id !== l.id) : []
+            const isBundleExpanded = expandedBundles.has(l.bundle_token)
             return (
               <div key={l.id} className="list-row" style={interestPending ? { borderColor: '#16a34a', background: '#f0fdf4' } : {}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
@@ -2020,6 +2029,33 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination }) {
                     </div>
                   </div>
                 </div>
+                {bundleSiblings.length > 0 && (
+                  <div style={{marginTop:8}}>
+                    <button className="btn btn-outline btn-sm" style={{padding:'4px 10px',fontSize:12}}
+                      onClick={()=>setExpandedBundles(prev => {
+                        const next = new Set(prev)
+                        next.has(l.bundle_token) ? next.delete(l.bundle_token) : next.add(l.bundle_token)
+                        return next
+                      })}>
+                      🔗 One of {bundleSiblings.length + 1} shared in this cycle {isBundleExpanded ? '▲' : '▼'}
+                    </button>
+                    {isBundleExpanded && (
+                      <div style={{marginTop:6,display:'flex',flexDirection:'column',gap:4,paddingLeft:10,borderLeft:'2px solid #eee'}}>
+                        {bundleSiblings.map(s => {
+                          const sp = profilesById[s.profile_id]
+                          const sStatus = s.revoked ? 'Revoked' : new Date(s.expires_at) < new Date() ? 'Expired'
+                            : s.interested_at ? '👍 Interested' : 'Awaiting response'
+                          return (
+                            <div key={s.id} style={{fontSize:12,color:'#555',display:'flex',justifyContent:'space-between',gap:8}}>
+                              <span>{sp ? sp.full_name : 'Profile'}</span>
+                              <span style={{color:'#8e8e8e'}}>{sStatus}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {/* Client tapped "👍 Interested" on this profile — previously
                     there was no way for a share-link client to signal this at
                     all, and no record of which client a link was even for
