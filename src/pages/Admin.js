@@ -190,10 +190,10 @@ function RefreshButton({ onClick, loading }) {
 }
 
 // Back + Refresh ek row mein (queue/tool screens ka common header).
-function ViewTopBar({ onBack, onRefresh, loading }) {
+function ViewTopBar({ onBack, onRefresh, loading, label = '← Back to list' }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-      <button className="btn btn-outline btn-sm" onClick={onBack}>← Back to list</button>
+      <button className="btn btn-outline btn-sm" onClick={onBack}>{label}</button>
       {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
     </div>
   )
@@ -262,8 +262,14 @@ export default function Admin({ staffUser }) {
   // Queue, this profile section) — CoordinationRequestsView picks the right
   // tab and scrolls/highlights that one card.
   const [coordFocusId, setCoordFocusId] = useState(null)
-  const goToCoordination = (requestId) => {
+  // Set only when the request was opened from inside a profile's own
+  // detail panel (vs. My Queue) — so "Back" there can return to that same
+  // profile instead of always dropping to the generic Profiles list
+  // (Aryan's audit, 2026-10-08: "Back to Profile" nav gap).
+  const [coordBackProfile, setCoordBackProfile] = useState(null)
+  const goToCoordination = (requestId, backProfile) => {
     setCoordFocusId(requestId)
+    setCoordBackProfile(backProfile || null)
     goToSectionView('tools', 'coordinationRequests')
   }
   // ===== VIEW NAVIGATION — Aryan ne complain kiya ki drawer/queue ke andar
@@ -933,7 +939,10 @@ export default function Admin({ staffUser }) {
       )}
 
       {view === 'coordinationRequests' && (
-        <CoordinationRequestsView staffUser={staffUser} onBack={()=>setView('list')} focusId={coordFocusId} onConsumeFocus={()=>setCoordFocusId(null)} />
+        <CoordinationRequestsView staffUser={staffUser}
+          onBack={()=>{ setView('list'); if (coordBackProfile) { setSelected(coordBackProfile); setCoordBackProfile(null) } }}
+          backLabel={coordBackProfile ? '← Back to Profile' : undefined}
+          focusId={coordFocusId} onConsumeFocus={()=>setCoordFocusId(null)} />
       )}
 
       {view === 'verificationQueue' && (
@@ -1311,7 +1320,7 @@ export default function Admin({ staffUser }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {coordByProfile[p.id].map(r => (
                             <div key={r.id} className="list-row clickable" style={{ padding: '8px 10px' }}
-                              onClick={() => goToCoordination(r.id)}>
+                              onClick={() => goToCoordination(r.id, p)}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                                 <div style={{ fontSize: 12 }}>
                                   {r.from_profile === p.id ? 'Sent to ' : 'Received from '}
@@ -2207,7 +2216,7 @@ function CasteSuggestionsView({ onBack, staffUser }) {
 const COORD_ALL_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'meeting_done', 'closed']
 const COORD_OPEN_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'meeting_done']
 
-function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }) {
+function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, staffUser }) {
   const [showToast, ToastView] = useToast()
   const [requests, setRequests] = useState([])
   const [profilesById, setProfilesById] = useState({})
@@ -2228,6 +2237,12 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
   // Now included by default so admin can see/coordinate proactively.
   const [tab, setTab] = useState('open') // open (not closed) | pending | closed | all
   const [query, setQuery] = useState('')
+  // Search used to only filter whatever page of the CURRENT tab happened to
+  // be loaded — a request in a different tab, or not yet paged in, simply
+  // wasn't found (audit 2026-10-08, P1 #10 re-scope). A non-empty query now
+  // runs its own broader fetch across every status instead.
+  const [searchResults, setSearchResults] = useState(null) // null = not searching, else rows from every status
+  const [searching, setSearching] = useState(false)
 
   const buildQuery = (forTab, from, to) => {
     let q = supabase.from('introductions').select('*').order('created_at', { ascending: false }).range(from, to)
@@ -2244,7 +2259,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
     if (rows.length === 0) return
     const ids = [...new Set(rows.flatMap(r => [r.from_profile, r.to_profile]))]
     if (ids.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
+      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone, gender').in('id', ids)
       const map = {}
       ;(profs || []).forEach(p => { map[p.id] = p })
       setProfilesById(prev => ({ ...prev, ...map }))
@@ -2284,6 +2299,29 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
 
   useEffect(() => { runQuery(tab, 0) }, [tab])
   useEffect(() => { refreshPendingCount() }, [])
+
+  // Debounced cross-status search — covers every request regardless of
+  // which tab it'd normally sit in or whether its page has been loaded.
+  useEffect(() => {
+    if (!query.trim()) { setSearchResults(null); return }
+    let cancelled = false
+    setSearching(true)
+    const t = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase.from('introductions').select('*')
+          .order('created_at', { ascending: false }).limit(200)
+        if (error) throw error
+        if (cancelled) return
+        await loadRelated(data || [])
+        if (!cancelled) setSearchResults(data || [])
+      } catch (err) {
+        console.error(err.message)
+      }
+      if (!cancelled) setSearching(false)
+    }, 300)
+    return () => { cancelled = true; clearTimeout(t) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
 
   // Opened via a "Manage"/"View" link elsewhere (My Queue, a profile's own
   // Coordination section) — jump to the tab that has it, make sure that
@@ -2475,8 +2513,10 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
     }
   }
 
-  // Tab filtering ab server-side ho gaya hai — yahan sirf search (loaded page par)
-  const filteredRequests = requests.filter(r => {
+  // Tab filtering is server-side; search instead runs over searchResults
+  // (every status, fetched separately above) once a query is typed, so it
+  // isn't limited to whichever tab/page happens to be on screen.
+  const filteredRequests = (searchResults ?? requests).filter(r => {
     const a = profilesById[r.from_profile], b = profilesById[r.to_profile]
     return matchesSearch(query, a?.full_name, a?.profile_code, a?.client_phone, b?.full_name, b?.profile_code, b?.client_phone, r.request_id)
   })
@@ -2484,7 +2524,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <ToastView />
-      <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
+      <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} label={backLabel} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:14}}>Coordination Requests</h2>
       {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by name, Profile ID, mobile or Request ID..." />}
 
@@ -2494,18 +2534,27 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
           "Open" (every status but Closed), not a separate current state;
           a request's one real current state is still its single
           COORD_STATUS_LABELS badge on the card below. */}
-      <div className="pill-tabs" style={{marginBottom:16}}>
-        {[
-          ['open', 'Open'],
-          ['pending', `Needs first response (${pendingCount})`],
-          ['closed', 'Closed'],
-          ['all', 'All'],
-        ].map(([t, label]) => (
-          <button key={t} className={'pill-tab ' + (tab === t ? 'active' : '')} onClick={()=>setTab(t)}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Searching looks across every status at once, so the tab pills
+          (which only describe the non-search view) step aside for a plain
+          note instead of implying the search is scoped to one of them. */}
+      {searchResults !== null ? (
+        <div style={{fontSize:12,color:'#8e8e8e',marginBottom:16}}>
+          {searching ? 'Searching across all requests...' : `Searching across all requests — ${filteredRequests.length} match${filteredRequests.length === 1 ? '' : 'es'}.`}
+        </div>
+      ) : (
+        <div className="pill-tabs" style={{marginBottom:16}}>
+          {[
+            ['open', 'Open'],
+            ['pending', `Needs first response (${pendingCount})`],
+            ['closed', 'Closed'],
+            ['all', 'All'],
+          ].map(([t, label]) => (
+            <button key={t} className={'pill-tab ' + (tab === t ? 'active' : '')} onClick={()=>setTab(t)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
@@ -2623,8 +2672,20 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                   <div style={{ marginTop: 10 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>History</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {history.map(n => (
+                      {history.map(n => {
+                        const notedProfile = n.profile_id === from?.id ? from : n.profile_id === to?.id ? to : null
+                        return (
                         <div key={n.id} style={{ fontSize: 13, background: '#f9f9f9', padding: '6px 8px', borderRadius: 8 }}>
+                          {/* Which of the two profiles this note is about —
+                              otherwise ambiguous once both sides of the
+                              match share one History list (audit gap). */}
+                          {notedProfile && (
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 12, marginRight: 6,
+                              background: notedProfile.gender === 'Male' ? '#eff6ff' : '#fdf2f8',
+                              color: notedProfile.gender === 'Male' ? '#2563eb' : '#db2777' }}>
+                              {notedProfile.gender === 'Male' ? '👦' : notedProfile.gender === 'Female' ? '👧' : '●'} {notedProfile.profile_code || notedProfile.full_name}
+                            </span>
+                          )}
                           {n.call_outcome && (
                             <span style={{ fontSize: 12, fontWeight: 600, padding: '7px 14px', borderRadius: 20, marginRight: 6,
                               background: CALL_OUTCOME_COLORS[n.call_outcome]?.bg, color: CALL_OUTCOME_COLORS[n.call_outcome]?.fg }}>
@@ -2633,7 +2694,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                           )}
                           {n.note} <span style={{ color: '#bbb' }}>· {new Date(n.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
                         </div>
-                      ))}
+                      )})}
                     </div>
                   </div>
                 )}
