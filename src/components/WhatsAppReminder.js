@@ -13,7 +13,14 @@ import { EVENT_LABELS, DEFAULT_MESSAGES, fillTemplate, fetchTemplates, logNotifi
 // Not a backend-automated push — no WhatsApp Business API/vendor is
 // configured yet (see docs/product/future-whatsapp-plan.md). This is the
 // one-tap, admin-triggered version until that vendor decision is made.
-export function WhatsAppReminderButton({ profile, eventType, vars, staffUserId, label, size = 'sm' }) {
+// `appendText`: a value (e.g. a share-link URL) that's always added after
+// the template text, regardless of what the template itself says — used
+// for match_shared so the link is never at the mercy of a template that
+// doesn't happen to mention it (unlike {{vars}}, which a custom template
+// can simply leave out). Unify-the-WhatsApp-sends audit, 2026-10-08: this
+// event used to build its own hardcoded message instead of going through
+// the same admin-editable template picker every other reminder uses.
+export function WhatsAppReminderButton({ profile, eventType, vars, appendText, staffUserId, label, size = 'sm' }) {
   const [open, setOpen] = useState(false)
   const phone = profile?.client_phone
   if (!profile) return null
@@ -21,26 +28,27 @@ export function WhatsAppReminderButton({ profile, eventType, vars, staffUserId, 
   return (
     <>
       <button type="button" className="btn btn-outline btn-sm"
-        style={{ padding: '5px 8px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 0, color: '#16a34a', borderColor: '#16a34a' }}
+        style={{ padding: pad, fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, color: '#16a34a', borderColor: '#16a34a' }}
         title={phone ? (label || 'Send a WhatsApp reminder') : 'No phone number saved for this profile'}
         onClick={(e) => { e.stopPropagation(); setOpen(true) }}>
-        <MessageCircle size={13} />
+        <MessageCircle size={13} />{size === 'md' && (label || 'Send via WhatsApp')}
       </button>
       {open && (
-        <ReminderSheet profile={profile} eventType={eventType} vars={vars} staffUserId={staffUserId}
+        <ReminderSheet profile={profile} eventType={eventType} vars={vars} appendText={appendText} staffUserId={staffUserId}
           onClose={() => setOpen(false)} />
       )}
     </>
   )
 }
 
-function ReminderSheet({ profile, eventType, vars, staffUserId, onClose }) {
+function ReminderSheet({ profile, eventType, vars, appendText, staffUserId, onClose }) {
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [templateId, setTemplateId] = useState('default')
   const [text, setText] = useState('')
   const phone = profile?.client_phone
   const fullVars = { name: profile?.full_name || 'there', ...vars }
+  const withAppend = (body) => appendText ? body + '\n\n' + appendText : body
 
   useEffect(() => {
     let active = true
@@ -49,7 +57,7 @@ function ReminderSheet({ profile, eventType, vars, staffUserId, onClose }) {
       setTemplates(rows)
       setLoading(false)
       const first = rows[0]
-      setText(fillTemplate(first ? first.message : DEFAULT_MESSAGES[eventType], fullVars))
+      setText(withAppend(fillTemplate(first ? first.message : DEFAULT_MESSAGES[eventType], fullVars)))
       setTemplateId(first ? first.id : 'default')
     })
     return () => { active = false }
@@ -59,7 +67,7 @@ function ReminderSheet({ profile, eventType, vars, staffUserId, onClose }) {
   const pickTemplate = (id) => {
     setTemplateId(id)
     const t = templates.find(x => x.id === id)
-    setText(fillTemplate(t ? t.message : DEFAULT_MESSAGES[eventType], fullVars))
+    setText(withAppend(fillTemplate(t ? t.message : DEFAULT_MESSAGES[eventType], fullVars)))
   }
 
   const send = async () => {
