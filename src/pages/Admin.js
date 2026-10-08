@@ -22,6 +22,7 @@ import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, g
 import { WhatsAppReminderButton } from '../components/WhatsAppReminder'
 import NotificationBell from '../components/NotificationBell'
 import { EVENT_LABELS, fillTemplate, logNotification } from '../utils/notifications'
+import { gunaMilanFor } from '../utils/astrology'
 import { useToast } from '../components/ui'
 
 // SEARCH DESIGN NOTE: yeh search ab DATABASE se query karta hai (Supabase
@@ -2331,14 +2332,74 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
   }
 
   // Positive/Negative outcome after the meeting — recorded on the same
-  // interaction (decision/decision_at), not a new record (audit #39).
+  // interaction (decision/decision_at), not a new record (audit #39). A
+  // positive decision also starts the next-round pipeline (audit #11).
   const handleDecision = async (id, decision) => {
     try {
       const patch = { decision, decision_at: new Date().toISOString() }
+      if (decision === 'interested') patch.next_round_stage = 'horoscope_review'
       const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
       await writeAuditLog(staffUser, 'coordination_decision_recorded', id, patch)
       setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+    } catch (err) {
+      showToast(err.message)
+    }
+  }
+
+  // Next-round pipeline after a positive decision: horoscope review ->
+  // house visit -> final meeting -> contact disclosure -> successful match.
+  // Same introduction row throughout (reuse-first, audit #11) — each step
+  // just advances next_round_stage and, where the audit calls for it,
+  // stamps its own timestamp. Any step can instead end the round as "not
+  // proceeding", which closes the request same as the existing Close action.
+  const handleAdvanceRound = async (id, nextStage, extraPatch) => {
+    try {
+      const patch = { next_round_stage: nextStage, ...(extraPatch || {}) }
+      const { error } = await supabase.from('introductions').update(patch).eq('id', id)
+      if (error) throw error
+      await writeAuditLog(staffUser, 'coordination_round_advanced', id, patch)
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+    } catch (err) {
+      showToast(err.message)
+    }
+  }
+
+  // Contact disclosure is the audit's one explicitly "auditable" step —
+  // writeAuditLog already records who (actor_user_id) and when
+  // (created_at) for every coordination action, so this reuses that same
+  // path rather than a new mechanism. It also closes the round out as a
+  // successful match — the audit's "final historical state".
+  const handleDiscloseAndComplete = async (id) => {
+    try {
+      const now = new Date().toISOString()
+      const patch = {
+        next_round_stage: 'successful_match',
+        contact_disclosed_at: now,
+        contact_disclosed_by: staffUser.user_id,
+        final_outcome: 'successful_match',
+        final_outcome_at: now,
+        status: 'closed',
+      }
+      const { error } = await supabase.from('introductions').update(patch).eq('id', id)
+      if (error) throw error
+      await writeAuditLog(staffUser, 'contact_disclosed', id, patch)
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+      refreshPendingCount()
+    } catch (err) {
+      showToast(err.message)
+    }
+  }
+
+  const handleNotProceeding = async (id) => {
+    try {
+      const now = new Date().toISOString()
+      const patch = { final_outcome: 'not_proceeding', final_outcome_at: now, status: 'closed' }
+      const { error } = await supabase.from('introductions').update(patch).eq('id', id)
+      if (error) throw error
+      await writeAuditLog(staffUser, 'coordination_round_ended', id, patch)
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+      refreshPendingCount()
     } catch (err) {
       showToast(err.message)
     }
@@ -2592,6 +2653,25 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                   </div>
                 )}
 
+                {/* Next round after a positive decision: horoscope review ->
+                    house visit -> final meeting -> contact disclosure ->
+                    successful match (audit 2026-10-08, P0 #11). Hidden once
+                    the round has ended (closed), same as every other
+                    in-progress control on this card. */}
+                {r.decision === 'interested' && r.next_round_stage && r.status !== 'closed' && (
+                  <NextRoundPanel request={r} fromProfile={from} toProfile={to}
+                    onAdvance={(stage, patch)=>handleAdvanceRound(r.id, stage, patch)}
+                    onDiscloseAndComplete={()=>handleDiscloseAndComplete(r.id)}
+                    onNotProceeding={()=>handleNotProceeding(r.id)} />
+                )}
+                {r.final_outcome && (
+                  <div style={{fontSize:12,marginTop:8,display:'flex',alignItems:'center',gap:6,
+                    color: r.final_outcome === 'successful_match' ? '#16a34a' : '#8e8e8e'}}>
+                    {r.final_outcome === 'successful_match' ? '💍' : <X size={13} />}
+                    {r.final_outcome === 'successful_match' ? 'Successful match' : 'Not proceeding'} · {new Date(r.final_outcome_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                  </div>
+                )}
+
                 {/* Post-introduction feedback — closes the VIP-matchmaking style loop: feedback sharpens the next match */}
                 {r.status === 'closed' && (
                   r.feedback ? (
@@ -2637,6 +2717,82 @@ function DecisionWindow({ deadline, onDecide }) {
         <button className="btn btn-black btn-sm" onClick={() => onDecide('interested')}>👍 Positive</button>
         <button className="btn btn-outline btn-sm" onClick={() => onDecide('not_interested')}>👎 Negative</button>
       </div>
+    </div>
+  )
+}
+
+const ROUND_STAGE_LABELS = {
+  horoscope_review: 'Horoscope review',
+  house_visit: 'House visit',
+  final_meeting: 'Final meeting',
+  contact_disclosure: 'Contact disclosure',
+  successful_match: 'Successful match',
+}
+
+// Next-round pipeline card — one step visible at a time, matching
+// ROUND_STAGE_LABELS' order. Each stage's own local date draft is kept
+// here rather than lifted up, same as scheduleDraft does for the first
+// meeting, since it's only needed while that stage is active.
+function NextRoundPanel({ request, fromProfile, toProfile, onAdvance, onDiscloseAndComplete, onNotProceeding }) {
+  const [dateDraft, setDateDraft] = useState('')
+  const stage = request.next_round_stage
+  const guna = gunaMilanFor(fromProfile, toProfile)
+
+  return (
+    <div style={{ marginTop: 8, padding: '10px 12px', borderRadius: 8, background: '#f0f7ff' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: '#1d4ed8', marginBottom: 8 }}>
+        Next round · {ROUND_STAGE_LABELS[stage]}
+      </div>
+
+      {stage === 'horoscope_review' && (
+        <>
+          {guna ? (
+            <div style={{ fontSize: 12, color: '#333', marginBottom: 8 }}>
+              Guna Milan: {guna.total}/{guna.max} ({guna.verdict}){guna.doshas.length > 0 && ` · ${guna.doshas.join(', ')}`}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 8 }}>
+              Horoscope data not available for one or both profiles — can still proceed.
+            </div>
+          )}
+          <button className="btn btn-black btn-sm" onClick={() => onAdvance('house_visit')}>Mark Reviewed → House Visit</button>
+        </>
+      )}
+
+      {stage === 'house_visit' && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input type="datetime-local" className="form-input" style={{ fontSize: 12, padding: '7px 12px', width: 190 }}
+            value={dateDraft} onChange={e => setDateDraft(e.target.value)} />
+          <button className="btn btn-black btn-sm"
+            onClick={() => onAdvance('final_meeting', { house_visit_at: dateDraft ? new Date(dateDraft).toISOString() : new Date().toISOString() })}>
+            Mark Visit Done → Final Meeting
+          </button>
+        </div>
+      )}
+
+      {stage === 'final_meeting' && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input type="datetime-local" className="form-input" style={{ fontSize: 12, padding: '7px 12px', width: 190 }}
+            value={dateDraft} onChange={e => setDateDraft(e.target.value)} />
+          <button className="btn btn-black btn-sm"
+            onClick={() => onAdvance('contact_disclosure', { final_meeting_at: dateDraft ? new Date(dateDraft).toISOString() : new Date().toISOString() })}>
+            Mark Meeting Done → Contact Disclosure
+          </button>
+        </div>
+      )}
+
+      {stage === 'contact_disclosure' && (
+        <button className="btn btn-black btn-sm" onClick={onDiscloseAndComplete}>
+          Disclose Contact & Mark Successful Match
+        </button>
+      )}
+
+      {stage !== 'successful_match' && (
+        <button className="btn btn-outline btn-sm" style={{ marginLeft: 8, color: '#dc2626', borderColor: '#dc2626' }}
+          onClick={onNotProceeding}>
+          Not Proceeding
+        </button>
+      )}
     </div>
   )
 }
