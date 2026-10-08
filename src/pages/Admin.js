@@ -5,7 +5,7 @@ import {
   ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, Tag, TrendingUp, Trash2,
-  ThumbsUp, MoreVertical,
+  ThumbsUp, MoreVertical, MapPin,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -210,6 +210,16 @@ const matchesSearch = (q, ...fields) => {
   const needle = q.trim().toLowerCase()
   if (!needle) return true
   return fields.some(f => f && String(f).toLowerCase().includes(needle))
+}
+
+// "now" in the local <input type="datetime-local"> format (no timezone,
+// minute precision) — used as `min` so past dates can't be picked (audit
+// 2026-10-08, P1 #14).
+const nowForDatetimeLocalMin = () => {
+  const d = new Date()
+  d.setSeconds(0, 0)
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
 }
 
 export default function Admin({ staffUser }) {
@@ -2175,6 +2185,7 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
   const [hasMore, setHasMore] = useState(false)
   const [pendingCount, setPendingCount] = useState(0) // badge ke liye — loaded rows se independent, poore table ka sahi count
   const [scheduleDraft, setScheduleDraft] = useState({}) // request id -> datetime-local string being edited
+  const [locationDraft, setLocationDraft] = useState({}) // request id -> location string being edited
   // Pending (not yet accepted/declined by the receiver) requests were never
   // shown here before — admin had no visibility until both members acted.
   // Now included by default so admin can see/coordinate proactively.
@@ -2294,10 +2305,17 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
   // meetings" (My Queue) ko yahin se data milta hai. Reschedule ka purana
   // time overwrite hone se pehle profile_notes mein log hota hai, taaki
   // "pehle kab rakha tha, kyun badla" ki history na gayab ho (audit gap #4).
-  const handleSchedule = async (id, datetimeLocal, prevScheduledAt, fromProfileId) => {
+  const handleSchedule = async (id, datetimeLocal, prevScheduledAt, fromProfileId, location) => {
     if (!datetimeLocal) return
     try {
       const newWhen = new Date(datetimeLocal).toISOString()
+      // Audit 2026-10-08, P1 #14: past dates were selectable (the
+      // datetime-local input had no min) — the UI now also sets min=now,
+      // this is the belt-and-suspenders server-side check.
+      if (new Date(newWhen).getTime() < Date.now() - 60000) {
+        showToast('Meeting time cannot be in the past.')
+        return
+      }
       if (prevScheduledAt) {
         const { data: auth } = await supabase.auth.getUser()
         const { data: noteRow } = await supabase.from('profile_notes').insert({
@@ -2308,11 +2326,12 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
         }).select('*').single()
         if (noteRow) setNotesByIntroduction(prev => ({ ...prev, [id]: [noteRow, ...(prev[id] || [])] }))
       }
-      const { error } = await supabase.from('introductions').update({ scheduled_at: newWhen }).eq('id', id)
+      const patch = { scheduled_at: newWhen, location: location || null }
+      const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
-      await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: newWhen, previous: prevScheduledAt || null })
+      await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: newWhen, location: location || null, previous: prevScheduledAt || null })
       setScheduleDraft(prev => ({ ...prev, [id]: undefined }))
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: newWhen } : r))
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
     } catch (err) {
       showToast(err.message)
     }
@@ -2412,7 +2431,9 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                         {r.scheduled_at && (
                           <div style={{marginTop:4}}>
                             <WhatsAppReminderButton profile={x} eventType="meeting_scheduled" label="Confirm on WhatsApp"
-                              vars={{ otherName: other?.full_name || 'the other member', when: new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) }} />
+                              vars={{ otherName: other?.full_name || 'the other member',
+                                when: new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+                                  + (r.location ? ` at ${r.location}` : '') }} />
                           </div>
                         )}
                       </div>
@@ -2428,16 +2449,29 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                         <CalendarClock size={11} /> {new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                       </div>
                     )}
+                    {r.location && (
+                      <div style={{fontSize:12,color:'#8e8e8e',display:'flex',alignItems:'center',gap:4}}>
+                        <MapPin size={11} /> {r.location}
+                      </div>
+                    )}
                   </div>
                 </div>
-                {/* Schedule a call/meeting time — My Queue ke "Today" section mein dikhta hai */}
+                {/* Schedule a call/meeting time — My Queue ke "Today" section mein
+                    dikhta hai. min=now blocks past dates (audit 2026-10-08, P1 #14);
+                    location field reuses introductions.location (audit P1 #15). */}
                 <div style={{display:'flex',alignItems:'center',gap:6,marginTop:8,flexWrap:'wrap'}} onClick={e=>e.stopPropagation()}>
                   <CalendarClock size={13} color="#8e8e8e" />
                   <input type="datetime-local" className="form-input" style={{fontSize:12,padding:'7px 12px',width:190}}
+                    min={nowForDatetimeLocalMin()}
                     value={scheduleDraft[r.id] ?? ''}
                     onChange={e=>setScheduleDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
+                  <MapPin size={13} color="#8e8e8e" />
+                  <input type="text" className="form-input" placeholder="Location (optional)"
+                    style={{fontSize:12,padding:'7px 12px',width:160}}
+                    value={locationDraft[r.id] ?? r.location ?? ''}
+                    onChange={e=>setLocationDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
                   <button className="btn btn-outline btn-sm" style={{padding:'7px 14px',fontSize:13}}
-                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id], r.scheduled_at, r.from_profile)}>
+                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id], r.scheduled_at, r.from_profile, locationDraft[r.id] ?? r.location)}>
                     {r.scheduled_at ? 'Reschedule' : 'Schedule'}
                   </button>
                   {r.scheduled_at && (
@@ -2946,6 +2980,11 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                       {isToday(m.scheduled_at) ? 'Today' : new Date(m.scheduled_at).toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' })}
                       {' · '}{new Date(m.scheduled_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}
                     </div>
+                    {m.location && (
+                      <div style={{fontSize:12,color:'#8e8e8e',marginTop:2,display:'flex',alignItems:'center',gap:4}}>
+                        <MapPin size={11} /> {m.location}
+                      </div>
+                    )}
                   </div>
                   {onManageCoordination && (
                     <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
