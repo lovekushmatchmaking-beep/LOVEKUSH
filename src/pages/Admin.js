@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+// A few of these were imported but never actually used anywhere in this
+// file (UserCheck, UserPlus, Menu, RotateCcw, Tag) — dead icon imports
+// left over from earlier edits (audit 2026-10-08, P2 #15 polish sweep).
 import {
-  Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, UserCheck, StickyNote,
-  ListChecks, UserPlus, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, Menu, X, LogOut,
-  ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera, RotateCcw,
-  UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, Tag, TrendingUp, Trash2,
+  Users, Clock, CheckCircle2, ShieldX, ShieldCheck, ShieldAlert, Flag, StickyNote,
+  ListChecks, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, X, LogOut,
+  ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
+  UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
   ThumbsUp, MoreVertical, MapPin, BadgeCheck,
 } from 'lucide-react'
 import { supabase } from '../supabase'
@@ -2914,6 +2917,16 @@ function VerificationQueueView({ staffUser, onBack }) {
   // saath load karta tha. Ab Profiles list jaisa "Load More" (30 per page).
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
+  // Bulk "Request Selfie" for the new-sign-ups section — a busy day can have
+  // a dozen new sign-ups needing the exact same one action, same motivation
+  // as the Profiles list's bulk Approve/Block (audit 2026-10-08, P2 #15).
+  const [selectedReq, setSelectedReq] = useState(new Set())
+  const [bulkRequesting, setBulkRequesting] = useState(false)
+  const toggleReqSelected = (id) => setSelectedReq(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
 
   const buildQuery = (from, to) => supabase
     .from('profiles')
@@ -2954,6 +2967,13 @@ function VerificationQueueView({ staffUser, onBack }) {
     else setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, ...patch } : x))
   }
 
+  const bulkRequestSelfies = async (items) => {
+    setBulkRequesting(true)
+    await Promise.all(items.filter(p => selectedReq.has(p.id)).map(p => act(p, 'selfie_requested')))
+    setSelectedReq(new Set())
+    setBulkRequesting(false)
+  }
+
   const sections = [
     { key: 'review', title: 'Selfie received — compare & verify', items: profiles.filter(p => p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'selfie_requested')) },
     { key: 'request', title: 'New sign-ups — request a selfie', items: profiles.filter(p => !p.is_admin_managed && ['not_started', 'rejected'].includes(p.verification_status || 'not_started') && !p.id_document_uploaded) },
@@ -2973,14 +2993,27 @@ function VerificationQueueView({ staffUser, onBack }) {
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Nothing waiting on verification right now.</div>
       ) : sections.filter(sec => sec.items.length > 0).map(sec => (
         <div key={sec.key} style={{marginBottom:24}}>
-          <div style={{fontSize:12,fontWeight:600,color:'#8e8e8e',marginBottom:8}}>{sec.title} ({sec.items.length})</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+            <div style={{fontSize:12,fontWeight:600,color:'#8e8e8e'}}>{sec.title} ({sec.items.length})</div>
+            {sec.key === 'request' && selectedReq.size > 0 && (
+              <button className="btn btn-black btn-sm" disabled={bulkRequesting} onClick={()=>bulkRequestSelfies(sec.items)}>
+                {bulkRequesting ? 'Requesting...' : `Request Selfie (${selectedReq.size})`}
+              </button>
+            )}
+          </div>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {sec.items.map(p => (
               <div key={p.id} className="list-row">
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:600}}>{p.full_name}</div>
-                    <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    {sec.key === 'request' && (
+                      <input type="checkbox" checked={selectedReq.has(p.id)} onChange={()=>toggleReqSelected(p.id)}
+                        title="Select for bulk Request Selfie" style={{width:18,height:18,flexShrink:0}} />
+                    )}
+                    <div>
+                      <div style={{fontSize:14,fontWeight:600}}>{p.full_name}</div>
+                      <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
+                    </div>
                   </div>
                   <div className="badge" style={{fontSize:12, background:'#eff6ff', color:'#2563eb'}}>
                     {p.id_document_uploaded && p.verification_status !== 'selfie_submitted' ? 'ID document uploaded' : (VERIFICATION_LABELS[p.verification_status] || 'Not verified')}
