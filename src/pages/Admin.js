@@ -289,7 +289,10 @@ export default function Admin({ staffUser }) {
   // pichhle section/view par hi wapas le jaata hai.
   const [searchParams, setSearchParams] = useSearchParams()
   const view = searchParams.get('view') || 'list'
-  const section = searchParams.get('section') || 'profiles' // main nav: profiles | dashboard | queues | tools | account
+  // Dashboard (the stats command-center) is the default landing screen, not
+  // Profiles — audit 2026-10-08, P1 #13: admin opened the app straight into
+  // a client list with no overview of what needs attention today.
+  const section = searchParams.get('section') || 'dashboard' // main nav: profiles | dashboard | queues | tools | account
   const setView = (v) => {
     if (v === 'list') navigate(-1) // undoes the push below — matches hardware back
     else setSearchParams(prev => {
@@ -302,7 +305,7 @@ export default function Admin({ staffUser }) {
   // another bottom-nav/sidebar tab) — pushes one new history entry.
   const setSectionOnly = (s) => setSearchParams(prev => {
     const next = new URLSearchParams(prev)
-    if (s === 'profiles') next.delete('section'); else next.set('section', s)
+    if (s === 'dashboard') next.delete('section'); else next.set('section', s)
     next.delete('view')
     return next
   })
@@ -311,7 +314,7 @@ export default function Admin({ staffUser }) {
   // admin started instead of landing on the wrong tab.
   const goToSectionView = (s, v) => setSearchParams(prev => {
     const next = new URLSearchParams(prev)
-    if (s === 'profiles') next.delete('section'); else next.set('section', s)
+    if (s === 'dashboard') next.delete('section'); else next.set('section', s)
     next.set('view', v)
     return next
   })
@@ -826,8 +829,8 @@ export default function Admin({ staffUser }) {
   const needsAttention = (stats.needsVerification || 0) + (stats.openReports || 0)
 
   const navItems = [
-    { id: 'profiles', label: 'Profiles', Icon: Users },
     { id: 'dashboard', label: 'Dashboard', Icon: BarChart3 },
+    { id: 'profiles', label: 'Profiles', Icon: Users },
     { id: 'queues', label: 'Queues', Icon: ListChecks, badge: needsAttention },
     { id: 'tools', label: 'Tools', Icon: Wrench },
     { id: 'account', label: 'Account', Icon: UserRound },
