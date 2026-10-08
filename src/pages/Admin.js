@@ -2353,10 +2353,21 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:14}}>Coordination Requests</h2>
       {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by name, Profile ID, mobile or Request ID..." />}
 
+      {/* Tab labels spelled out (audit 2026-10-08, P0 #9: "Open" and
+          "Pending" read as contradictory statuses when both are just
+          lowercase words) — "Pending" is a narrower filter *within*
+          "Open" (every status but Closed), not a separate current state;
+          a request's one real current state is still its single
+          COORD_STATUS_LABELS badge on the card below. */}
       <div className="pill-tabs" style={{marginBottom:16}}>
-        {['open','pending','closed','all'].map(t => (
+        {[
+          ['open', 'Open'],
+          ['pending', `Needs first response (${pendingCount})`],
+          ['closed', 'Closed'],
+          ['all', 'All'],
+        ].map(([t, label]) => (
           <button key={t} className={'pill-tab ' + (tab === t ? 'active' : '')} onClick={()=>setTab(t)}>
-            {t === 'pending' ? `pending (${pendingCount})` : t}
+            {label}
           </button>
         ))}
       </div>
