@@ -2313,13 +2313,32 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
 
   const handleAction = async (id, status) => {
     try {
-      const { error } = await supabase.from('introductions').update({ status }).eq('id', id)
+      // Audit 2026-10-08, P0 #10: marking a meeting Done should
+      // automatically start a 48-hour decision window — introductions
+      // already has a decision/decision_at/decision_deadline columns,
+      // but nothing ever set or read them. Starting it here, same write.
+      const patch = status === 'meeting_done' ? { status, decision_deadline: new Date(Date.now() + 48*60*60*1000).toISOString() } : { status }
+      const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
       // Coordination status change kahin audit log nahi likhta tha — Aryan
       // ka audit gap #7. entity_id = introduction id.
       await writeAuditLog(staffUser, 'coordination_status_change', id, { new_status: status })
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r))
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
       refreshPendingCount()
+    } catch (err) {
+      showToast(err.message)
+    }
+  }
+
+  // Positive/Negative outcome after the meeting — recorded on the same
+  // interaction (decision/decision_at), not a new record (audit #39).
+  const handleDecision = async (id, decision) => {
+    try {
+      const patch = { decision, decision_at: new Date().toISOString() }
+      const { error } = await supabase.from('introductions').update(patch).eq('id', id)
+      if (error) throw error
+      await writeAuditLog(staffUser, 'coordination_decision_recorded', id, patch)
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
     } catch (err) {
       showToast(err.message)
     }
@@ -2558,6 +2577,21 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
                   </div>
                 )}
 
+                {/* 48-hour decision window — starts automatically when the
+                    meeting is marked Done (audit 2026-10-08, P0 #10). Shown
+                    only until a decision is recorded, then replaced by the
+                    recorded outcome (same interaction, no new record). */}
+                {r.status === 'meeting_done' && r.decision_deadline && !r.decision && (
+                  <DecisionWindow deadline={r.decision_deadline} onDecide={(d)=>handleDecision(r.id, d)} />
+                )}
+                {r.decision && (
+                  <div style={{fontSize:12,marginTop:8,display:'flex',alignItems:'center',gap:6,
+                    color: r.decision === 'interested' ? '#16a34a' : '#8e8e8e'}}>
+                    {r.decision === 'interested' ? <CheckCircle2 size={13} /> : <X size={13} />}
+                    Decision: {r.decision === 'interested' ? 'Positive' : 'Negative'} · {new Date(r.decision_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                  </div>
+                )}
+
                 {/* Post-introduction feedback — closes the VIP-matchmaking style loop: feedback sharpens the next match */}
                 {r.status === 'closed' && (
                   r.feedback ? (
@@ -2578,6 +2612,31 @@ function CoordinationRequestsView({ onBack, focusId, onConsumeFocus, staffUser }
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// 48-hour decision window — countdown + Positive/Negative buttons, shown on
+// a coordination card once a meeting is marked Done (audit 2026-10-08, P0 #10).
+function DecisionWindow({ deadline, onDecide }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60000)
+    return () => clearInterval(t)
+  }, [])
+  const msLeft = new Date(deadline).getTime() - now
+  const overdue = msLeft <= 0
+  const hLeft = Math.floor(Math.abs(msLeft) / (60 * 60 * 1000))
+  const mLeft = Math.floor((Math.abs(msLeft) % (60 * 60 * 1000)) / 60000)
+  return (
+    <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: overdue ? '#fef2f2' : '#fffbeb' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: overdue ? '#b91c1c' : '#92400e', marginBottom: 6 }}>
+        {overdue ? `Decision overdue · ${hLeft}h ${mLeft}m past deadline` : `Decision Pending · ${hLeft}h ${mLeft}m remaining`}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button className="btn btn-black btn-sm" onClick={() => onDecide('interested')}>👍 Positive</button>
+        <button className="btn btn-outline btn-sm" onClick={() => onDecide('not_interested')}>👎 Negative</button>
+      </div>
     </div>
   )
 }
