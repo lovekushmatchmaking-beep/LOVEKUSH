@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Phone, MessageCircle, Pencil } from 'lucide-react'
+import { Phone, MessageCircle, Pencil, Building2 } from 'lucide-react'
 import { supabase } from '../supabase'
 import { buildTelLink, buildWaChatLink, normalizePhone } from '../utils/shareProfile'
 
@@ -42,11 +42,24 @@ export const contactLogPrefix = (kind) => (kind === 'call' ? '📞 Called: ' : k
 // reading the icon carefully) — 'sm' just keeps the button a bit more
 // compact than 'md' (used in the expanded profile), both are comfortably
 // tappable (>=7px vertical padding, well over the old 4px).
-export function ContactButtons({ phone, onAction, logProfile, introductionId, size = 'sm' }) {
+// `externalBureauName`: profile.external_bureau_name (profile source bureau
+// ka naam, e.g. "X.MB") — jab number hi nahi hai (external bureau profiles
+// aksar contact details nahi dete), yeh buttons silently gayab hone ke
+// jagah ek chhota "No contact — external bureau" note dikhate hain, taaki
+// koi socha na le ki number save karna bhool gaye (Aryan's ask, 2026-10-09).
+export function ContactButtons({ phone, onAction, logProfile, introductionId, size = 'sm', externalBureauName }) {
   const [logKind, setLogKind] = useState(null)
   const tel = buildTelLink(phone)
   const wa = buildWaChatLink(phone)
-  if (!tel) return null
+  if (!tel) {
+    if (!externalBureauName) return null
+    return (
+      <span style={{ fontSize: 11, color: '#b45309', fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        title={`Sourced from ${externalBureauName} — they haven't shared this client's contact details`}>
+        <Building2 size={12} /> No contact — external ({externalBureauName})
+      </span>
+    )
+  }
   const pad = size === 'sm' ? '7px 12px' : '9px 16px'
   const stop = (kind) => (e) => {
     e.stopPropagation()
@@ -151,13 +164,17 @@ function QuickCallLog({ profile, kind, introductionId, onClose }) {
 // dikha chuki hai (Profiles list's own top quick-actions row) — number ko
 // phir bhi yahan hi edit kiya ja sakta hai, bas dusra Call/WhatsApp jodaa
 // nahi dikhta (Aryan's audit, 2026-10-08: duplicate Call/WhatsApp buttons).
-export function ProfileContact({ profile, onSaved, onAction, logCalls = false, introductionId, staffUser, showContactButtons = true }) {
+export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, logCalls = false, introductionId, staffUser, showContactButtons = true }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(profile.client_phone || '')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const phone = profile.client_phone
   const valid = !!normalizePhone(phone)
+  const bureau = profile.external_bureau_name
+  const [editingBureau, setEditingBureau] = useState(false)
+  const [bureauDraft, setBureauDraft] = useState(bureau || '')
+  const [bureauSaving, setBureauSaving] = useState(false)
 
   const save = async () => {
     if (!normalizePhone(draft)) { setError('Enter a valid number (10 digits, or with country code)'); return }
@@ -179,29 +196,69 @@ export function ProfileContact({ profile, onSaved, onAction, logCalls = false, i
     onSaved && onSaved(draft.trim())
   }
 
+  // Bureau name — jab bhi set ho, "No number saved yet" ki jagah yeh batata
+  // hai KYUN number nahi hai (woh dusra bureau client ka contact nahi deta).
+  const saveBureau = async (raw = bureauDraft) => {
+    setBureauSaving(true)
+    const value = (raw || '').trim() || null
+    const { error: err } = await supabase.from('profiles').update({ external_bureau_name: value }).eq('id', profile.id)
+    setBureauSaving(false)
+    if (err) { setError('Could not save: ' + err.message); return }
+    setError(''); setEditingBureau(false); setBureauDraft(value || '')
+    onBureauSaved && onBureauSaved(value)
+  }
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12, fontSize: 12 }}
-      onClick={e => e.stopPropagation()}>
-      <Phone size={14} color="#8e8e8e" />
-      {editing || !phone ? (
-        <>
-          <input className="form-input" placeholder="WhatsApp / mobile number" value={draft} inputMode="tel"
-            onChange={e => setDraft(e.target.value)} style={{ flex: '1 1 160px', fontSize: 12, maxWidth: 220 }} />
-          <button className="btn btn-outline btn-sm" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save number'}</button>
-          {phone && <button className="btn btn-outline btn-sm" onClick={() => { setEditing(false); setDraft(phone); setError('') }}>Cancel</button>}
-          {!phone && <span style={{ color: '#8e8e8e' }}>No number saved yet</span>}
-        </>
-      ) : (
-        <>
-          <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{phone}</span>
-          {!valid && <span style={{ color: '#dc2626' }}>Number looks incomplete</span>}
-          {valid && showContactButtons &&
-            <ContactButtons phone={phone} onAction={onAction} logProfile={logCalls ? profile : undefined} introductionId={introductionId} size="md" />}
-          <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="Edit number"
-            onClick={() => setEditing(true)}><Pencil size={12} /></button>
-        </>
-      )}
-      {error && <div style={{ width: '100%', fontSize: 11, color: '#dc2626' }}>{error}</div>}
+    <div onClick={e => e.stopPropagation()}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8, fontSize: 12 }}>
+        <Phone size={14} color="#8e8e8e" />
+        {editing || !phone ? (
+          <>
+            <input className="form-input" placeholder="WhatsApp / mobile number" value={draft} inputMode="tel"
+              onChange={e => setDraft(e.target.value)} style={{ flex: '1 1 160px', fontSize: 12, maxWidth: 220 }} />
+            <button className="btn btn-outline btn-sm" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save number'}</button>
+            {phone && <button className="btn btn-outline btn-sm" onClick={() => { setEditing(false); setDraft(phone); setError('') }}>Cancel</button>}
+            {!phone && (
+              <span style={{ color: bureau ? '#b45309' : '#8e8e8e' }}>
+                {bureau ? `No contact — external bureau profile (${bureau})` : 'No number saved yet'}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{phone}</span>
+            {!valid && <span style={{ color: '#dc2626' }}>Number looks incomplete</span>}
+            {valid && showContactButtons &&
+              <ContactButtons phone={phone} onAction={onAction} logProfile={logCalls ? profile : undefined} introductionId={introductionId} size="md" />}
+            <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="Edit number"
+              onClick={() => setEditing(true)}><Pencil size={12} /></button>
+          </>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12, fontSize: 12 }}>
+        <Building2 size={13} color="#8e8e8e" />
+        {editingBureau ? (
+          <>
+            <input className="form-input" placeholder='Bureau name, e.g. "X.MB"' value={bureauDraft}
+              onChange={e => setBureauDraft(e.target.value)} style={{ flex: '1 1 160px', fontSize: 12, maxWidth: 220 }} autoFocus />
+            <button className="btn btn-outline btn-sm" disabled={bureauSaving} onClick={saveBureau}>{bureauSaving ? 'Saving…' : 'Save'}</button>
+            <button className="btn btn-outline btn-sm" onClick={() => { setEditingBureau(false); setBureauDraft(bureau || '') }}>Cancel</button>
+          </>
+        ) : bureau ? (
+          <>
+            <span className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#b45309' }}
+              title="Sourced from another marriage bureau — their contact details are typically missing/restricted">🔗 External — {bureau}</span>
+            <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="Edit bureau name"
+              onClick={() => setEditingBureau(true)}><Pencil size={12} /></button>
+            <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px', fontSize: 11, color: '#8e8e8e' }}
+              title="Not external — clear this tag" onClick={() => saveBureau('')}>Clear</button>
+          </>
+        ) : (
+          <button className="btn btn-outline btn-sm" style={{ padding: '3px 8px', fontSize: 11, color: '#8e8e8e' }}
+            onClick={() => setEditingBureau(true)}>+ Mark as external bureau profile</button>
+        )}
+      </div>
+      {error && <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 8 }}>{error}</div>}
     </div>
   )
 }
