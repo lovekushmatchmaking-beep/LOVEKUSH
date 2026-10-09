@@ -71,6 +71,32 @@ test('age ranking is direction-aware: a bride older than the groom ranks below a
   expect(brideOlder.needsDiscussion.some(s => s.includes('older than groom'))).toBe(true)
 })
 
+test('partner religion preference supports multiple religions, with backward-compat fallback to the old single-value field', () => {
+  // New multi-select array field
+  expect(passesHardFilters(
+    boy({ partner_religion_preferences: ['Hindu', 'Sikh'] }),
+    girl({ religion: 'Sikh' })
+  )).toBe(true)
+  expect(passesHardFilters(
+    boy({ partner_religion_preferences: ['Hindu', 'Sikh'] }),
+    girl({ religion: 'Muslim' })
+  )).toBe(false)
+  // Empty array = Any / open to all
+  expect(passesHardFilters(
+    boy({ partner_religion_preferences: [] }),
+    girl({ religion: 'Muslim' })
+  )).toBe(true)
+  // Old single-value field still works for profiles that never saved the new field
+  expect(passesHardFilters(
+    boy({ partner_religion: 'Sikh' }),
+    girl({ religion: 'Sikh' })
+  )).toBe(true)
+  expect(passesHardFilters(
+    boy({ partner_religion: 'Sikh' }),
+    girl({ religion: 'Hindu' })
+  )).toBe(false)
+})
+
 test('profession and complexion (existing fields) now feed the score', () => {
   const r1 = computeMatchScore(boy({ profession: 'Software Engineer' }), girl({ profession: 'Software Engineer' }))
   expect(r1.strengths.some(s => s.includes('Same profession'))).toBe(true)

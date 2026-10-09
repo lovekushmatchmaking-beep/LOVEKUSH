@@ -603,7 +603,8 @@ export default function Dashboard({ user }) {
                     ['Age Range', profile.partner_age_min && profile.partner_age_max ? profile.partner_age_min + ' - ' + profile.partner_age_max + ' years' : null],
                     ['Height Range', profile.partner_height_min && profile.partner_height_max ? formatHeightFromInches(profile.partner_height_min) + ' - ' + formatHeightFromInches(profile.partner_height_max) : null],
                     ['Income Range', profile.partner_income_max ? formatIncomeShort(profile.partner_income_min, profile.partner_income_currency) + ' - ' + formatIncomeShort(profile.partner_income_max, profile.partner_income_currency) : null],
-                    ['Religion', profile.partner_religion],
+                    ['Religion', Array.isArray(profile.partner_religion_preferences) && profile.partner_religion_preferences.length
+                      ? profile.partner_religion_preferences.join(', ') : profile.partner_religion],
                     ['Preferred Community', Array.isArray(profile.partner_community_ids) ? profile.partner_community_ids.join(', ') : null],
                     ['Education Level', Array.isArray(profile.partner_education_level_preferences) && profile.partner_education_level_preferences.length ? profile.partner_education_level_preferences.join(', ') : null],
                     ['Location', profile.partner_location],
@@ -1490,7 +1491,11 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     partner_city_preference: profile.partner_city_preference || '',
     partner_state_preference: profile.partner_state_preference || '',
     partner_country_preference: profile.partner_country_preference || 'Open to All',
-    partner_religion: profile.partner_religion || 'Any',
+    // Multiple religions ab select kar sakte hain (naya array column) —
+    // purana single-value partner_religion se migrate karte hain agar
+    // yeh profile abhi tak naya field save nahi kar chuka.
+    partner_religion_preferences: profile.partner_religion_preferences
+      || (profile.partner_religion && profile.partner_religion !== 'Any' ? [profile.partner_religion] : []),
     partner_community_ids: profile.partner_community_ids || [],
     partner_location: profile.partner_location || '',
     partner_education: profile.partner_education || 'Any',
@@ -1663,6 +1668,10 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           partner_height_max: parseInt(form.partner_height_max) || null,
           partner_income_min: parseInt(form.partner_income_min) || null,
           partner_income_max: parseInt(form.partner_income_max) || null,
+          // Purana single-value column sync rakhte hain — kuch jagah
+          // (Admin.js "Looking for" summary, ProfileView.js) abhi bhi
+          // wahi padhte hain.
+          partner_religion: form.partner_religion_preferences[0] || 'Any',
           profile_completeness: breakdown.overall,
           completeness_breakdown: breakdown,
         })
@@ -2415,21 +2424,20 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         </div>
         <div className="form-group">
           <FormLabel>Religion Preference</FormLabel>
-          <select className="form-select" value={form.partner_religion} onChange={e=>set('partner_religion',e.target.value)}>
-            <option value="Any">Any / Open to all</option>
-            {RELIGIONS.map(r=><option key={r}>{r}</option>)}
-          </select>
+          <CheckboxDropdown options={RELIGIONS} selected={form.partner_religion_preferences}
+            onChange={v=>set('partner_religion_preferences',v)} placeholder="Any / Open to all" />
+          <div className="form-hint">Khaali chhodne par sab religions acceptable maane jaayenge</div>
         </div>
-        {form.partner_religion !== 'Any' && (
+        {form.partner_religion_preferences.length > 0 && (
           <div className="form-group">
             <FormLabel>Preferred Community</FormLabel>
             <CheckboxDropdown
               options={[
-                ...(form.partner_religion === 'Muslim' ? ISLAMIC_COMMUNITIES
-                  : form.partner_religion === 'Christian' ? CHRISTIAN_COMMUNITIES
-                  : RELIGION_HIERARCHY[form.partner_religion]?.community.options
-                  || CASTES
-                ).filter(c => !/^(other|others|don'?t)/i.test(c)),
+                ...[...new Set(form.partner_religion_preferences.flatMap(r =>
+                  r === 'Muslim' ? ISLAMIC_COMMUNITIES
+                    : r === 'Christian' ? CHRISTIAN_COMMUNITIES
+                    : RELIGION_HIERARCHY[r]?.community.options || CASTES
+                ))].filter(c => !/^(other|others|don'?t)/i.test(c)),
                 ...PARTNER_COMMUNITY_SPECIAL_OPTIONS,
               ]}
               selected={form.partner_community_ids}

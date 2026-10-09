@@ -1930,7 +1930,9 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                 <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2}}>Looking for</div>
                 <div style={{fontSize:13}}>
                   {profile.partner_age_min && profile.partner_age_max ? `${profile.partner_age_min}-${profile.partner_age_max}y` : ''}
-                  {profile.partner_religion && profile.partner_religion !== 'Any' ? ` • ${profile.partner_religion}` : ''}
+                  {Array.isArray(profile.partner_religion_preferences) && profile.partner_religion_preferences.length
+                    ? ` • ${profile.partner_religion_preferences.join('/')}`
+                    : (profile.partner_religion && profile.partner_religion !== 'Any' ? ` • ${profile.partner_religion}` : '')}
                   {profile.partner_country_preference && profile.partner_country_preference !== 'Open to All' ? ` • ${profile.partner_country_preference}` : ''}
                 </div>
               </div>

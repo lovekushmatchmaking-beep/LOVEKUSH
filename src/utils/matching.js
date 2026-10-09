@@ -68,11 +68,20 @@ export function passesHardFilters(me, other) {
   if (other.partner_height_min && meHeightInches && meHeightInches < Number(other.partner_height_min)) return false
   if (other.partner_height_max && meHeightInches && meHeightInches > Number(other.partner_height_max)) return false
 
-  // Religion — dono taraf se (agar explicit preference hai, "Any" nahi)
-  const meWantsReligion = me.partner_religion && me.partner_religion !== 'Any'
-  const otherWantsReligion = other.partner_religion && other.partner_religion !== 'Any'
-  if (meWantsReligion && me.partner_religion !== other.religion) return false
-  if (otherWantsReligion && other.partner_religion !== me.religion) return false
+  // Religion — dono taraf se. Ab multiple religions select kar sakte hain
+  // (naya `partner_religion_preferences` text[] column — Aryan's ask,
+  // 2026-10-09: "Punjabi mein bhi, Hindu mein bhi, Sikh mein bhi"). Purana
+  // single-value `partner_religion` column abhi bhi fallback hai un
+  // profiles ke liye jinhone naya multi-select field kabhi save nahi
+  // kiya (backward-compat — khaali array = "Any", jaisa purana column
+  // bhi karta tha).
+  const religionPrefs = (p) => (p.partner_religion_preferences && p.partner_religion_preferences.length > 0)
+    ? p.partner_religion_preferences
+    : (p.partner_religion && p.partner_religion !== 'Any' ? [p.partner_religion] : [])
+  const mePrefersReligions = religionPrefs(me)
+  const otherPrefersReligions = religionPrefs(other)
+  if (mePrefersReligions.length > 0 && !mePrefersReligions.includes(other.religion)) return false
+  if (otherPrefersReligions.length > 0 && !otherPrefersReligions.includes(me.religion)) return false
 
   // Community preference — dono taraf se. "Any Community / No Bar",
   // "Inter-community", "Others" aur "Don't wish to specify" koi actual

@@ -52,7 +52,11 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
     partner_income_currency: profile.partner_income_currency || 'INR',
     partner_income_min: profile.partner_income_min ?? PARTNER_INCOME_BOUNDS.INR.min,
     partner_income_max: profile.partner_income_max ?? PARTNER_INCOME_BOUNDS.INR.max,
-    partner_religion: profile.partner_religion || 'Any',
+    // Multiple religions ab select kar sakte hain (naya array column) —
+    // purana single-value partner_religion se migrate karte hain agar
+    // yeh profile abhi tak naya field save nahi kar chuka.
+    partner_religion_preferences: profile.partner_religion_preferences
+      || (profile.partner_religion && profile.partner_religion !== 'Any' ? [profile.partner_religion] : []),
     partner_community_ids: profile.partner_community_ids || [],
     partner_notes: profile.partner_notes || '',
   })
@@ -75,25 +79,39 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
   // the most-relevant fields, purely informational.
   const summaryParts = []
   if (form.partner_age_min || form.partner_age_max) summaryParts.push(`${form.partner_age_min}-${form.partner_age_max} yrs`)
-  if (form.partner_religion && form.partner_religion !== 'Any') summaryParts.push(form.partner_religion)
+  if (form.partner_religion_preferences.length > 0) summaryParts.push(form.partner_religion_preferences.join(' / '))
   if (form.partner_location) summaryParts.push(form.partner_location)
 
   const handleSearch = async () => {
     setSaving(true)
-    const { data, error } = await supabase.from('profiles').update(form).eq('id', profile.id).select().single()
+    // partner_religion (purana single-value column) ko bhi sync rakhte hain
+    // — kuch jagah (Admin.js "Looking for" summary, ProfileView.js) abhi
+    // bhi wahi padhte hain, taaki unke liye bhi pehla-selected religion
+    // dikhta rahe.
+    const payload = { ...form, partner_religion: form.partner_religion_preferences[0] || 'Any' }
+    let { data, error } = await supabase.from('profiles').update(payload).eq('id', profile.id).select().single()
+    if (error && /partner_religion_preferences/.test(error.message)) {
+      // Safety net — agar kisi wajah se naya column abhi tak nahi hai
+      const { partner_religion_preferences, ...fallback } = payload
+      ;({ data, error } = await supabase.from('profiles').update(fallback).eq('id', profile.id).select().single())
+    }
     setSaving(false)
     if (error) { alert('Could not save: ' + error.message); return }
     onSearch(data)
   }
 
+  const communityOptionsForReligion = (religion) => (
+    religion === 'Muslim' ? ISLAMIC_COMMUNITIES
+      : religion === 'Christian' ? CHRISTIAN_COMMUNITIES
+      : RELIGION_HIERARCHY[religion]?.community.options || CASTES
+  )
+  // Multiple religions select karne par community list sab selected
+  // religions ki communities ko union karti hai (jaise, Hindu + Sikh
+  // dono chuno to dono ki communities dikhengi).
   const communityOptions = [
-    ...(form.partner_religion === 'Muslim' ? ISLAMIC_COMMUNITIES
-      : form.partner_religion === 'Christian' ? CHRISTIAN_COMMUNITIES
-      : RELIGION_HIERARCHY[form.partner_religion]?.community.options
-      || CASTES
-    ).filter(c => !/^(other|others|don'?t)/i.test(c)),
-    ...PARTNER_COMMUNITY_SPECIAL_OPTIONS,
-  ]
+    ...new Set(form.partner_religion_preferences.flatMap(r => communityOptionsForReligion(r)))
+  ].filter(c => !/^(other|others|don'?t)/i.test(c))
+    .concat(PARTNER_COMMUNITY_SPECIAL_OPTIONS)
 
   return (
     <div>
@@ -166,12 +184,11 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
       <AccordionSection title="Religion and Ethnicity" icon={Landmark}>
         <div className="form-group">
           <FormLabel>Religion Preference</FormLabel>
-          <select className="form-select" value={form.partner_religion} onChange={e => set('partner_religion', e.target.value)}>
-            <option value="Any">Any / Open to all</option>
-            {RELIGIONS.map(r => <option key={r}>{r}</option>)}
-          </select>
+          <CheckboxDropdown options={RELIGIONS} selected={form.partner_religion_preferences}
+            onChange={v => set('partner_religion_preferences', v)} placeholder="Any / Open to all" />
+          <div className="form-hint">Khaali chhodne par sab religions acceptable maane jaayenge</div>
         </div>
-        {form.partner_religion !== 'Any' && (
+        {form.partner_religion_preferences.length > 0 && (
           <div className="form-group">
             <FormLabel>Preferred Community</FormLabel>
             <CheckboxDropdown options={communityOptions} selected={form.partner_community_ids} onChange={setPartnerCommunity} placeholder="Select communities..." />

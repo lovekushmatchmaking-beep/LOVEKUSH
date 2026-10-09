@@ -414,7 +414,9 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
             ['Income', incomeLabel(m.partner_income_min, m.partner_income_max, m.partner_income_currency)],
           ]} />
           <FactCard title="Religion & Ethnicity" fields={[
-            ['Religion', m.partner_religion && m.partner_religion !== 'Any' ? m.partner_religion : null],
+            ['Religion', Array.isArray(m.partner_religion_preferences) && m.partner_religion_preferences.length
+              ? m.partner_religion_preferences.join(', ')
+              : (m.partner_religion && m.partner_religion !== 'Any' ? m.partner_religion : null)],
             ['Community', (m.partner_community_ids || []).join(', ') || null],
           ]} />
           <FactCard title="Additional Preferences" fields={[
