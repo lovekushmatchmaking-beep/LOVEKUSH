@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
-import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS, LEAD_SOURCE_OPTIONS } from '../constants/profileOptions'
+import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS, LEAD_SOURCE_OPTIONS, parseHeightToInches, formatHeightFromInches } from '../constants/profileOptions'
 import CreateProfile from './CreateProfile'
 import BiodataView from './BiodataView'
 import { EditProfileForm } from './Dashboard'
@@ -1736,6 +1736,33 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
   const [phoneDraft, setPhoneDraft] = useState('')
   const [phoneError, setPhoneError] = useState('')
 
+  // Manual filters on top of the matching algorithm's own ranking/score
+  // (Aryan's ask, 2026-10-09) — admin can narrow the ranked list by hand
+  // instead of only trusting the auto score. Reuses the same select
+  // option lists (RELIGIONS/CASTES/MARITAL_STATUSES/EDUCATIONS) as
+  // signup/profile fields, same height-bucket approach as the Dashboard
+  // Breakdown panel — no new field, no new algorithm.
+  const [showFilters, setShowFilters] = useState(false)
+  const [filters, setFilters] = useState({ ageMin: '', ageMax: '', city: '', religion: '', community: '', maritalStatus: '', education: '', heightMin: '', heightMax: '' })
+  const setFilter = (key, val) => setFilters(prev => ({ ...prev, [key]: val }))
+  const clearFilters = () => setFilters({ ageMin: '', ageMax: '', city: '', religion: '', community: '', maritalStatus: '', education: '', heightMin: '', heightMax: '' })
+  const activeFilterCount = Object.values(filters).filter(v => v !== '').length
+
+  const filteredResults = results.filter(r => {
+    const o = r.profile
+    if (filters.ageMin && (!o.age || o.age < Number(filters.ageMin))) return false
+    if (filters.ageMax && (!o.age || o.age > Number(filters.ageMax))) return false
+    if (filters.city && !(o.city || '').toLowerCase().includes(filters.city.trim().toLowerCase())) return false
+    if (filters.religion && o.religion !== filters.religion) return false
+    if (filters.community && o.community !== filters.community) return false
+    if (filters.maritalStatus && o.marital_status !== filters.maritalStatus) return false
+    if (filters.education && o.education !== filters.education) return false
+    const inches = parseHeightToInches(o.height)
+    if (filters.heightMin && (!inches || inches < Number(filters.heightMin))) return false
+    if (filters.heightMax && (!inches || inches > Number(filters.heightMax))) return false
+    return true
+  })
+
   const saveClientPhone = async () => {
     const digits = phoneDraft.replace(/\D/g, '')
     if (digits.length < 10) { setPhoneError('Enter a valid number (10 digits, or with country code)'); return }
@@ -1850,15 +1877,68 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
         </div>
       )}
 
+      {!loading && results.length > 0 && (
+        <div style={{marginBottom:14}}>
+          <button className="btn btn-outline btn-sm" onClick={()=>setShowFilters(v=>!v)}>
+            <SlidersHorizontal size={14} style={{verticalAlign:'-2px',marginRight:4}} />
+            {showFilters ? 'Hide filters' : 'Filter results'}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+          </button>
+          {showFilters && (
+            <div style={{background:'#fafafa',border:'1px solid #ededed',borderRadius:'var(--radius)',padding:14,marginTop:8}}>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:10}}>
+                <input className="form-input" placeholder="Age min" inputMode="numeric" value={filters.ageMin}
+                  onChange={e=>setFilter('ageMin', e.target.value.replace(/\D/g,''))} style={{maxWidth:90}} />
+                <input className="form-input" placeholder="Age max" inputMode="numeric" value={filters.ageMax}
+                  onChange={e=>setFilter('ageMax', e.target.value.replace(/\D/g,''))} style={{maxWidth:90}} />
+                <select className="form-select" value={filters.heightMin} onChange={e=>setFilter('heightMin', e.target.value)} style={{maxWidth:160}}>
+                  <option value="">Height: any min</option>
+                  {[53,56,60,64,68,72,76,80,84].map(inc => <option key={inc} value={inc}>Min {formatHeightFromInches(inc)}</option>)}
+                </select>
+                <select className="form-select" value={filters.heightMax} onChange={e=>setFilter('heightMax', e.target.value)} style={{maxWidth:160}}>
+                  <option value="">Height: any max</option>
+                  {[53,56,60,64,68,72,76,80,84].map(inc => <option key={inc} value={inc}>Max {formatHeightFromInches(inc)}</option>)}
+                </select>
+                <input className="form-input" placeholder="City" value={filters.city}
+                  onChange={e=>setFilter('city', e.target.value)} style={{maxWidth:140}} />
+              </div>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+                <select className="form-select" value={filters.religion} onChange={e=>setFilter('religion', e.target.value)} style={{maxWidth:160}}>
+                  <option value="">All religions</option>
+                  {RELIGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <select className="form-select" value={filters.community} onChange={e=>setFilter('community', e.target.value)} style={{maxWidth:180}}>
+                  <option value="">All castes / communities</option>
+                  {CASTES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select className="form-select" value={filters.maritalStatus} onChange={e=>setFilter('maritalStatus', e.target.value)} style={{maxWidth:170}}>
+                  <option value="">All marital statuses</option>
+                  {MARITAL_STATUSES.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select className="form-select" value={filters.education} onChange={e=>setFilter('education', e.target.value)} style={{maxWidth:170}}>
+                  <option value="">All education levels</option>
+                  {EDUCATIONS.map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+                {activeFilterCount > 0 && <button className="btn btn-outline btn-sm" onClick={clearFilters}>Clear filters</button>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Finding matches...</div>
       ) : results.length === 0 ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
           No matches found. This can happen if there are no other active, opposite-gender profiles meeting the hard requirements (age/religion/marital-status preferences).
         </div>
+      ) : filteredResults.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
+          No matches meet these filters. <button className="btn btn-outline btn-sm" style={{marginLeft:6}} onClick={clearFilters}>Clear filters</button>
+        </div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:10}}>
-          {results.map(r => {
+          <div style={{fontSize:12,color:'#8e8e8e',marginBottom:-2}}>{filteredResults.length} of {results.length} matches</div>
+          {filteredResults.map(r => {
             const other = r.profile
             const isExpanded = expandedId === other.id
             const linkState = linkFor[other.id]
