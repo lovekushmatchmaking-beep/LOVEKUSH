@@ -62,18 +62,54 @@ export default function SharedProfile() {
     </div>
   )
 
-  const rows = [
+  // Puri biodata — contact (phone/email) ke siwa — Aryan, 2026-10-09.
+  // Section split BiodataView.js jaisa hi hai, jo member ko khud ki
+  // profile dikhata hai; reuse-first, naya layout nahi banaya.
+  const personalRows = [
     ['Age', profile.age ? profile.age + ' years' : null],
     ['Height', profile.height],
-    ['City', [profile.city, profile.state].filter(Boolean).join(', ')],
+    ['Weight', profile.weight],
+    ['Marital Status', profile.marital_status],
+    ['Complexion', profile.complexion],
+    ['Body Type', profile.body_type],
+    ['Nationality', profile.nationality],
+    ['Mother Tongue', profile.mother_tongue],
+  ].filter(([,v])=>v)
+
+  const religiousRows = [
     ['Religion', profile.religion],
     ['Community', profile.community],
+    ['Sub-Caste', profile.sub_caste],
+    ['Gotra', profile.gotra],
+    ['Manglik', profile.manglik],
+    ['Rashi', profile.rashi],
+    ['Nakshatra', profile.nakshatra],
+  ].filter(([,v])=>v)
+
+  const careerRows = [
+    ['Living In', [profile.city, profile.state, profile.country].filter(Boolean).join(', ')],
     ['Education', profile.education],
+    ['Degree', profile.degree],
+    ['College', profile.college_name],
+    ['Employer', profile.employer],
     ['Profession', profile.occupation],
     ['Annual Income', profile.annual_income],
     ['Diet', profile.diet],
-    ['Complexion', profile.complexion],
   ].filter(([,v])=>v)
+
+  const familyRows = [
+    ['Family Type', profile.family_type],
+    ["Father's Profession", profile.father_profession],
+    ["Mother's Profession", profile.mother_profession],
+    ['Family Financial Status', profile.family_financial_status],
+  ].filter(([,v])=>v)
+
+  const renderRows = (rows) => rows.map(([k,v])=>(
+    <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.06)',fontSize:14}}>
+      <span style={{color:'#8e8e8e'}}>{k}</span>
+      <span style={{fontWeight:500,textAlign:'right'}}>{v}</span>
+    </div>
+  ))
 
   return (
     <div style={{minHeight:'100vh',background:'#fff'}}>
@@ -100,12 +136,26 @@ export default function SharedProfile() {
           <div style={{fontSize:20,fontWeight:600,marginBottom:4}}>{profile.masked_name}</div>
           <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20,fontFamily:'monospace'}}>{profile.profile_code}</div>
 
-          {rows.map(([k,v])=>(
-            <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid rgba(0,0,0,0.06)',fontSize:14}}>
-              <span style={{color:'#8e8e8e'}}>{k}</span>
-              <span style={{fontWeight:500}}>{v}</span>
-            </div>
-          ))}
+          {profile.about_me && (
+            <div style={{marginBottom:16,fontSize:13,color:'#333',lineHeight:1.6,fontStyle:'italic'}}>"{profile.about_me}"</div>
+          )}
+
+          {personalRows.length > 0 && <>
+            <div style={{fontSize:11,fontWeight:600,color:'#8e8e8e',textTransform:'uppercase',letterSpacing:'0.04em',marginTop:4,marginBottom:2}}>Personal Details</div>
+            {renderRows(personalRows)}
+          </>}
+          {religiousRows.length > 0 && <>
+            <div style={{fontSize:11,fontWeight:600,color:'#8e8e8e',textTransform:'uppercase',letterSpacing:'0.04em',marginTop:14,marginBottom:2}}>Religious Background</div>
+            {renderRows(religiousRows)}
+          </>}
+          {careerRows.length > 0 && <>
+            <div style={{fontSize:11,fontWeight:600,color:'#8e8e8e',textTransform:'uppercase',letterSpacing:'0.04em',marginTop:14,marginBottom:2}}>Education & Career</div>
+            {renderRows(careerRows)}
+          </>}
+          {familyRows.length > 0 && <>
+            <div style={{fontSize:11,fontWeight:600,color:'#8e8e8e',textTransform:'uppercase',letterSpacing:'0.04em',marginTop:14,marginBottom:2}}>Family Details</div>
+            {renderRows(familyRows)}
+          </>}
 
           <button
             onClick={markInterested}
@@ -129,10 +179,16 @@ export default function SharedProfile() {
         </div>
 
         <div style={{marginTop:20,fontSize:12,color:'#8e8e8e',textAlign:'center',lineHeight:1.6}}>
-          Contact details, photos and full information are shared confidentially.<br/>
-          {profile.rm_email
-            ? <>For complete profile details, please contact your Relationship Manager at <a href={`mailto:${profile.rm_email}`} style={{color:'inherit'}}>{profile.rm_email}</a>.</>
-            : 'For complete profile details, please contact LOVEKUSH Global Matchmaking Services.'}
+          Contact details and photos are shared confidentially — please reach your Relationship Manager.<br/>
+          {(profile.rm_name || profile.rm_phone || profile.rm_email) ? (
+            <>
+              {profile.rm_name && <strong style={{color:'#111'}}>{profile.rm_name}</strong>}
+              {profile.rm_name && (profile.rm_phone || profile.rm_email) && ' · '}
+              {profile.rm_phone && <a href={`tel:${profile.rm_phone.replace(/\s+/g,'')}`} style={{color:'inherit'}}>{profile.rm_phone}</a>}
+              {profile.rm_phone && profile.rm_email && ' · '}
+              {profile.rm_email && <a href={`mailto:${profile.rm_email}`} style={{color:'inherit'}}>{profile.rm_email}</a>}
+            </>
+          ) : 'Please contact LOVEKUSH Global Matchmaking Services.'}
         </div>
 
         <div style={{marginTop:16,fontSize:10,color:'#bbb',textAlign:'center'}}>

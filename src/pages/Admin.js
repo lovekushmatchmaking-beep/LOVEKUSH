@@ -941,7 +941,8 @@ export default function Admin({ staffUser }) {
       )}
 
       {view === 'shareLinks' && (
-        <ShareLinksView staffUserId={staffUser.user_id} onBack={()=>setView('list')} onManageCoordination={goToCoordination} />
+        <ShareLinksView staffUserId={staffUser.user_id} onBack={()=>setView('list')} onManageCoordination={goToCoordination}
+          onOpenProfile={(p)=>{ setViewingProfile(p); setView('fullProfile') }} />
       )}
 
       {view === 'casteSuggestions' && (
@@ -1938,12 +1939,13 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
 }
 
 // ===== SHARE LINKS MANAGEMENT — view kitni baar khula, revoke karo =====
-function ShareLinksView({ staffUserId, onBack, onManageCoordination }) {
+function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfile }) {
   const [links, setLinks] = useState([])
   const [profilesById, setProfilesById] = useState({}) // shown-profile id + client_profile_id -> {full_name, profile_code}
   const [loading, setLoading] = useState(true)
   const [showToast, ToastView] = useToast()
   const [expandedBundles, setExpandedBundles] = useState(new Set())
+  const [openingProfile, setOpeningProfile] = useState(null) // profile_id currently being fetched for "View Profile"
 
   useEffect(() => { load() }, [])
 
@@ -2012,6 +2014,25 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination }) {
   const copyLink = (token) => {
     navigator.clipboard?.writeText(`${window.location.origin}/share/${token}`)
     showToast('Link copied!')
+  }
+
+  // "Interested" badge pehle sirf client ka naam dikhata tha — jis profile
+  // par interest aaya hai uski ID ya profile tak jaane ka koi raasta nahi tha
+  // (Aryan, 2026-10-09). profilesById mein already id/full_name/profile_code
+  // maujood hai (minimal fields); poora profile fetch karke existing
+  // read-only "fullProfile" view (BiodataView, same jo line ~931 par use
+  // hoti hai) khol dete hain — naya viewer nahi banaya, reuse-first.
+  const handleViewProfile = async (profileId) => {
+    if (!onOpenProfile) return
+    setOpeningProfile(profileId)
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', profileId).single()
+      if (error) throw error
+      onOpenProfile(data)
+    } catch (err) {
+      showToast(err.message)
+    }
+    setOpeningProfile(null)
   }
 
   return (
@@ -2094,10 +2115,19 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination }) {
                     (audit gap, 2026-10-05). */}
                 {l.interested_at && (
                   <div style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
-                    <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5}}>
+                    <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
                       <ThumbsUp size={12} /> Interested · {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                      {shownProfile?.profile_code && (
+                        <span style={{fontFamily:'monospace',color:'#555',fontWeight:500}}>· ID {shownProfile.profile_code}</span>
+                      )}
                     </div>
                     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                      {onOpenProfile && (
+                        <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12}}
+                          disabled={openingProfile === l.profile_id} onClick={()=>handleViewProfile(l.profile_id)}>
+                          {openingProfile === l.profile_id ? 'Opening...' : '↗ View Profile'}
+                        </button>
+                      )}
                       {!l.interest_acknowledged_at && (
                         <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12}}
                           onClick={()=>handleAcknowledge(l.id)}>Mark as noted</button>
