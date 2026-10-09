@@ -58,3 +58,17 @@ export function buildMailtoLink(email, subject, message) {
 export function buildWaChooserLink(message) {
   return 'https://wa.me/?text=' + encodeURIComponent(message)
 }
+
+// Share link (public, no login) par "About Me" dikhane se pehle — wahi
+// rule jo server ka share_safe_about_me() lagata hai (Aryan, 2026-10-09):
+// client-import ka raw note ("Source sheet ID ... | Raw unclassified data
+// ... | WhatsApp: 99...") poora hata do, aur normal About Me mein se phone
+// number / email nikaal do. Server already yeh karta hai; yeh sirf backup.
+const PHONE_RE = /(\b(whats\s?app|mobile|mob|phone|ph|contact|call)\b(\s*(no|number)\.?)?\s*[:-]?\s*)?\+?(\d[\s-]?){9,}\d/gi
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g
+export function shareSafeAboutMe(text) {
+  if (!text) return null
+  if (/(source sheet id|raw unclassified)/i.test(text)) return null
+  const cleaned = String(text).replace(EMAIL_RE, '').replace(PHONE_RE, '').trim()
+  return cleaned || null
+}

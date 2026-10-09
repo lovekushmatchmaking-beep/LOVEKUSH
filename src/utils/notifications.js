@@ -14,6 +14,7 @@ export const EVENT_LABELS = {
   profile_approved: 'Profile approved',
   match_shared: 'Match shared',
   meeting_scheduled: 'Meeting scheduled',
+  interest_received: 'Interest received',
   general: 'General',
 }
 
@@ -24,6 +25,9 @@ export const DEFAULT_MESSAGES = {
   profile_approved: 'Hi {{name}}, good news — your LOVEKUSH profile has been verified and is now live. You can start viewing matches on your dashboard.',
   match_shared: 'Hi {{name}}, we just shared a match with you on LOVEKUSH. Please have a look and let us know if you\'d like us to set up a talk.',
   meeting_scheduled: 'Hi {{name}}, confirming your meeting/call with {{otherName}} on {{when}}. Please let us know if you need to reschedule.',
+  // Share link par ek party ne "Interested" dabaya — doosri party ko
+  // interested profile ka link bhejna (Aryan, 2026-10-09).
+  interest_received: 'Hi {{name}}, good news from LOVEKUSH! {{otherName}} has shown interest in your profile. Please have a look at their profile below. Would you like to meet them or take this forward? Just reply here and we will arrange it.',
   general: 'Hi {{name}}, this is LOVEKUSH Global Matchmaking Services.',
 }
 

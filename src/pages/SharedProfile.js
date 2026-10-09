@@ -3,6 +3,7 @@ import { Lock, ThumbsUp, Check } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { BrandLockup } from '../components/BrandLogo'
+import { shareSafeAboutMe } from '../utils/shareProfile'
 import { markShareLinkInterest } from '../utils/shareLinks'
 
 // Yeh page KISI KO BHI (bina login ke) khulti hai jab woh secure share
@@ -125,7 +126,7 @@ export default function SharedProfile() {
             2026-10-08, P1 #12). */}
         {profile.client_masked_name && (
           <div style={{fontSize:12,color:'#8e8e8e',textAlign:'center',marginBottom:14}}>
-            Suggested for <strong style={{color:'#111'}}>{profile.client_masked_name}</strong>
+            Suggested for <strong style={{color:'#111'}}>{profile.client_full_name || profile.client_masked_name}</strong>
             {(profile.client_age || profile.client_city) && (
               <> · {[profile.client_age ? profile.client_age + ' years' : null, profile.client_city].filter(Boolean).join(', ')}</>
             )}
@@ -133,11 +134,14 @@ export default function SharedProfile() {
         )}
 
         <div style={{background:'#f9f9f9',borderRadius:16,padding:24}}>
-          <div style={{fontSize:20,fontWeight:600,marginBottom:4}}>{profile.masked_name}</div>
+          <div style={{fontSize:20,fontWeight:600,marginBottom:4}}>{profile.full_name || profile.masked_name}</div>
           <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20,fontFamily:'monospace'}}>{profile.profile_code}</div>
 
-          {profile.about_me && (
-            <div style={{marginBottom:16,fontSize:13,color:'#333',lineHeight:1.6,fontStyle:'italic'}}>"{profile.about_me}"</div>
+          {/* Poora naam (Aryan, 2026-10-09 — share link par full name, sirf
+              contact details nahi). About Me se client-import ka raw note aur
+              koi bhi phone/email hata ke dikhate hain. */}
+          {shareSafeAboutMe(profile.about_me) && (
+            <div style={{marginBottom:16,fontSize:13,color:'#333',lineHeight:1.6,fontStyle:'italic'}}>"{shareSafeAboutMe(profile.about_me)}"</div>
           )}
 
           {personalRows.length > 0 && <>

@@ -3,6 +3,7 @@ import { Lock, ThumbsUp, Check } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { BrandLockup } from '../components/BrandLogo'
+import { shareSafeAboutMe } from '../utils/shareProfile'
 import { markShareLinkInterest } from '../utils/shareLinks'
 
 // Ek hi link mein kai matches (Admin "Find Matches" se chune hue) — bina
@@ -80,7 +81,7 @@ export default function SharedMatches() {
             showing once (audit 2026-10-08, P1 #12). */}
         {profiles[0]?.client_masked_name && (
           <div style={{fontSize:12,color:'#8e8e8e',textAlign:'center',marginBottom:14}}>
-            Suggested for <strong style={{color:'#111'}}>{profiles[0].client_masked_name}</strong>
+            Suggested for <strong style={{color:'#111'}}>{profiles[0].client_full_name || profiles[0].client_masked_name}</strong>
             {(profiles[0].client_age || profiles[0].client_city) && (
               <> · {[profiles[0].client_age ? profiles[0].client_age + ' years' : null, profiles[0].client_city].filter(Boolean).join(', ')}</>
             )}
@@ -120,11 +121,14 @@ export default function SharedMatches() {
             return (
               <div key={p.token} style={{background:'#f9f9f9',borderRadius:16,padding:20}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:10}}>
-                  <div style={{fontSize:18,fontWeight:600}}>{p.masked_name}</div>
+                  <div style={{fontSize:18,fontWeight:600}}>{p.full_name || p.masked_name}</div>
                   <div style={{fontSize:11,color:'#8e8e8e',fontFamily:'monospace'}}>{p.profile_code}</div>
                 </div>
-                {p.about_me && (
-                  <div style={{marginBottom:10,fontSize:13,color:'#333',lineHeight:1.5,fontStyle:'italic'}}>"{p.about_me}"</div>
+                {/* Poora naam (Aryan, 2026-10-09 — share link par full name, sirf
+                    contact details nahi). About Me se client-import ka raw note aur
+                    koi bhi phone/email hata ke dikhate hain. */}
+                {shareSafeAboutMe(p.about_me) && (
+                  <div style={{marginBottom:10,fontSize:13,color:'#333',lineHeight:1.5,fontStyle:'italic'}}>"{shareSafeAboutMe(p.about_me)}"</div>
                 )}
                 {rows.map(([k,v])=>(
                   <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:'1px solid rgba(0,0,0,0.06)',fontSize:13}}>

@@ -22,7 +22,7 @@ import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildMailtoLink } from '../utils/shareProfile'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, forwardShareLinkInterest } from '../utils/shareLinks'
-import { WhatsAppReminderButton } from '../components/WhatsAppReminder'
+import { WhatsAppReminderButton, ReminderSheet } from '../components/WhatsAppReminder'
 import NotificationBell from '../components/NotificationBell'
 import { EVENT_LABELS } from '../utils/notifications'
 import { gunaMilanFor } from '../utils/astrology'
@@ -942,7 +942,7 @@ export default function Admin({ staffUser }) {
 
       {view === 'shareLinks' && (
         <ShareLinksView staffUserId={staffUser.user_id} onBack={()=>setView('list')} onManageCoordination={goToCoordination}
-          onOpenProfile={(p)=>{ setViewingProfile(p); setView('fullProfile') }} />
+          onOpenProfile={(p)=>{ setView('list'); setSelected(p) }} />
       )}
 
       {view === 'casteSuggestions' && (
@@ -2011,6 +2011,34 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
     setForwarding(prev => ({ ...prev, [linkId]: false }))
   }
 
+  // Ek party ne share link par "Interested" dabaya (yahan client) — ab
+  // doosri party (jiska profile share hua tha) ko batana hai ki "X ne aapki
+  // profile mein interest dikhaya hai, meeting karna ya aage badhna
+  // chahenge?", saath mein X (interested profile) ka share link (Aryan,
+  // 2026-10-09). Reuse-first: existing generateShareLink + WhatsApp
+  // template sheet (interest_received category). Agar is pair ka active
+  // link pehle se bana hai to wahi dobara bhejte hain, naya nahi banate.
+  const [interestSheet, setInterestSheet] = useState(null) // { profile, otherName, url }
+  const [preparingInterest, setPreparingInterest] = useState(null)
+  const handleSendInterest = async (l) => {
+    setPreparingInterest(l.id)
+    try {
+      const { data: target, error } = await supabase.from('profiles').select('id, full_name, client_phone').eq('id', l.profile_id).single()
+      if (error) throw error
+      const now = new Date()
+      const existing = links.find(x => x.profile_id === l.client_profile_id && x.client_profile_id === l.profile_id
+        && !x.revoked && new Date(x.expires_at) > now && !x.bundle_token)
+      const url = existing
+        ? `${window.location.origin}/share/${existing.token}`
+        : (await generateShareLink(l.client_profile_id, staffUserId, l.profile_id)).url
+      setInterestSheet({ profile: target, otherName: profilesById[l.client_profile_id]?.full_name || 'A LOVEKUSH member', url })
+      if (!existing) load()
+    } catch (err) {
+      showToast(err.message)
+    }
+    setPreparingInterest(null)
+  }
+
   const copyLink = (token) => {
     navigator.clipboard?.writeText(`${window.location.origin}/share/${token}`)
     showToast('Link copied!')
@@ -2018,10 +2046,10 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
 
   // "Interested" badge pehle sirf client ka naam dikhata tha — jis profile
   // par interest aaya hai uski ID ya profile tak jaane ka koi raasta nahi tha
-  // (Aryan, 2026-10-09). profilesById mein already id/full_name/profile_code
-  // maujood hai (minimal fields); poora profile fetch karke existing
-  // read-only "fullProfile" view (BiodataView, same jo line ~931 par use
-  // hoti hai) khol dete hain — naya viewer nahi banaya, reuse-first.
+  // (Aryan, 2026-10-09). Poora profile fetch karke seedha uska profile card
+  // (Profiles list, Call/WhatsApp/Share actions ke saath) khol dete hain —
+  // wahi jo My Queue karta hai. Pehle read-only biodata khulta tha, par
+  // Aryan ko card chahiye tha jahan se aage action le sake.
   const handleViewProfile = async (profileId) => {
     if (!onOpenProfile) return
     setOpeningProfile(profileId)
@@ -2040,6 +2068,11 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
       <ToastView />
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>My Share Links</h2>
+      {interestSheet && (
+        <ReminderSheet profile={interestSheet.profile} eventType="interest_received"
+          vars={{ otherName: interestSheet.otherName }} appendText={interestSheet.url} staffUserId={staffUserId}
+          onClose={()=>setInterestSheet(null)} />
+      )}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
@@ -2126,6 +2159,13 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                         <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12}}
                           disabled={openingProfile === l.profile_id} onClick={()=>handleViewProfile(l.profile_id)}>
                           {openingProfile === l.profile_id ? 'Opening...' : '↗ View Profile'}
+                        </button>
+                      )}
+                      {client && (
+                        <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12,color:'#16a34a',borderColor:'#16a34a'}}
+                          disabled={preparingInterest === l.id} onClick={()=>handleSendInterest(l)}
+                          title={`Send ${client.full_name}'s profile to ${shownProfile?.full_name || 'this profile'} on WhatsApp`}>
+                          {preparingInterest === l.id ? 'Preparing...' : `📲 Send interest to ${(shownProfile?.full_name || 'profile').split(' ')[0]}`}
                         </button>
                       )}
                       {!l.interest_acknowledged_at && (

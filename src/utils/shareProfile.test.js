@@ -1,4 +1,4 @@
-import { normalizePhone, buildTelLink, buildWaChatLink, buildWaMeLink } from './shareProfile'
+import { normalizePhone, buildTelLink, buildWaChatLink, buildWaMeLink, shareSafeAboutMe } from './shareProfile'
 
 test('normalizePhone handles common Indian and NRI formats', () => {
   expect(normalizePhone('98765 43210')).toBe('919876543210')
@@ -17,4 +17,11 @@ test('call and WhatsApp links', () => {
   expect(buildWaMeLink('9876543210', 'hi there')).toBe('https://wa.me/919876543210?text=hi%20there')
   expect(buildTelLink('abc')).toBeNull()
   expect(buildWaChatLink(undefined)).toBeNull()
+})
+
+test('shareSafeAboutMe hides import dumps and contact details', () => {
+  expect(shareSafeAboutMe('Source sheet ID: MB00122 | Raw unclassified data (verify if needed): Unmarried | WhatsApp: 9911312410')).toBeNull()
+  expect(shareSafeAboutMe('Love travel. WhatsApp: +91 98765 43210, mail a@b.com')).toBe('Love travel. , mail')
+  expect(shareSafeAboutMe('Studied 2019-2021 in Delhi')).toBe('Studied 2019-2021 in Delhi')
+  expect(shareSafeAboutMe('')).toBeNull()
 })

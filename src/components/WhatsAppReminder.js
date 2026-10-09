@@ -41,7 +41,9 @@ export function WhatsAppReminderButton({ profile, eventType, vars, appendText, s
   )
 }
 
-function ReminderSheet({ profile, eventType, vars, appendText, staffUserId, onClose }) {
+// Exported so a caller that has to do async work first (e.g. create the
+// share link that goes in appendText) can open the same sheet itself.
+export function ReminderSheet({ profile, eventType, vars, appendText, staffUserId, onClose }) {
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [templateId, setTemplateId] = useState('default')
