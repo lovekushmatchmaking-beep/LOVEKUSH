@@ -65,6 +65,17 @@ export async function acknowledgeShareLinkInterest(linkId) {
   if (error) throw new Error('Could not update: ' + error.message)
 }
 
+// "📲 Send interest to X" button ka label lamba tha, aur click karne ke
+// baad koi feedback nahi tha ki bheja ki nahi — dobara check karna padta
+// tha (Aryan, 2026-10-09). WhatsApp sheet se actual "Send via WhatsApp"
+// dabne par (ReminderSheet.send(), not just opening the sheet) persist
+// karte hain, taaki button "✓ Sent" dikhaye aur refresh ke baad bhi yaad
+// rahe — forwarded_at jaisa hi pattern, same table.
+export async function markInterestSent(linkId) {
+  const { error } = await supabase.from('share_links').update({ interest_sent_at: new Date().toISOString() }).eq('id', linkId)
+  if (error) throw new Error('Could not update: ' + error.message)
+}
+
 // Ab tak "Interested" sirf admin ke liye dikhta tha ("Mark as noted") —
 // jiss profile ko dikhaya gaya use kabhi pata nahi chalta tha ki kisi ne
 // usse interest dikhaya hai (Model 2 ka sabse bada gap, audit 2026-10-06).
