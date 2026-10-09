@@ -43,7 +43,7 @@ export function WhatsAppReminderButton({ profile, eventType, vars, appendText, s
 
 // Exported so a caller that has to do async work first (e.g. create the
 // share link that goes in appendText) can open the same sheet itself.
-export function ReminderSheet({ profile, eventType, vars, appendText, staffUserId, onClose }) {
+export function ReminderSheet({ profile, eventType, vars, appendText, staffUserId, onClose, onSent }) {
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [templateId, setTemplateId] = useState('default')
@@ -76,6 +76,13 @@ export function ReminderSheet({ profile, eventType, vars, appendText, staffUserI
     const link = waLinkFor(phone, text)
     if (link) window.open(link, '_blank', 'noopener,noreferrer')
     await logNotification({ profileId: profile.id, eventType, staffUserId, messagePreview: text })
+    // Caller-supplied persistence hook — e.g. mark the share link's
+    // "Send interest" button as sent, so it still shows ✓ after a reload
+    // (Aryan, 2026-10-09). Best-effort: a failure here should never stop
+    // the WhatsApp send from having already happened.
+    if (onSent) {
+      try { await onSent() } catch (e) { console.warn('onSent failed (non-critical):', e.message) }
+    }
     onClose()
   }
 

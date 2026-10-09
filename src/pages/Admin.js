@@ -21,7 +21,7 @@ import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, co
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildMailtoLink } from '../utils/shareProfile'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
-import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, forwardShareLinkInterest } from '../utils/shareLinks'
+import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, forwardShareLinkInterest, markInterestSent } from '../utils/shareLinks'
 import { WhatsAppReminderButton, ReminderSheet } from '../components/WhatsAppReminder'
 import NotificationBell from '../components/NotificationBell'
 import { EVENT_LABELS } from '../utils/notifications'
@@ -2148,7 +2148,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
   // 2026-10-09). Reuse-first: existing generateShareLink + WhatsApp
   // template sheet (interest_received category). Agar is pair ka active
   // link pehle se bana hai to wahi dobara bhejte hain, naya nahi banate.
-  const [interestSheet, setInterestSheet] = useState(null) // { profile, otherName, url }
+  const [interestSheet, setInterestSheet] = useState(null) // { linkId, profile, otherName, url }
   const [preparingInterest, setPreparingInterest] = useState(null)
   const handleSendInterest = async (l) => {
     setPreparingInterest(l.id)
@@ -2161,12 +2161,21 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
       const url = existing
         ? `${window.location.origin}/share/${existing.token}`
         : (await generateShareLink(l.client_profile_id, staffUserId, l.profile_id)).url
-      setInterestSheet({ profile: target, otherName: profilesById[l.client_profile_id]?.full_name || 'A LOVEKUSH member', url })
+      setInterestSheet({ linkId: l.id, profile: target, otherName: profilesById[l.client_profile_id]?.full_name || 'A LOVEKUSH member', url })
       if (!existing) load()
     } catch (err) {
       showToast(err.message)
     }
     setPreparingInterest(null)
+  }
+
+  // "Send interest" button ka "✓ Sent" state — WhatsApp sheet se asal mein
+  // "Send via WhatsApp" dabne par persist hota hai (interest_sent_at,
+  // forwarded_at jaisa hi pattern), taaki refresh ke baad bhi pata chale
+  // ki humne bhej diya hai (Aryan, 2026-10-09).
+  const handleInterestSent = async (linkId) => {
+    await markInterestSent(linkId)
+    setLinks(prev => prev.map(l => l.id === linkId ? { ...l, interest_sent_at: new Date().toISOString() } : l))
   }
 
   const copyLink = (token) => {
@@ -2201,6 +2210,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
       {interestSheet && (
         <ReminderSheet profile={interestSheet.profile} eventType="interest_received"
           vars={{ otherName: interestSheet.otherName }} appendText={interestSheet.url} staffUserId={staffUserId}
+          onSent={()=>handleInterestSent(interestSheet.linkId)}
           onClose={()=>setInterestSheet(null)} />
       )}
 
@@ -2292,11 +2302,19 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                         </button>
                       )}
                       {client && (
-                        <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12,color:'#16a34a',borderColor:'#16a34a'}}
-                          disabled={preparingInterest === l.id} onClick={()=>handleSendInterest(l)}
-                          title={`Send ${client.full_name}'s profile to ${shownProfile?.full_name || 'this profile'} on WhatsApp`}>
-                          {preparingInterest === l.id ? 'Preparing...' : `📲 Send interest to ${(shownProfile?.full_name || 'profile').split(' ')[0]}`}
-                        </button>
+                        l.interest_sent_at ? (
+                          <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12,color:'#16a34a',borderColor:'#16a34a'}}
+                            disabled={preparingInterest === l.id} onClick={()=>handleSendInterest(l)}
+                            title={`Sent ${new Date(l.interest_sent_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })} — click to send again`}>
+                            {preparingInterest === l.id ? 'Preparing...' : '✓ Sent'}
+                          </button>
+                        ) : (
+                          <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12,color:'#16a34a',borderColor:'#16a34a'}}
+                            disabled={preparingInterest === l.id} onClick={()=>handleSendInterest(l)}
+                            title={`Send ${client.full_name}'s profile to ${shownProfile?.full_name || 'this profile'} on WhatsApp`}>
+                            {preparingInterest === l.id ? 'Preparing...' : `📲 Send interest to ${(shownProfile?.full_name || 'profile').split(' ')[0]}`}
+                          </button>
+                        )
                       )}
                       {!l.interest_acknowledged_at && (
                         <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12}}
