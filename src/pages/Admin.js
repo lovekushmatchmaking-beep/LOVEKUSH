@@ -2416,8 +2416,11 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                     (audit gap, 2026-10-05). */}
                 {l.interested_at && (
                   <div style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
-                    <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
-                      <ThumbsUp size={12} /> Interested · {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                    {/* The word "Interested" was redundant next to the
+                        thumbs-up icon itself (Aryan, 2026-10-09 follow-up:
+                        "only logo hi kaafi hai"). */}
+                    <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}} title="Interested">
+                      <ThumbsUp size={12} /> {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                     </div>
                     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                       {client && (
