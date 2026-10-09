@@ -841,6 +841,23 @@ export default function Admin({ staffUser }) {
   const sectionForView = { verificationQueue:'queues', reportsQueue:'queues', myQueue:'queues', duplicateLeads:'queues', casteSuggestions:'tools', coordinationRequests:'tools', shareLinks:'tools', createClient:'profiles', editProfile:'profiles', fullProfile:'profiles', findMatches:'profiles' }
   const effectiveSection = view === 'list' ? section : (sectionForView[view] || section)
   const switchSection = (s) => { if (view !== 'list') navigate(-1); setSectionOnly(s) }
+  // Jumping to a profile card from a sub-view other than Profiles (e.g.
+  // Share Links, "View Profile"/profile-ID clicks) — switchSection+navigate(-1)
+  // races with the pending history pop (navigate(-1) is async), so the
+  // section param it just set can get clobbered right back by the old
+  // value the moment the pop actually resolves. Still looked "done"
+  // immediately after the click, nothing visibly happened (Aryan,
+  // 2026-10-09). One direct setSearchParams call instead — single history
+  // push, no pending pop to race with.
+  const jumpToProfile = (p) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('view')
+      next.set('section', 'profiles')
+      return next
+    })
+    setSelected(p)
+  }
 
   // Tapping a notification in the bell dropdown jumps straight to the
   // exact record it's about where we have one (link_entity_type='profile'),
@@ -942,7 +959,7 @@ export default function Admin({ staffUser }) {
 
       {view === 'shareLinks' && (
         <ShareLinksView staffUserId={staffUser.user_id} onBack={()=>setView('list')} onManageCoordination={goToCoordination}
-          onOpenProfile={(p)=>{ switchSection('profiles'); setView('list'); setSelected(p) }} />
+          onOpenProfile={(p)=>{ jumpToProfile(p) }} />
       )}
 
       {view === 'casteSuggestions' && (
@@ -2277,23 +2294,12 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
             const isBundleExpanded = expandedBundles.has(l.bundle_token)
             return (
               <div key={l.id} className="list-row" style={interestPending ? { borderColor: '#16a34a', background: '#f0fdf4' } : {}}>
+                {/* Share ID — moved to the top corner, prominent, since
+                    that's what Aryan actually searches/refers to by
+                    (Aryan, 2026-10-09 follow-up). */}
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:600,display:'flex',alignItems:'center',gap:6}}>
-                      {/* A colored dot already shows active/expired/revoked
-                          (green card border + this dot) — the word "Active"
-                          on every single card added nothing and just read as
-                          clutter (Aryan, 2026-10-09). Only the states that
-                          actually need explaining (Expired/Revoked) still
-                          show as text. */}
-                      <span title={status} style={{width:7,height:7,borderRadius:'50%',background:statusColor,flexShrink:0}} />
-                      {shownProfile ? shownProfile.full_name : 'Profile'}
-                      {client && <span style={{fontWeight:400,color:'#8e8e8e'}}> · for {client.full_name}</span>}
-                    </div>
-                    <div style={{fontSize:12,fontFamily:'monospace',color:'#8e8e8e',marginTop:2}}>{l.share_id || '/' + l.token.slice(0,12) + '...'}</div>
-                    {status !== 'Active' && (
-                      <div style={{fontSize:12,color:statusColor,fontWeight:600,marginTop:2}}>{status}</div>
-                    )}
+                  <div style={{fontSize:11,fontFamily:'monospace',fontWeight:700,color:'#8e8e8e',letterSpacing:'0.3px'}}>
+                    {l.share_id || '/' + l.token.slice(0,12) + '...'}
                   </div>
                   <div style={{display:'flex',alignItems:'flex-start',gap:4}}>
                     {/* Views + expiry compacted to icon + value — no "views"
@@ -2322,6 +2328,59 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                       !l.revoked && !isExpired && { label: 'Revoke link', icon: X, color: '#dc2626',
                         onClick: () => handleRevoke(l.id) },
                     ].filter(Boolean)} />
+                  </div>
+                </div>
+                {/* Both profiles in this coordination — the shared profile
+                    and who it was shared with — each with their own
+                    Profile ID right under their name, clickable straight to
+                    that profile's card. The standalone "View Profile"
+                    button never worked reliably and is gone now; the name
+                    and ID themselves are the link (Aryan, 2026-10-09
+                    follow-up: "View Profile hata do, dono ki ID clickable
+                    honi chahiye"). */}
+                <div style={{marginTop:8,display:'flex',alignItems:'flex-start',gap:6}}>
+                  <span title={status} style={{width:7,height:7,borderRadius:'50%',background:statusColor,flexShrink:0,marginTop:5}} />
+                  <div>
+                    {onOpenProfile ? (
+                      <button type="button" disabled={openingProfile === l.profile_id} onClick={()=>handleViewProfile(l.profile_id)}
+                        style={{fontSize:13,fontWeight:600,background:'none',border:'none',padding:0,textAlign:'left',cursor:'pointer',color:'#111'}}>
+                        {shownProfile ? shownProfile.full_name : 'Profile'}
+                      </button>
+                    ) : (
+                      <div style={{fontSize:13,fontWeight:600}}>{shownProfile ? shownProfile.full_name : 'Profile'}</div>
+                    )}
+                    {shownProfile?.profile_code && (
+                      onOpenProfile ? (
+                        <button type="button" disabled={openingProfile === l.profile_id} onClick={()=>handleViewProfile(l.profile_id)}
+                          style={{display:'block',fontSize:11,fontFamily:'monospace',color:'#8e8e8e',background:'none',border:'none',
+                            padding:0,textDecoration:'underline',cursor:'pointer',marginTop:1}} title="Open this profile">
+                          ID {shownProfile.profile_code}
+                        </button>
+                      ) : <div style={{fontSize:11,fontFamily:'monospace',color:'#8e8e8e',marginTop:1}}>ID {shownProfile.profile_code}</div>
+                    )}
+                    {client && (
+                      <div style={{marginTop:6,fontSize:12,color:'#8e8e8e'}}>
+                        for{' '}
+                        {onOpenProfile ? (
+                          <button type="button" disabled={openingProfile === l.client_profile_id} onClick={()=>handleViewProfile(l.client_profile_id)}
+                            style={{fontWeight:600,background:'none',border:'none',padding:0,cursor:'pointer',color:'#333'}}>
+                            {client.full_name}
+                          </button>
+                        ) : <span style={{fontWeight:600,color:'#333'}}>{client.full_name}</span>}
+                        {client.profile_code && (
+                          onOpenProfile ? (
+                            <button type="button" disabled={openingProfile === l.client_profile_id} onClick={()=>handleViewProfile(l.client_profile_id)}
+                              style={{display:'block',fontSize:11,fontFamily:'monospace',color:'#8e8e8e',background:'none',border:'none',
+                                padding:0,textDecoration:'underline',cursor:'pointer',marginTop:1}} title="Open this profile">
+                              ID {client.profile_code}
+                            </button>
+                          ) : <div style={{fontSize:11,fontFamily:'monospace',color:'#8e8e8e',marginTop:1}}>ID {client.profile_code}</div>
+                        )}
+                      </div>
+                    )}
+                    {status !== 'Active' && (
+                      <div style={{fontSize:12,color:statusColor,fontWeight:600,marginTop:6}}>{status}</div>
+                    )}
                   </div>
                 </div>
                 {bundleSiblings.length > 0 && (
@@ -2357,27 +2416,13 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                     (audit gap, 2026-10-05). */}
                 {l.interested_at && (
                   <div style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
-                    <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
-                      <ThumbsUp size={12} /> Interested · {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
-                      {/* Profile ID clickable — straight to that profile's
-                          card, same as "View Profile" (Aryan, 2026-10-09). */}
-                      {shownProfile?.profile_code && onOpenProfile && (
-                        <button type="button" disabled={openingProfile === l.profile_id} onClick={()=>handleViewProfile(l.profile_id)}
-                          style={{fontFamily:'monospace',color:'#555',fontWeight:500,background:'none',border:'none',padding:0,
-                            textDecoration:'underline',cursor:'pointer',fontSize:12}}
-                          title="Open this profile">· ID {shownProfile.profile_code}</button>
-                      )}
-                      {shownProfile?.profile_code && !onOpenProfile && (
-                        <span style={{fontFamily:'monospace',color:'#555',fontWeight:500}}>· ID {shownProfile.profile_code}</span>
-                      )}
+                    {/* The word "Interested" was redundant next to the
+                        thumbs-up icon itself (Aryan, 2026-10-09 follow-up:
+                        "only logo hi kaafi hai"). */}
+                    <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}} title="Interested">
+                      <ThumbsUp size={12} /> {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                     </div>
                     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                      {onOpenProfile && (
-                        <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12}}
-                          disabled={openingProfile === l.profile_id} onClick={()=>handleViewProfile(l.profile_id)}>
-                          {openingProfile === l.profile_id ? 'Opening...' : '↗ View Profile'}
-                        </button>
-                      )}
                       {client && (
                         l.interest_sent_at ? (
                           <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12,color:'#16a34a',borderColor:'#16a34a'}}
