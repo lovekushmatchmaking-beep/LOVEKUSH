@@ -89,15 +89,33 @@ export default function SharedMatches() {
 
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
           {profiles.map(p => {
+            // Puri biodata — contact chhod kar — SharedProfile.js (single
+            // profile share) jaisa hi split, reuse-first (Aryan, 2026-10-09).
             const rows = [
               ['Age', p.age ? p.age + ' years' : null],
               ['Height', p.height],
-              ['City', [p.city, p.state].filter(Boolean).join(', ')],
+              ['Weight', p.weight],
+              ['Marital Status', p.marital_status],
+              ['Complexion', p.complexion],
+              ['Body Type', p.body_type],
+              ['Nationality', p.nationality],
+              ['Mother Tongue', p.mother_tongue],
+              ['City', [p.city, p.state, p.country].filter(Boolean).join(', ')],
               ['Religion', [p.religion, p.community].filter(Boolean).join(' • ')],
+              ['Sub-Caste / Gotra', [p.sub_caste, p.gotra].filter(Boolean).join(' / ')],
+              ['Manglik', p.manglik],
+              ['Rashi / Nakshatra', [p.rashi, p.nakshatra].filter(Boolean).join(' / ')],
               ['Education', p.education],
+              ['Degree', p.degree],
+              ['College', p.college_name],
+              ['Employer', p.employer],
               ['Profession', p.occupation],
               ['Annual Income', p.annual_income],
               ['Diet', p.diet],
+              ['Family Type', p.family_type],
+              ["Father's Profession", p.father_profession],
+              ["Mother's Profession", p.mother_profession],
+              ['Family Financial Status', p.family_financial_status],
             ].filter(([,v])=>v)
             return (
               <div key={p.token} style={{background:'#f9f9f9',borderRadius:16,padding:20}}>
@@ -105,6 +123,9 @@ export default function SharedMatches() {
                   <div style={{fontSize:18,fontWeight:600}}>{p.masked_name}</div>
                   <div style={{fontSize:11,color:'#8e8e8e',fontFamily:'monospace'}}>{p.profile_code}</div>
                 </div>
+                {p.about_me && (
+                  <div style={{marginBottom:10,fontSize:13,color:'#333',lineHeight:1.5,fontStyle:'italic'}}>"{p.about_me}"</div>
+                )}
                 {rows.map(([k,v])=>(
                   <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:'1px solid rgba(0,0,0,0.06)',fontSize:13}}>
                     <span style={{color:'#8e8e8e'}}>{k}</span>
@@ -136,10 +157,16 @@ export default function SharedMatches() {
         </div>
 
         <div style={{marginTop:20,fontSize:12,color:'#8e8e8e',textAlign:'center',lineHeight:1.6}}>
-          Contact details, photos and full information are shared confidentially.<br/>
-          {profiles[0]?.rm_email
-            ? <>Tap "Interested" on a profile, or contact your Relationship Manager at <a href={`mailto:${profiles[0].rm_email}`} style={{color:'inherit'}}>{profiles[0].rm_email}</a>.</>
-            : 'Tap "Interested" on a profile, or reply to LOVEKUSH with the Profile ID.'}
+          Contact details and photos are shared confidentially — please reach your Relationship Manager.<br/>
+          {(profiles[0]?.rm_name || profiles[0]?.rm_phone || profiles[0]?.rm_email) ? (
+            <>
+              {profiles[0].rm_name && <strong style={{color:'#111'}}>{profiles[0].rm_name}</strong>}
+              {profiles[0].rm_name && (profiles[0].rm_phone || profiles[0].rm_email) && ' · '}
+              {profiles[0].rm_phone && <a href={`tel:${profiles[0].rm_phone.replace(/\s+/g,'')}`} style={{color:'inherit'}}>{profiles[0].rm_phone}</a>}
+              {profiles[0].rm_phone && profiles[0].rm_email && ' · '}
+              {profiles[0].rm_email && <a href={`mailto:${profiles[0].rm_email}`} style={{color:'inherit'}}>{profiles[0].rm_email}</a>}
+            </>
+          ) : 'Tap "Interested" on a profile, or reply to LOVEKUSH with the Profile ID.'}
         </div>
 
         {expiresAt && (
