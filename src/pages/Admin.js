@@ -12,7 +12,11 @@ import {
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
-import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS, LEAD_SOURCE_OPTIONS, parseHeightToInches, formatHeightFromInches } from '../constants/profileOptions'
+import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS, LEAD_SOURCE_OPTIONS, parseHeightToInches, formatHeightFromInches,
+  PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS,
+  formatIncomeShort, parseIncomeRangeMidpoint } from '../constants/profileOptions'
+import DualRangeSlider from '../components/DualRangeSlider'
+import CheckboxDropdown from '../components/CheckboxDropdown'
 import CreateProfile from './CreateProfile'
 import BiodataView from './BiodataView'
 import { EditProfileForm } from './Dashboard'
@@ -342,9 +346,12 @@ export default function Admin({ staffUser }) {
   // Search + Filters
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('') // debounced value that actually triggers query
+  // religion/community/maritalStatus/education ab multi-select arrays hain
+  // (Aryan's ask, 2026-10-09: "multiple choice, checkbox — koi Hindu bhi
+  // dekhna chahta hai, Sikh bhi") — pehle sirf ek value chun sakte the.
   const DEFAULT_FILTERS = {
-    religion: '', community: '', city: '', gender: '',
-    ageMin: '', ageMax: '', maritalStatus: '', education: '', assignedToMe: false,
+    religion: [], community: [], city: '', gender: '',
+    ageMin: '', ageMax: '', maritalStatus: [], education: [], assignedToMe: false,
   }
   // Filters panel ab apna last-used state (open/closed + jo filters chune
   // the) localStorage mein yaad rakhta hai, taaki roz same filter (jaise
@@ -357,7 +364,15 @@ export default function Admin({ staffUser }) {
   const [filters, setFilters] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('admin_filters_state') || 'null')
-      return saved ? { ...DEFAULT_FILTERS, ...saved } : DEFAULT_FILTERS
+      if (!saved) return DEFAULT_FILTERS
+      const merged = { ...DEFAULT_FILTERS, ...saved }
+      // Purana saved state religion/community/maritalStatus/education ko
+      // single string ki tarah save kar chuka ho sakta hai (multi-select
+      // se pehle) — array fields ko hamesha array mein coerce karte hain.
+      ;['religion', 'community', 'maritalStatus', 'education'].forEach(k => {
+        if (!Array.isArray(merged[k])) merged[k] = merged[k] ? [merged[k]] : []
+      })
+      return merged
     } catch { return DEFAULT_FILTERS }
   })
 
@@ -493,12 +508,12 @@ export default function Admin({ staffUser }) {
         q = q.or(`profile_code.ilike.%${safeSearch}%,full_name.ilike.%${safeSearch}%,client_phone.ilike.%${safeSearch}%`)
       }
     }
-    if (filters.religion) q = q.eq('religion', filters.religion)
-    if (filters.community) q = q.eq('community', filters.community)
+    if (filters.religion.length > 0) q = q.in('religion', filters.religion)
+    if (filters.community.length > 0) q = q.in('community', filters.community)
     if (filters.city) q = q.ilike('city', `%${filters.city}%`)
     if (filters.gender) q = q.eq('gender', filters.gender)
-    if (filters.maritalStatus) q = q.eq('marital_status', filters.maritalStatus)
-    if (filters.education) q = q.eq('education', filters.education)
+    if (filters.maritalStatus.length > 0) q = q.in('marital_status', filters.maritalStatus)
+    if (filters.education.length > 0) q = q.in('education', filters.education)
     if (filters.ageMin) q = q.gte('age', parseInt(filters.ageMin))
     if (filters.ageMax) q = q.lte('age', parseInt(filters.ageMax))
     if (filters.assignedToMe) q = q.eq('managed_by_staff_id', staffUser.user_id)
@@ -583,7 +598,9 @@ export default function Admin({ staffUser }) {
     setFilters(DEFAULT_FILTERS)
   }
 
-  const activeFilterCount = Object.values(filters).filter(Boolean).length
+  // Arrays (religion/community/maritalStatus/education) count as "active"
+  // only when non-empty — Boolean([]) is otherwise always true.
+  const activeFilterCount = Object.values(filters).filter(v => Array.isArray(v) ? v.length > 0 : Boolean(v)).length
   // Status bhi ab ek filter field ki tarah count hota hai (combined Search &
   // Filter control) — "X results found", Filters badge aur "Clear all" teeno
   // search + status + panel filters ko ek saath treat karte hain.
@@ -593,16 +610,22 @@ export default function Admin({ staffUser }) {
     setSearchInput(''); setSearch(''); setActiveTab('all'); resetFilters()
   }
   // Chhote removable chips — jo bhi narrow kar raha hai (search/status/panel
-  // filter) ek hi line mein dikhta hai, panel band hone par bhi.
+  // filter) ek hi line mein dikhta hai, panel band hone par bhi. Multi-select
+  // fields (religion/community/maritalStatus/education) ek chip per selected
+  // value dikhate hain, taaki "clear" sirf wahi ek value hataye.
   const FILTER_CHIP_LABELS = {
-    religion: v => v, community: v => v, city: v => `City: ${v}`, gender: v => v,
-    ageMin: v => `Age ≥ ${v}`, ageMax: v => `Age ≤ ${v}`, maritalStatus: v => v,
-    education: v => v, assignedToMe: () => 'Assigned to me',
+    city: v => `City: ${v}`, gender: v => v,
+    ageMin: v => `Age ≥ ${v}`, ageMax: v => `Age ≤ ${v}`,
+    assignedToMe: () => 'Assigned to me',
   }
   const activeFilterChips = [
     ...(search ? [{ key: 'search', label: `"${search}"`, clear: () => { setSearchInput(''); setSearch('') } }] : []),
     ...(activeTab !== 'all' ? [{ key: 'status', label: `Status: ${activeTab}`, clear: () => setActiveTab('all') }] : []),
-    ...Object.entries(filters).filter(([, v]) => v).map(([k, v]) => ({
+    ...['religion', 'community', 'maritalStatus', 'education'].flatMap(k => filters[k].map(v => ({
+      key: k + ':' + v, label: v,
+      clear: () => setFilters(f => ({ ...f, [k]: f[k].filter(x => x !== v) })),
+    }))),
+    ...Object.entries(filters).filter(([k, v]) => !Array.isArray(v) && v).map(([k, v]) => ({
       key: k, label: FILTER_CHIP_LABELS[k] ? FILTER_CHIP_LABELS[k](v) : String(v),
       clear: () => setFilters(f => ({ ...f, [k]: DEFAULT_FILTERS[k] })),
     })),
@@ -1085,14 +1108,10 @@ export default function Admin({ staffUser }) {
           <div className="list-row" style={{ marginBottom: 0 }}>
             <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Religion & Community</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-              <select className="form-select" value={filters.religion} onChange={e=>setFilters(f=>({...f,religion:e.target.value}))}>
-                <option value="">Any Religion</option>
-                {RELIGIONS.map(r=><option key={r} value={r}>{r}</option>)}
-              </select>
-              <select className="form-select" value={filters.community} onChange={e=>setFilters(f=>({...f,community:e.target.value}))}>
-                <option value="">Any Community</option>
-                {CASTES.map(c=><option key={c} value={c}>{c}</option>)}
-              </select>
+              <CheckboxDropdown options={RELIGIONS} selected={filters.religion}
+                onChange={v=>setFilters(f=>({...f,religion:v}))} placeholder="Any Religion" />
+              <CheckboxDropdown options={CASTES} selected={filters.community}
+                onChange={v=>setFilters(f=>({...f,community:v}))} placeholder="Any Community" />
             </div>
 
             <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Location & Demographics</div>
@@ -1111,14 +1130,10 @@ export default function Admin({ staffUser }) {
 
             <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Marital Status & Education</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <select className="form-select" value={filters.maritalStatus} onChange={e=>setFilters(f=>({...f,maritalStatus:e.target.value}))}>
-                <option value="">Any Marital Status</option>
-                {MARITAL_STATUSES.map(m=><option key={m} value={m}>{m}</option>)}
-              </select>
-              <select className="form-select" value={filters.education} onChange={e=>setFilters(f=>({...f,education:e.target.value}))}>
-                <option value="">Any Education</option>
-                {EDUCATIONS.map(e=><option key={e} value={e}>{e}</option>)}
-              </select>
+              <CheckboxDropdown options={MARITAL_STATUSES} selected={filters.maritalStatus}
+                onChange={v=>setFilters(f=>({...f,maritalStatus:v}))} placeholder="Any Marital Status" />
+              <CheckboxDropdown options={EDUCATIONS} selected={filters.education}
+                onChange={v=>setFilters(f=>({...f,education:v}))} placeholder="Any Education" />
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 14, cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.assignedToMe} onChange={e=>setFilters(f=>({...f,assignedToMe:e.target.checked}))} />
@@ -1781,24 +1796,43 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
   // option lists (RELIGIONS/CASTES/MARITAL_STATUSES/EDUCATIONS) as
   // signup/profile fields, same height-bucket approach as the Dashboard
   // Breakdown panel — no new field, no new algorithm.
+  const showFiltersDefault = { ageMin: 18, ageMax: 70, heightMin: PARTNER_HEIGHT_MIN_INCHES, heightMax: PARTNER_HEIGHT_MAX_INCHES,
+    incomeCurrency: 'INR', incomeMin: PARTNER_INCOME_BOUNDS.INR.min, incomeMax: PARTNER_INCOME_BOUNDS.INR.max,
+    // Multi-select (Aryan's ask, 2026-10-09: checkbox/multi-choice filters —
+    // e.g. Hindu aur Sikh dono ek saath select karna)
+    city: '', religion: [], community: [], maritalStatus: [], education: [] }
   const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({ ageMin: '', ageMax: '', city: '', religion: '', community: '', maritalStatus: '', education: '', heightMin: '', heightMax: '' })
+  // Age/height/income ab slider-based range hain (DualRangeSlider, same
+  // component jo member-facing Search screen par use hota hai) — pehle
+  // number-input/text the (Aryan's ask, 2026-10-09: "filter mein sliders
+  // chahiye"). Income filter default range (full bounds) par hamesha
+  // "active" dikhta tha purane number-input design mein bhi nahi — yahan
+  // bhi default range ko active nahi maante.
+  const [filters, setFilters] = useState(showFiltersDefault)
   const setFilter = (key, val) => setFilters(prev => ({ ...prev, [key]: val }))
-  const clearFilters = () => setFilters({ ageMin: '', ageMax: '', city: '', religion: '', community: '', maritalStatus: '', education: '', heightMin: '', heightMax: '' })
-  const activeFilterCount = Object.values(filters).filter(v => v !== '').length
+  const clearFilters = () => setFilters(showFiltersDefault)
+  const activeFilterCount = (filters.city !== '' ? 1 : 0)
+    + ['religion', 'community', 'maritalStatus', 'education'].filter(k => filters[k].length > 0).length
+    + (filters.ageMin !== showFiltersDefault.ageMin || filters.ageMax !== showFiltersDefault.ageMax ? 1 : 0)
+    + (filters.heightMin !== showFiltersDefault.heightMin || filters.heightMax !== showFiltersDefault.heightMax ? 1 : 0)
+    + (filters.incomeMin !== showFiltersDefault.incomeMin || filters.incomeMax !== showFiltersDefault.incomeMax || filters.incomeCurrency !== showFiltersDefault.incomeCurrency ? 1 : 0)
 
   const filteredResults = results.filter(r => {
     const o = r.profile
-    if (filters.ageMin && (!o.age || o.age < Number(filters.ageMin))) return false
-    if (filters.ageMax && (!o.age || o.age > Number(filters.ageMax))) return false
+    if (o.age && (o.age < filters.ageMin || o.age > filters.ageMax)) return false
     if (filters.city && !(o.city || '').toLowerCase().includes(filters.city.trim().toLowerCase())) return false
-    if (filters.religion && o.religion !== filters.religion) return false
-    if (filters.community && o.community !== filters.community) return false
-    if (filters.maritalStatus && o.marital_status !== filters.maritalStatus) return false
-    if (filters.education && o.education !== filters.education) return false
+    if (filters.religion.length > 0 && !filters.religion.includes(o.religion)) return false
+    if (filters.community.length > 0 && !filters.community.includes(o.community)) return false
+    if (filters.maritalStatus.length > 0 && !filters.maritalStatus.includes(o.marital_status)) return false
+    if (filters.education.length > 0 && !filters.education.includes(o.education)) return false
     const inches = parseHeightToInches(o.height)
-    if (filters.heightMin && (!inches || inches < Number(filters.heightMin))) return false
-    if (filters.heightMax && (!inches || inches > Number(filters.heightMax))) return false
+    if (inches && (inches < filters.heightMin || inches > filters.heightMax)) return false
+    if (filters.incomeMin !== showFiltersDefault.incomeMin || filters.incomeMax !== showFiltersDefault.incomeMax) {
+      if (o.annual_income && o.annual_income_currency === filters.incomeCurrency) {
+        const mid = parseIncomeRangeMidpoint(o.annual_income, o.annual_income_currency)
+        if (mid != null && (mid < filters.incomeMin || mid > filters.incomeMax)) return false
+      }
+    }
     return true
   })
 
@@ -1963,39 +1997,59 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
           </button>
           {showFilters && (
             <div style={{background:'#fafafa',border:'1px solid #ededed',borderRadius:'var(--radius)',padding:14,marginTop:8}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:16,marginBottom:14}}>
+                <div>
+                  <div style={{fontSize:12,color:'#8e8e8e',marginBottom:4}}>Age range</div>
+                  <DualRangeSlider min={18} max={70} valueMin={filters.ageMin} valueMax={filters.ageMax}
+                    onChange={(lo,hi)=>setFilters(p=>({...p, ageMin:lo, ageMax:hi}))}
+                    formatLabel={v => v + ' yrs'} />
+                </div>
+                <div>
+                  <div style={{fontSize:12,color:'#8e8e8e',marginBottom:4}}>Height range</div>
+                  <DualRangeSlider min={PARTNER_HEIGHT_MIN_INCHES} max={PARTNER_HEIGHT_MAX_INCHES}
+                    valueMin={filters.heightMin} valueMax={filters.heightMax}
+                    onChange={(lo,hi)=>setFilters(p=>({...p, heightMin:lo, heightMax:hi}))}
+                    formatLabel={formatHeightFromInches} />
+                </div>
+                <div>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+                    <span style={{fontSize:12,color:'#8e8e8e'}}>Income range</span>
+                    <select className="form-select" value={filters.incomeCurrency} style={{maxWidth:100,fontSize:12,padding:'2px 6px'}}
+                      onChange={e=>{
+                        const bounds = PARTNER_INCOME_BOUNDS[e.target.value]
+                        setFilters(p=>({...p, incomeCurrency:e.target.value, incomeMin:bounds.min, incomeMax:bounds.max}))
+                      }}>
+                      <option value="INR">₹ INR</option>
+                      <option value="USD">$ USD</option>
+                    </select>
+                  </div>
+                  <DualRangeSlider values={PARTNER_INCOME_STEPS[filters.incomeCurrency]}
+                    valueMin={filters.incomeMin} valueMax={filters.incomeMax}
+                    onChange={(lo,hi)=>setFilters(p=>({...p, incomeMin:lo, incomeMax:hi}))}
+                    formatLabel={v => formatIncomeShort(v, filters.incomeCurrency)} />
+                </div>
+              </div>
               <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:10}}>
-                <input className="form-input" placeholder="Age min" inputMode="numeric" value={filters.ageMin}
-                  onChange={e=>setFilter('ageMin', e.target.value.replace(/\D/g,''))} style={{maxWidth:90}} />
-                <input className="form-input" placeholder="Age max" inputMode="numeric" value={filters.ageMax}
-                  onChange={e=>setFilter('ageMax', e.target.value.replace(/\D/g,''))} style={{maxWidth:90}} />
-                <select className="form-select" value={filters.heightMin} onChange={e=>setFilter('heightMin', e.target.value)} style={{maxWidth:160}}>
-                  <option value="">Height: any min</option>
-                  {[53,56,60,64,68,72,76,80,84].map(inc => <option key={inc} value={inc}>Min {formatHeightFromInches(inc)}</option>)}
-                </select>
-                <select className="form-select" value={filters.heightMax} onChange={e=>setFilter('heightMax', e.target.value)} style={{maxWidth:160}}>
-                  <option value="">Height: any max</option>
-                  {[53,56,60,64,68,72,76,80,84].map(inc => <option key={inc} value={inc}>Max {formatHeightFromInches(inc)}</option>)}
-                </select>
                 <input className="form-input" placeholder="City" value={filters.city}
                   onChange={e=>setFilter('city', e.target.value)} style={{maxWidth:140}} />
               </div>
               <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-                <select className="form-select" value={filters.religion} onChange={e=>setFilter('religion', e.target.value)} style={{maxWidth:160}}>
-                  <option value="">All religions</option>
-                  {RELIGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-                <select className="form-select" value={filters.community} onChange={e=>setFilter('community', e.target.value)} style={{maxWidth:180}}>
-                  <option value="">All castes / communities</option>
-                  {CASTES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select className="form-select" value={filters.maritalStatus} onChange={e=>setFilter('maritalStatus', e.target.value)} style={{maxWidth:170}}>
-                  <option value="">All marital statuses</option>
-                  {MARITAL_STATUSES.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <select className="form-select" value={filters.education} onChange={e=>setFilter('education', e.target.value)} style={{maxWidth:170}}>
-                  <option value="">All education levels</option>
-                  {EDUCATIONS.map(e => <option key={e} value={e}>{e}</option>)}
-                </select>
+                <div style={{maxWidth:180,flex:'1 1 160px'}}>
+                  <CheckboxDropdown options={RELIGIONS} selected={filters.religion}
+                    onChange={v=>setFilter('religion', v)} placeholder="All religions" />
+                </div>
+                <div style={{maxWidth:200,flex:'1 1 180px'}}>
+                  <CheckboxDropdown options={CASTES} selected={filters.community}
+                    onChange={v=>setFilter('community', v)} placeholder="All castes / communities" />
+                </div>
+                <div style={{maxWidth:190,flex:'1 1 170px'}}>
+                  <CheckboxDropdown options={MARITAL_STATUSES} selected={filters.maritalStatus}
+                    onChange={v=>setFilter('maritalStatus', v)} placeholder="All marital statuses" />
+                </div>
+                <div style={{maxWidth:190,flex:'1 1 170px'}}>
+                  <CheckboxDropdown options={EDUCATIONS} selected={filters.education}
+                    onChange={v=>setFilter('education', v)} placeholder="All education levels" />
+                </div>
                 {activeFilterCount > 0 && <button className="btn btn-outline btn-sm" onClick={clearFilters}>Clear filters</button>}
               </div>
             </div>

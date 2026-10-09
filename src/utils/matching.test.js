@@ -1,4 +1,4 @@
-import { passesHardFilters, computeMatchScore } from './matching'
+import { passesHardFilters, computeMatchScore, sameCasteOrCommunity } from './matching'
 import { NAKSHATRAS } from './astrology'
 
 const base = { marital_status: 'Never Married', religion: 'Hindu', age: 28 }
@@ -38,4 +38,42 @@ test('guna feeds the score and strengths', () => {
 test("mother's gotra overlap is a warning", () => {
   const r = computeMatchScore(boy({ gotra: 'Garg', mother_gotra: 'Kashyap' }), girl({ gotra: 'Kashyap' }))
   expect(r.needsDiscussion.some(s => s.includes("mother's gotra"))).toBe(true)
+})
+
+test('caste spelling variants (Kushwaha/Kushwah) count as same caste, but unrelated short names do not', () => {
+  expect(sameCasteOrCommunity('Kushwaha', 'Kushwah')).toBe(true)
+  expect(sameCasteOrCommunity('Kushwaha', 'Kushwaha')).toBe(true)
+  expect(sameCasteOrCommunity('Yadav', 'Jat')).toBe(false)
+  expect(sameCasteOrCommunity('Jat', 'Rat')).toBe(false) // short names: no fuzzy tolerance
+  expect(sameCasteOrCommunity('', 'Kushwah')).toBe(false)
+
+  const r = computeMatchScore(boy({ community: 'Kushwaha' }), girl({ community: 'Kushwah' }))
+  expect(r.strengths.some(s => s.includes('Same community/caste'))).toBe(true)
+  expect(passesHardFilters(
+    boy({ community: 'Kushwaha', partner_community_ids: ['Kushwah'] }),
+    girl({ community: 'Kushwah' })
+  )).toBe(true)
+})
+
+test('age ranking is direction-aware: a bride older than the groom ranks below a same-age/younger bride', () => {
+  const groom = boy({ age: 30 })
+  const sameAgeBride = girl({ age: 30 })
+  const olderBride = girl({ age: 32 })
+  const scoreSame = computeMatchScore(groom, sameAgeBride).score
+  const scoreOlder = computeMatchScore(groom, olderBride).score
+  expect(scoreOlder).toBeLessThan(scoreSame)
+
+  // Groom older than bride by the same gap is penalized much less
+  // (traditional/common pattern) than bride older by the same gap.
+  const groomOlder = computeMatchScore(boy({ age: 32 }), girl({ age: 30 }))
+  const brideOlder = computeMatchScore(boy({ age: 30 }), girl({ age: 32 }))
+  expect(brideOlder.score).toBeLessThan(groomOlder.score)
+  expect(brideOlder.needsDiscussion.some(s => s.includes('older than groom'))).toBe(true)
+})
+
+test('profession and complexion (existing fields) now feed the score', () => {
+  const r1 = computeMatchScore(boy({ profession: 'Software Engineer' }), girl({ profession: 'Software Engineer' }))
+  expect(r1.strengths.some(s => s.includes('Same profession'))).toBe(true)
+  const r2 = computeMatchScore(boy({ complexion: 'Fair' }), girl({ complexion: 'Fair' }))
+  expect(r2.strengths.some(s => s.includes('Same complexion'))).toBe(true)
 })
