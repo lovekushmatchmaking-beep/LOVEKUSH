@@ -29,6 +29,10 @@ const TYPE_EMOJI = {
   share_link_interest: '👍',
   profile_liked: '❤️',
   mutual_interest: '💞',
+  meeting_done: '🤝',
+  decision_recorded: '📝',
+  next_round_stage: '🔭',
+  match_outcome: '💍',
 }
 
 export default function NotificationBell({ userId, onNavigate, align = 'right' }) {

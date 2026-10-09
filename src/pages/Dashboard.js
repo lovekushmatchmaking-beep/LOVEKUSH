@@ -56,6 +56,14 @@ const NOTIF_TYPE_TO_TAB = {
   coordination_request_received: 'requests',
   meeting_scheduled: 'requests',
   caste_suggestion_reviewed: 'home',
+  // Post-meeting lifecycle (audit 2026-10-09) — same introductions row as
+  // coordination_request_received/meeting_scheduled above, so it lands on
+  // Requests and the existing notifFocusId deep-link scrolls straight to
+  // that exact card.
+  meeting_done: 'requests',
+  decision_recorded: 'requests',
+  next_round_stage: 'requests',
+  match_outcome: 'requests',
 }
 
 // Single-choice fields render as a native <select> dropdown — keeps the
@@ -1190,6 +1198,35 @@ function HelpView({ profileCode, onBack, onToast }) {
   )
 }
 
+// Everything past "accepted" used to collapse into one generic "Our
+// manager will call you" line, even once the meeting was done, a
+// decision was recorded, the next-round pipeline (horoscope/house visit/
+// final meeting/contact disclosure) had moved on, or the match was
+// closed successful/not-proceeding — stale/incomplete info once Admin.js
+// actually started writing those columns (audit 2026-10-09: "galat/
+// incomplete jagah le ja rahi hain"). One place decides what to show for
+// any given state of an introduction row, in priority order newest-first,
+// reused by both the received and sent lists below.
+const ROUND_STAGE_TEXT = {
+  horoscope_review: 'Horoscope review in progress',
+  house_visit: 'House visit being arranged',
+  final_meeting: 'Final meeting being arranged',
+  contact_disclosure: 'Final step — contact details coming soon',
+}
+function introStatusInfo(i) {
+  if (i.final_outcome === 'successful_match') return { text: 'Successful match 💍', color: 'var(--success)', Icon: CircleCheck }
+  if (i.final_outcome === 'not_proceeding') return { text: 'Not proceeding further', color: 'var(--gray3)', Icon: X }
+  if (i.next_round_stage) return { text: ROUND_STAGE_TEXT[i.next_round_stage] || 'Update on your match', color: 'var(--primary)', Icon: Sparkles }
+  if (i.decision === 'interested') return { text: 'Positive outcome — moving to next round', color: 'var(--success)', Icon: CircleCheck }
+  if (i.decision === 'not_interested') return { text: 'Meeting outcome recorded', color: 'var(--gray3)', Icon: X }
+  if (i.status === 'meeting_done') return { text: 'Meeting done — decision update coming soon', color: 'var(--gray3)', Icon: CircleCheck }
+  if (i.status === 'contacted') return { text: 'Our manager contacted you', color: 'var(--gray3)', Icon: PhoneIcon }
+  if (i.status === 'accepted') return { text: 'Accepted · our manager will call you', color: 'var(--success)', Icon: CircleCheck }
+  if (i.status === 'declined') return { text: 'Declined', color: 'var(--gray3)', Icon: X }
+  if (i.status === 'closed') return { text: 'Closed', color: 'var(--gray3)', Icon: X }
+  return { text: 'Our manager will call you', color: 'var(--gray3)', Icon: PhoneIcon }
+}
+
 function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], onRespondPhoto, focusId, onConsumeFocus }) {
   const [subTab, setSubTab] = useState('received') // 'received' | 'sent'
   const [profilesById, setProfilesById] = useState({})
@@ -1312,17 +1349,11 @@ function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], 
                     <button className="btn btn-primary btn-sm" style={{flex:1}} onClick={()=>onRespond(i.id,'accepted')}><CircleCheck size={15} /> Accept</button>
                     <button className="btn btn-outline btn-sm" style={{flex:1}} onClick={()=>onRespond(i.id,'declined')}><X size={15} /> Decline</button>
                   </div>
-                ) : i.status === 'accepted' ? (
-                  <div style={{fontSize:12,color:'var(--success)',display:'flex',gap:6,alignItems:'center'}}>
-                    <CircleCheck size={14} /> Accepted · our manager will call you
+                ) : (() => { const { text, color, Icon } = introStatusInfo(i); return (
+                  <div style={{fontSize:12,color,display:'flex',gap:6,alignItems:'center'}}>
+                    <Icon size={14} /> {text}
                   </div>
-                ) : i.status === 'declined' ? (
-                  <div style={{fontSize:12,color:'var(--gray3)',display:'flex',gap:6,alignItems:'center'}}><X size={14} /> Declined</div>
-                ) : (
-                  <div style={{fontSize:12,color:'var(--gray3)',display:'flex',gap:6,alignItems:'center'}}>
-                    <PhoneIcon size={14} /> Our manager will call you
-                  </div>
-                )}
+                )})()}
               </div>
             ))}
           </div>
@@ -1362,8 +1393,13 @@ function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], 
                   <div style={{fontSize:15,fontWeight:600}}>{profilesById[i.to_profile] || 'Profile'}</div>
                   <div style={{fontSize:12,color:'var(--gray3)'}}>{i.request_type === 'meeting' ? 'Meeting' : 'Talk'}</div>
                 </div>
-                <span className={'chip ' + ((i.status==='declined' || i.status==='closed') ? 'chip-muted' : (i.status==='contacted'||i.status==='accepted') ? 'chip-success' : 'chip-warning')}
-                  style={{textTransform:'capitalize'}}>{i.status==='declined' ? 'Not accepted' : (i.status || 'pending')}</span>
+                {(!i.status || i.status === 'pending') ? (
+                  <span className="chip chip-warning">Pending</span>
+                ) : i.status === 'declined' ? (
+                  <span className="chip chip-muted">Not accepted</span>
+                ) : (() => { const { text, color } = introStatusInfo(i); return (
+                  <span className="chip" style={{ color, borderColor: color }}>{text}</span>
+                )})()}
               </div>
             ))}
           </div>
