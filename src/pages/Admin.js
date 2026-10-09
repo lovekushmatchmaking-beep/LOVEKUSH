@@ -12,7 +12,10 @@ import {
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
-import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS, LEAD_SOURCE_OPTIONS, parseHeightToInches, formatHeightFromInches } from '../constants/profileOptions'
+import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS, LEAD_SOURCE_OPTIONS, parseHeightToInches, formatHeightFromInches,
+  PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS,
+  formatIncomeShort, parseIncomeRangeMidpoint } from '../constants/profileOptions'
+import DualRangeSlider from '../components/DualRangeSlider'
 import CreateProfile from './CreateProfile'
 import BiodataView from './BiodataView'
 import { EditProfileForm } from './Dashboard'
@@ -1781,24 +1784,40 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
   // option lists (RELIGIONS/CASTES/MARITAL_STATUSES/EDUCATIONS) as
   // signup/profile fields, same height-bucket approach as the Dashboard
   // Breakdown panel — no new field, no new algorithm.
+  const showFiltersDefault = { ageMin: 18, ageMax: 70, heightMin: PARTNER_HEIGHT_MIN_INCHES, heightMax: PARTNER_HEIGHT_MAX_INCHES,
+    incomeCurrency: 'INR', incomeMin: PARTNER_INCOME_BOUNDS.INR.min, incomeMax: PARTNER_INCOME_BOUNDS.INR.max,
+    city: '', religion: '', community: '', maritalStatus: '', education: '' }
   const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({ ageMin: '', ageMax: '', city: '', religion: '', community: '', maritalStatus: '', education: '', heightMin: '', heightMax: '' })
+  // Age/height/income ab slider-based range hain (DualRangeSlider, same
+  // component jo member-facing Search screen par use hota hai) — pehle
+  // number-input/text the (Aryan's ask, 2026-10-09: "filter mein sliders
+  // chahiye"). Income filter default range (full bounds) par hamesha
+  // "active" dikhta tha purane number-input design mein bhi nahi — yahan
+  // bhi default range ko active nahi maante.
+  const [filters, setFilters] = useState(showFiltersDefault)
   const setFilter = (key, val) => setFilters(prev => ({ ...prev, [key]: val }))
-  const clearFilters = () => setFilters({ ageMin: '', ageMax: '', city: '', religion: '', community: '', maritalStatus: '', education: '', heightMin: '', heightMax: '' })
-  const activeFilterCount = Object.values(filters).filter(v => v !== '').length
+  const clearFilters = () => setFilters(showFiltersDefault)
+  const activeFilterCount = ['city', 'religion', 'community', 'maritalStatus', 'education'].filter(k => filters[k] !== '').length
+    + (filters.ageMin !== showFiltersDefault.ageMin || filters.ageMax !== showFiltersDefault.ageMax ? 1 : 0)
+    + (filters.heightMin !== showFiltersDefault.heightMin || filters.heightMax !== showFiltersDefault.heightMax ? 1 : 0)
+    + (filters.incomeMin !== showFiltersDefault.incomeMin || filters.incomeMax !== showFiltersDefault.incomeMax || filters.incomeCurrency !== showFiltersDefault.incomeCurrency ? 1 : 0)
 
   const filteredResults = results.filter(r => {
     const o = r.profile
-    if (filters.ageMin && (!o.age || o.age < Number(filters.ageMin))) return false
-    if (filters.ageMax && (!o.age || o.age > Number(filters.ageMax))) return false
+    if (o.age && (o.age < filters.ageMin || o.age > filters.ageMax)) return false
     if (filters.city && !(o.city || '').toLowerCase().includes(filters.city.trim().toLowerCase())) return false
     if (filters.religion && o.religion !== filters.religion) return false
     if (filters.community && o.community !== filters.community) return false
     if (filters.maritalStatus && o.marital_status !== filters.maritalStatus) return false
     if (filters.education && o.education !== filters.education) return false
     const inches = parseHeightToInches(o.height)
-    if (filters.heightMin && (!inches || inches < Number(filters.heightMin))) return false
-    if (filters.heightMax && (!inches || inches > Number(filters.heightMax))) return false
+    if (inches && (inches < filters.heightMin || inches > filters.heightMax)) return false
+    if (filters.incomeMin !== showFiltersDefault.incomeMin || filters.incomeMax !== showFiltersDefault.incomeMax) {
+      if (o.annual_income && o.annual_income_currency === filters.incomeCurrency) {
+        const mid = parseIncomeRangeMidpoint(o.annual_income, o.annual_income_currency)
+        if (mid != null && (mid < filters.incomeMin || mid > filters.incomeMax)) return false
+      }
+    }
     return true
   })
 
@@ -1963,19 +1982,39 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
           </button>
           {showFilters && (
             <div style={{background:'#fafafa',border:'1px solid #ededed',borderRadius:'var(--radius)',padding:14,marginTop:8}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:16,marginBottom:14}}>
+                <div>
+                  <div style={{fontSize:12,color:'#8e8e8e',marginBottom:4}}>Age range</div>
+                  <DualRangeSlider min={18} max={70} valueMin={filters.ageMin} valueMax={filters.ageMax}
+                    onChange={(lo,hi)=>setFilters(p=>({...p, ageMin:lo, ageMax:hi}))}
+                    formatLabel={v => v + ' yrs'} />
+                </div>
+                <div>
+                  <div style={{fontSize:12,color:'#8e8e8e',marginBottom:4}}>Height range</div>
+                  <DualRangeSlider min={PARTNER_HEIGHT_MIN_INCHES} max={PARTNER_HEIGHT_MAX_INCHES}
+                    valueMin={filters.heightMin} valueMax={filters.heightMax}
+                    onChange={(lo,hi)=>setFilters(p=>({...p, heightMin:lo, heightMax:hi}))}
+                    formatLabel={formatHeightFromInches} />
+                </div>
+                <div>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+                    <span style={{fontSize:12,color:'#8e8e8e'}}>Income range</span>
+                    <select className="form-select" value={filters.incomeCurrency} style={{maxWidth:100,fontSize:12,padding:'2px 6px'}}
+                      onChange={e=>{
+                        const bounds = PARTNER_INCOME_BOUNDS[e.target.value]
+                        setFilters(p=>({...p, incomeCurrency:e.target.value, incomeMin:bounds.min, incomeMax:bounds.max}))
+                      }}>
+                      <option value="INR">₹ INR</option>
+                      <option value="USD">$ USD</option>
+                    </select>
+                  </div>
+                  <DualRangeSlider values={PARTNER_INCOME_STEPS[filters.incomeCurrency]}
+                    valueMin={filters.incomeMin} valueMax={filters.incomeMax}
+                    onChange={(lo,hi)=>setFilters(p=>({...p, incomeMin:lo, incomeMax:hi}))}
+                    formatLabel={v => formatIncomeShort(v, filters.incomeCurrency)} />
+                </div>
+              </div>
               <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:10}}>
-                <input className="form-input" placeholder="Age min" inputMode="numeric" value={filters.ageMin}
-                  onChange={e=>setFilter('ageMin', e.target.value.replace(/\D/g,''))} style={{maxWidth:90}} />
-                <input className="form-input" placeholder="Age max" inputMode="numeric" value={filters.ageMax}
-                  onChange={e=>setFilter('ageMax', e.target.value.replace(/\D/g,''))} style={{maxWidth:90}} />
-                <select className="form-select" value={filters.heightMin} onChange={e=>setFilter('heightMin', e.target.value)} style={{maxWidth:160}}>
-                  <option value="">Height: any min</option>
-                  {[53,56,60,64,68,72,76,80,84].map(inc => <option key={inc} value={inc}>Min {formatHeightFromInches(inc)}</option>)}
-                </select>
-                <select className="form-select" value={filters.heightMax} onChange={e=>setFilter('heightMax', e.target.value)} style={{maxWidth:160}}>
-                  <option value="">Height: any max</option>
-                  {[53,56,60,64,68,72,76,80,84].map(inc => <option key={inc} value={inc}>Max {formatHeightFromInches(inc)}</option>)}
-                </select>
                 <input className="form-input" placeholder="City" value={filters.city}
                   onChange={e=>setFilter('city', e.target.value)} style={{maxWidth:140}} />
               </div>

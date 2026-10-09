@@ -6,6 +6,40 @@
 import { parseHeightToInches, parseIncomeRangeMidpoint } from '../constants/profileOptions'
 import { gunaMilanFor, sameGotra } from './astrology'
 
+// Caste/community naam ki spelling variants (jaise "Kushwaha" / "Kushwah" —
+// same caste, bas transliteration mein ek 'a' ka farak) ko exact string
+// match na hone ki wajah se "different caste" treat karne se bachaata hai.
+// Chhota edit-distance tolerance use karte hain, sirf lambe naamon par
+// (5+ letters) — chhote naamon (jaise "Jat") par tolerance nahi, warna
+// galti se alag castes bhi same maan li jaayengi.
+function normalizeCasteName(s) {
+  return String(s || '').trim().toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ')
+}
+function levenshtein(a, b) {
+  const m = a.length, n = b.length
+  if (m === 0) return n
+  if (n === 0) return m
+  const dp = []
+  for (let i = 0; i <= m; i++) dp.push(new Array(n + 1).fill(0))
+  for (let i = 0; i <= m; i++) dp[i][0] = i
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+    }
+  }
+  return dp[m][n]
+}
+export function sameCasteOrCommunity(a, b) {
+  if (!a || !b) return false
+  const na = normalizeCasteName(a), nb = normalizeCasteName(b)
+  if (!na || !nb) return false
+  if (na === nb) return true
+  if (na.length < 5 || nb.length < 5) return false
+  return levenshtein(na, nb) <= 1
+}
+
 // "Horoscope Match Required? = Yes" wale member ko 18/36 se kam Guna
 // wale profiles nahi dikhte (traditional minimum).
 export const MIN_GUNA_WHEN_REQUIRED = 18
@@ -49,8 +83,10 @@ export function passesHardFilters(me, other) {
   const NON_SPECIFIC = ['Any Community / No Bar', 'Inter-community', 'Others', "Don't wish to specify"]
   const meSpecificCommunities = (me.partner_community_ids || []).filter(c => !NON_SPECIFIC.includes(c))
   const otherSpecificCommunities = (other.partner_community_ids || []).filter(c => !NON_SPECIFIC.includes(c))
-  if (meSpecificCommunities.length > 0 && !meSpecificCommunities.includes(other.community)) return false
-  if (otherSpecificCommunities.length > 0 && !otherSpecificCommunities.includes(me.community)) return false
+  // Exact match ke saath-saath spelling-variant tolerance bhi (Kushwaha/
+  // Kushwah jaisi cases) — sameCasteOrCommunity upar define hai.
+  if (meSpecificCommunities.length > 0 && !meSpecificCommunities.some(c => c === other.community || sameCasteOrCommunity(c, other.community))) return false
+  if (otherSpecificCommunities.length > 0 && !otherSpecificCommunities.some(c => c === me.community || sameCasteOrCommunity(c, me.community))) return false
 
   // Education level preference — dono taraf se. Search screen par user
   // jo education levels chunta hai wo ab tak sirf save hote the, matching
@@ -100,6 +136,10 @@ const WEIGHTS = {
   community: 20, education: 12, incomeOccupation: 12, location: 12,
   age: 10, familyType: 8, diet: 8, manglik: 8, motherTongue: 5, lifestyle: 5,
   christianDenomination: 10, guna: 10,
+  // Aryan ne bola profession/complexion jaisi existing fields bhi factor
+  // mein aani chahiye — reuse-first, naya field nahi, sirf scoring mein
+  // add kiya (existing diet/mother_tongue jaisa "same=bonus" pattern).
+  profession: 6, complexion: 4,
 }
 
 function scoreCategory(condition, points, strengthText, discussText) {
@@ -114,12 +154,15 @@ export function computeMatchScore(me, other) {
   let earned = 0
   let possible = 0
 
-  // Community / Caste
+  // Community / Caste — exact match, ya spelling-variant (Kushwaha/Kushwah)
   if (me.community && other.community) {
     possible += WEIGHTS.community
     if (me.community === other.community) {
       earned += WEIGHTS.community
       strengths.push('Same community/caste (' + me.community + ')')
+    } else if (sameCasteOrCommunity(me.community, other.community)) {
+      earned += WEIGHTS.community
+      strengths.push('Same community/caste (' + me.community + ' / ' + other.community + ' — spelling variant)')
     } else {
       earned += WEIGHTS.community * 0.3
       needsDiscussion.push('Different community (' + me.community + ' / ' + other.community + ')')
@@ -229,14 +272,59 @@ export function computeMatchScore(me, other) {
     }
   }
 
-  // Age closeness
+  // Age closeness — ab direction-aware. India mein groom ka bride se
+  // same-age ya bada hona common hai; bride ka groom se bada hona rare
+  // hai (Aryan: ~20-30% hi karte hain) — ispe exclude nahi karte (hard
+  // filter nahi hai) par ranking mein zyada neeche jaata hai, taaki
+  // (e.g.) 30-saal ke ladke ko 32-saal ki ladki 28-saal wali se upar
+  // rank na ho.
   if (me.age && other.age) {
     possible += WEIGHTS.age
     const gap = Math.abs(me.age - other.age)
-    const ageScore = Math.max(0, WEIGHTS.age - gap * 1.5)
+    const male = me.gender === 'Male' ? me : other
+    const female = me.gender === 'Male' ? other : me
+    const brideOlderBy = (male.gender === 'Male' && female.gender === 'Female') ? female.age - male.age : null
+    let ageScore
+    if (brideOlderBy != null && brideOlderBy > 0) {
+      ageScore = Math.max(0, WEIGHTS.age - 2 - brideOlderBy * 2.5)
+    } else if (brideOlderBy != null) {
+      const groomOlderBy = -brideOlderBy
+      ageScore = Math.max(0, WEIGHTS.age - groomOlderBy * 0.8)
+    } else {
+      // Dono ka gender pata na ho (test/edge data) — purana symmetric fallback
+      ageScore = Math.max(0, WEIGHTS.age - gap * 1.5)
+    }
     earned += ageScore
-    if (gap <= 3) strengths.push('Age difference: ' + gap + ' years (within preference)')
-    else needsDiscussion.push('Age difference: ' + gap + ' years')
+    if (brideOlderBy != null && brideOlderBy > 0) {
+      needsDiscussion.push('Bride is ' + brideOlderBy + ' years older than groom — less common pairing, worth discussing with family')
+    } else if (gap <= 3) {
+      strengths.push('Age difference: ' + gap + ' years (within preference)')
+    } else {
+      needsDiscussion.push('Age difference: ' + gap + ' years')
+    }
+  }
+
+  // Profession — same profession ek positive signal hai (existing field,
+  // pehle scoring mein bilkul use nahi hota tha)
+  if (me.profession && other.profession) {
+    possible += WEIGHTS.profession
+    if (me.profession === other.profession) {
+      earned += WEIGHTS.profession
+      strengths.push('Same profession (' + me.profession + ')')
+    } else {
+      needsDiscussion.push('Profession differs (' + me.profession + ' / ' + other.profession + ')')
+    }
+  }
+
+  // Complexion — existing field, pehle scoring mein use nahi hota tha.
+  // Low weight rakha hai kyunki yeh age/community/education jitna decisive
+  // factor nahi hai.
+  if (me.complexion && other.complexion) {
+    possible += WEIGHTS.complexion
+    if (me.complexion === other.complexion) {
+      earned += WEIGHTS.complexion
+      strengths.push('Same complexion (' + me.complexion + ')')
+    }
   }
 
   // Family Type
