@@ -842,14 +842,25 @@ export default function Admin({ staffUser }) {
   const effectiveSection = view === 'list' ? section : (sectionForView[view] || section)
   const switchSection = (s) => { if (view !== 'list') navigate(-1); setSectionOnly(s) }
   // Jumping to a profile card from a sub-view other than Profiles (e.g.
-  // Share Links, "View Profile"/profile-ID clicks) — switchSection+navigate(-1)
-  // races with the pending history pop (navigate(-1) is async), so the
-  // section param it just set can get clobbered right back by the old
-  // value the moment the pop actually resolves. Still looked "done"
-  // immediately after the click, nothing visibly happened (Aryan,
-  // 2026-10-09). One direct setSearchParams call instead — single history
-  // push, no pending pop to race with.
+  // Share Links, notification bell, "View Profile"/profile-ID clicks) —
+  // two bugs here, both from Aryan testing the live deploy (2026-10-09):
+  // 1) switchSection+navigate(-1) races with the pending history pop
+  //    (navigate(-1) is async), so the section param it just set can get
+  //    clobbered right back by the old value the moment the pop actually
+  //    resolves. Fixed with one direct setSearchParams call — single
+  //    history push, no pending pop to race with.
+  // 2) Even with the section switch landing correctly, the Profiles list
+  //    only renders an expanded detail panel for a row that's actually in
+  //    its own paginated/filtered `profiles` array — `setSelected(p)` alone
+  //    does nothing visible if that profile isn't on the currently loaded
+  //    page (wrong tab, filtered out, or just further down the list than
+  //    what's fetched). That's why "only one of the two profile IDs on a
+  //    share-link card opens" — whichever one happened to already be in
+  //    the loaded list worked, the other silently selected a profile with
+  //    no matching row to expand. Fixed by injecting the fetched profile
+  //    into the `profiles` array directly, so a matching row always exists.
   const jumpToProfile = (p) => {
+    setProfiles(prev => prev.some(x => x.id === p.id) ? prev.map(x => x.id === p.id ? p : x) : [p, ...prev])
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       next.delete('view')
@@ -872,7 +883,7 @@ export default function Admin({ staffUser }) {
     // dropping the admin on a generic tab.
     if (n.link_entity_type === 'profile' && n.link_entity_id) {
       const { data } = await supabase.from('profiles').select('*').eq('id', n.link_entity_id).maybeSingle()
-      if (data) { switchSection('profiles'); setView('list'); setSelected(data) }
+      if (data) jumpToProfile(data)
     }
   }
 
