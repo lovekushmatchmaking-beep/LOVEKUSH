@@ -8,7 +8,7 @@ import {
   ListChecks, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
-  ThumbsUp, MoreVertical, MapPin, BadgeCheck,
+  ThumbsUp, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -1724,6 +1724,17 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
 // ===== FIND MATCHES VIEW — reuses existing matching.js, adds masked sharing =====
 function FindMatchesView({ profile, results, loading, staffUserId, staffUser, onBack }) {
   const [expandedId, setExpandedId] = useState(null)
+  // Main profile pinned on top, full detail collapsible — admin asked
+  // (voice note, 2026-10-09) to be able to see the profile they're
+  // matching for while scrolling/expanding the match list below, instead
+  // of only a name + code header. Defaults open since that's the whole
+  // point of the ask; collapsible so it doesn't eat the screen on mobile.
+  const [mainExpanded, setMainExpanded] = useState(true)
+  const [mainPhotoPath, setMainPhotoPath] = useState(null)
+  useEffect(() => {
+    supabase.from('photos').select('storage_path').eq('profile_id', profile.id).eq('is_primary', true).maybeSingle()
+      .then(({ data }) => setMainPhotoPath(data?.storage_path || null))
+  }, [profile.id])
   const [linkFor, setLinkFor] = useState({}) // otherId -> { url, generating, error }
   // Kai matches ek saath ek hi link mein bhejne ke liye (jaise ek client
   // ke liye 5-6 chune hue profiles) — checkbox se chuno, ek link banao.
@@ -1821,12 +1832,51 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
 
-      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>
-        Matches for {profile.full_name}
-      </h2>
-      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>
-        {profile.profile_code} • Using existing matching algorithm
+      {/* Pinned main profile — sticky so it stays visible while scrolling/
+          expanding the match list below (the "two partition" screen ask:
+          main profile on one side/top, matches to expand on the other/
+          below, without navigating away). */}
+      <div style={{position:'sticky',top:0,zIndex:6,background:'#fff',borderBottom:'1px solid #ededed',marginBottom:16,paddingBottom:12,marginLeft:-20,marginRight:-20,paddingLeft:20,paddingRight:20}}>
+        <div style={{display:'flex',alignItems:'center',gap:12,cursor:'pointer'}} onClick={()=>setMainExpanded(v=>!v)}>
+          <div style={{width:44,height:44,borderRadius:'50%',background:'#f0f0f0',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+            {mainPhotoPath ? <SignedImage path={mainPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} /> : <UserRound size={18} color="#bbb" />}
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:'var(--font-display)',fontSize:17,fontWeight:500}}>Matches for {profile.full_name}</div>
+            <div style={{fontSize:12,color:'#8e8e8e'}}>{profile.profile_code} • {profile.age ? profile.age+'y' : ''}{profile.age && profile.height ? ' • ' : ''}{profile.height || ''}{(profile.age||profile.height) && profile.city ? ' • ' : ''}{profile.city || ''}</div>
+          </div>
+          {mainExpanded ? <ChevronUp size={18} color="#8e8e8e" /> : <ChevronDown size={18} color="#8e8e8e" />}
+        </div>
+
+        {mainExpanded && (
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(0,0,0,0.06)',display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))',gap:8}}>
+            {[
+              ['Religion', profile.religion], ['Community/Caste', profile.community],
+              ['Marital status', profile.marital_status], ['Education', profile.education],
+              ['Diet', profile.diet], ['Mother tongue', profile.mother_tongue],
+              ['Family type', profile.family_type], ['Manglik', profile.manglik],
+              ['Annual income', profile.annual_income], ['State', profile.state],
+              ['Country', profile.country],
+            ].filter(([,v]) => v).map(([label, value]) => (
+              <div key={label}>
+                <div style={{fontSize:11,color:'#8e8e8e'}}>{label}</div>
+                <div style={{fontSize:13,fontWeight:500}}>{value}</div>
+              </div>
+            ))}
+            {(profile.partner_age_min || profile.partner_age_max || profile.partner_religion || profile.partner_country_preference) && (
+              <div style={{gridColumn:'1 / -1',marginTop:4}}>
+                <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2}}>Looking for</div>
+                <div style={{fontSize:13}}>
+                  {profile.partner_age_min && profile.partner_age_max ? `${profile.partner_age_min}-${profile.partner_age_max}y` : ''}
+                  {profile.partner_religion && profile.partner_religion !== 'Any' ? ` • ${profile.partner_religion}` : ''}
+                  {profile.partner_country_preference && profile.partner_country_preference !== 'Open to All' ? ` • ${profile.partner_country_preference}` : ''}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
       {clientPhone && (
         <div style={{display:'flex',alignItems:'center',gap:8,marginTop:-12,marginBottom:16,fontSize:12}}>
           <span style={{color:'#8e8e8e',fontFamily:'monospace'}}>{clientPhone}</span>
@@ -1847,7 +1897,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
       )}
 
       {picked.length > 0 && (
-        <div style={{position:'sticky',top:0,zIndex:5,background:'#fff8e1',borderRadius:12,padding:14,marginBottom:14}}>
+        <div style={{background:'#fff8e1',borderRadius:12,padding:14,marginBottom:14}}>
           <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>
             {picked.length} selected — share all in one link
             {clientPhone
