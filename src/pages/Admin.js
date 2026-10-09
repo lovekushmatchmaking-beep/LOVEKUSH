@@ -8,7 +8,7 @@ import {
   ListChecks, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
-  ThumbsUp, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp,
+  ThumbsUp, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -735,6 +735,14 @@ export default function Admin({ staffUser }) {
     if (selected?.id === id) setSelected(prev => ({ ...prev, client_phone: phone }))
   }
 
+  // External bureau tag — ProfileContact already writes external_bureau_name
+  // to Supabase itself; this just keeps the list/selected row in sync so the
+  // "External — <name>" badge updates without a refetch.
+  const updateExternalBureau = (id, name) => {
+    setProfiles(prev => prev.map(p => p.id === id ? { ...p, external_bureau_name: name } : p))
+    if (selected?.id === id) setSelected(prev => ({ ...prev, external_bureau_name: name }))
+  }
+
   // Lead source — business-owner audit (2026-10-04). Signup/Create Client
   // already asks this; this is just so admin can set/correct it for a
   // walk-in that was entered without going through the full question.
@@ -1225,6 +1233,11 @@ export default function Admin({ staffUser }) {
                       <div className={"badge badge-" + p.profile_status} style={{ fontSize: 12 }} title={'Profile status: ' + p.profile_status}>{p.profile_status}</div>
                       {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 12, background: '#eff6ff', color: '#2563eb' }} title="Member sent a selfie — needs comparing to their photo">Selfie received</div>}
                       {SHOW_PREMIUM_TOGGLE && p.is_premium && <div className="badge" style={{ fontSize: 12, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }} title="Marked Premium"><Crown size={10} />Premium</div>}
+                      {/* Profile sourced from another marriage bureau — contact
+                          details are usually missing/withheld (Aryan's ask,
+                          2026-10-09). profiles.external_bureau_name set below
+                          in the expanded Contact section. */}
+                      {p.external_bureau_name && <div className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }} title={`Sourced from ${p.external_bureau_name} — their contact details are typically missing/restricted`}><Building2 size={10} />External — {p.external_bureau_name}</div>}
                       {/* Note draft keyed per-profile now (Aryan's audit, 2026-10-05) so it
                           survives switching to another client — this badge just surfaces
                           that an unsaved draft is still sitting here, waiting to be finished. */}
@@ -1244,7 +1257,7 @@ export default function Admin({ staffUser }) {
                         review day shouldn't need a full scroll just to tap
                         Approve/Block (Aryan's audit, gap #10). */}
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }} onClick={e => e.stopPropagation()}>
-                      <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} />
+                      <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} externalBureauName={p.external_bureau_name} />
                       <OverflowMenu items={[
                         { label: 'View profile', icon: Eye, onClick: () => { setViewingProfile(p); setView('fullProfile') } },
                         { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
@@ -1292,6 +1305,7 @@ export default function Admin({ staffUser }) {
                     <div className="admin-section-header"><Phone size={13} />Contact</div>
                     <ProfileContact key={p.id + (p.client_phone || '')} profile={p} staffUser={staffUser}
                       onSaved={phone => updateClientPhone(p.id, phone)}
+                      onBureauSaved={name => updateExternalBureau(p.id, name)}
                       onAction={kind => startContactLog(p, kind)} showContactButtons={false} />
 
                     {/* Verification — compact: just icon + inline action buttons */}
