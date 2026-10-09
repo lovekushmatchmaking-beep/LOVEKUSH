@@ -942,7 +942,7 @@ export default function Admin({ staffUser }) {
 
       {view === 'shareLinks' && (
         <ShareLinksView staffUserId={staffUser.user_id} onBack={()=>setView('list')} onManageCoordination={goToCoordination}
-          onOpenProfile={(p)=>{ setView('list'); setSelected(p) }} />
+          onOpenProfile={(p)=>{ switchSection('profiles'); setView('list'); setSelected(p) }} />
       )}
 
       {view === 'casteSuggestions' && (
@@ -2076,6 +2076,12 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
   const [showToast, ToastView] = useToast()
   const [expandedBundles, setExpandedBundles] = useState(new Set())
   const [openingProfile, setOpeningProfile] = useState(null) // profile_id currently being fetched for "View Profile"
+  // Share ID search — Aryan ne complain kiya (2026-10-09) ki page bahut
+  // messy hai aur Share ID (jaise SHR-261009-0075) daalne par kuch filter
+  // nahi hota, kyunki pehle is page par koi search box tha hi nahi. Ab ek
+  // dedicated box hai, upar/prominent, jo share_id + profile name/ID +
+  // client name sab pe match karta hai (client-side, list already chhoti hai).
+  const [shareSearch, setShareSearch] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -2202,11 +2208,39 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
     setOpeningProfile(null)
   }
 
+  const filteredLinks = useMemo(() => {
+    const q = shareSearch.trim().toLowerCase()
+    if (!q) return links
+    return links.filter(l => {
+      const shownProfile = profilesById[l.profile_id]
+      const client = l.client_profile_id ? profilesById[l.client_profile_id] : null
+      return (l.share_id && l.share_id.toLowerCase().includes(q))
+        || (shownProfile?.full_name && shownProfile.full_name.toLowerCase().includes(q))
+        || (shownProfile?.profile_code && shownProfile.profile_code.toLowerCase().includes(q))
+        || (client?.full_name && client.full_name.toLowerCase().includes(q))
+        || (client?.profile_code && client.profile_code.toLowerCase().includes(q))
+    })
+  }, [links, profilesById, shareSearch])
+
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <ToastView />
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
-      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>My Share Links</h2>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:12}}>My Share Links</h2>
+      {/* Search box — upar, achi tarah visible, Share ID + profile/client
+          naam/ID sab pe kaam karta hai (Aryan, 2026-10-09). */}
+      {links.length > 0 && (
+        <div style={{position:'relative',marginBottom:18}}>
+          <Search size={15} style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'#aaa'}} />
+          <input type="text" value={shareSearch} onChange={e=>setShareSearch(e.target.value)}
+            placeholder="Search by Share ID, profile ID or name..."
+            style={{width:'100%',padding:'10px 12px 10px 36px',fontSize:13,borderRadius:10,border:'1px solid #ededed',background:'#fafafa'}} />
+          {shareSearch && (
+            <button className="btn btn-outline btn-sm" style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',padding:'3px 6px'}}
+              onClick={()=>setShareSearch('')} title="Clear search"><X size={13} /></button>
+          )}
+        </div>
+      )}
       {interestSheet && (
         <ReminderSheet profile={interestSheet.profile} eventType="interest_received"
           vars={{ otherName: interestSheet.otherName }} appendText={interestSheet.url} staffUserId={staffUserId}
@@ -2220,9 +2254,13 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
           No share links created yet. Generate one from "Find Matches" for any profile.
         </div>
+      ) : filteredLinks.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
+          No share links match "{shareSearch}".
+        </div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {links.map(l => {
+          {filteredLinks.map(l => {
             const isExpired = new Date(l.expires_at) < new Date()
             const status = l.revoked ? 'Revoked' : isExpired ? 'Expired' : 'Active'
             const statusColor = l.revoked ? '#8e8e8e' : isExpired ? '#b45309' : '#16a34a'
@@ -2239,20 +2277,51 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
             const isBundleExpanded = expandedBundles.has(l.bundle_token)
             return (
               <div key={l.id} className="list-row" style={interestPending ? { borderColor: '#16a34a', background: '#f0fdf4' } : {}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
                   <div>
-                    <div style={{fontSize:13,fontWeight:600}}>
+                    <div style={{fontSize:13,fontWeight:600,display:'flex',alignItems:'center',gap:6}}>
+                      {/* A colored dot already shows active/expired/revoked
+                          (green card border + this dot) — the word "Active"
+                          on every single card added nothing and just read as
+                          clutter (Aryan, 2026-10-09). Only the states that
+                          actually need explaining (Expired/Revoked) still
+                          show as text. */}
+                      <span title={status} style={{width:7,height:7,borderRadius:'50%',background:statusColor,flexShrink:0}} />
                       {shownProfile ? shownProfile.full_name : 'Profile'}
                       {client && <span style={{fontWeight:400,color:'#8e8e8e'}}> · for {client.full_name}</span>}
                     </div>
                     <div style={{fontSize:12,fontFamily:'monospace',color:'#8e8e8e',marginTop:2}}>{l.share_id || '/' + l.token.slice(0,12) + '...'}</div>
-                    <div style={{fontSize:13,color:statusColor,fontWeight:600,marginTop:2}}>{status}</div>
+                    {status !== 'Active' && (
+                      <div style={{fontSize:12,color:statusColor,fontWeight:600,marginTop:2}}>{status}</div>
+                    )}
                   </div>
-                  <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:12,color:'#8e8e8e'}}>{l.view_count} view{l.view_count!==1?'s':''}</div>
-                    <div style={{fontSize:12,color:'#bbb'}}>
-                      {l.revoked ? 'Revoked' : `Expires ${new Date(l.expires_at).toLocaleDateString('en-IN')}`}
+                  <div style={{display:'flex',alignItems:'flex-start',gap:4}}>
+                    {/* Views + expiry compacted to icon + value — no "views"
+                        / "Expires" words (Aryan, 2026-10-09). */}
+                    <div style={{textAlign:'right',fontSize:12,color:'#8e8e8e'}}>
+                      <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:3}} title={`${l.view_count} view${l.view_count!==1?'s':''}`}>
+                        <Eye size={12} /> {l.view_count}
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:3,color:'#bbb',marginTop:2}}
+                        title={l.revoked ? 'Revoked' : `Expires ${new Date(l.expires_at).toLocaleDateString('en-IN')}`}>
+                        <Info size={12} /> {l.revoked ? 'Revoked' : new Date(l.expires_at).toLocaleDateString('en-IN', { day:'2-digit', month:'2-digit' })}
+                      </div>
                     </div>
+                    {/* Copy Link — icon-only now (Aryan, 2026-10-09: the
+                        word "Copy Link" was just taking up space). */}
+                    <button className="btn btn-outline btn-sm" style={{padding:'5px 6px',lineHeight:1}}
+                      onClick={()=>copyLink(l.token)} title="Copy share link"><Copy size={14} /></button>
+                    {/* Less-used actions compacted into the ⋮ menu (Aryan,
+                        2026-10-09: page felt messy with every button always
+                        showing). Revoke lives here regardless of interest
+                        state; "Dismiss reminder" only while an unread
+                        interest is still highlighting this card. */}
+                    <OverflowMenu items={[
+                      interestPending && { label: 'Dismiss reminder (already followed up)', icon: CheckCircle2,
+                        onClick: () => handleAcknowledge(l.id) },
+                      !l.revoked && !isExpired && { label: 'Revoke link', icon: X, color: '#dc2626',
+                        onClick: () => handleRevoke(l.id) },
+                    ].filter(Boolean)} />
                   </div>
                 </div>
                 {bundleSiblings.length > 0 && (
@@ -2290,7 +2359,15 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                   <div style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
                     <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
                       <ThumbsUp size={12} /> Interested · {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
-                      {shownProfile?.profile_code && (
+                      {/* Profile ID clickable — straight to that profile's
+                          card, same as "View Profile" (Aryan, 2026-10-09). */}
+                      {shownProfile?.profile_code && onOpenProfile && (
+                        <button type="button" disabled={openingProfile === l.profile_id} onClick={()=>handleViewProfile(l.profile_id)}
+                          style={{fontFamily:'monospace',color:'#555',fontWeight:500,background:'none',border:'none',padding:0,
+                            textDecoration:'underline',cursor:'pointer',fontSize:12}}
+                          title="Open this profile">· ID {shownProfile.profile_code}</button>
+                      )}
+                      {shownProfile?.profile_code && !onOpenProfile && (
                         <span style={{fontFamily:'monospace',color:'#555',fontWeight:500}}>· ID {shownProfile.profile_code}</span>
                       )}
                     </div>
@@ -2316,10 +2393,6 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                           </button>
                         )
                       )}
-                      {!l.interest_acknowledged_at && (
-                        <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12}}
-                          onClick={()=>handleAcknowledge(l.id)}>Mark as noted</button>
-                      )}
                       {l.forwarded_at ? (
                         l.forwarded_introduction_id && onManageCoordination ? (
                           <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12,color:'#16a34a',borderColor:'#16a34a'}}
@@ -2336,13 +2409,6 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                     </div>
                   </div>
                 )}
-                <div style={{display:'flex',gap:8,marginTop:10}}>
-                  <button className="btn btn-outline btn-sm" onClick={()=>copyLink(l.token)}><Copy size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Copy Link</button>
-                  {!l.revoked && !isExpired && (
-                    <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
-                      onClick={()=>handleRevoke(l.id)}>✕ Revoke</button>
-                  )}
-                </div>
               </div>
             )
           })}
