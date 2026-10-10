@@ -58,6 +58,14 @@ export async function markShareLinkInterest(token) {
   if (error) throw new Error(error.message)
 }
 
+// Client ne "Not for me" tap kiya — sirf admin ko pata chalta hai,
+// client ko koi negative message nahi dikhta (Aryan, 2026-10-10).
+// mark_share_link_interest ka sibling RPC, same pattern.
+export async function markShareLinkNotInterested(token) {
+  const { error } = await supabase.rpc('mark_share_link_not_interested', { p_token: token })
+  if (error) throw new Error(error.message)
+}
+
 // Admin ne interest signal dekh/action le liya — "needs attention" se hata
 // deta hai, record khud rehta hai.
 export async function acknowledgeShareLinkInterest(linkId) {

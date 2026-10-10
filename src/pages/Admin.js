@@ -8,7 +8,7 @@ import {
   ListChecks, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
-  ThumbsUp, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2,
+  ThumbsUp, ThumbsDown, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -2828,7 +2828,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                         {bundleSiblings.map(s => {
                           const sp = profilesById[s.profile_id]
                           const sStatus = s.revoked ? 'Revoked' : new Date(s.expires_at) < new Date() ? 'Expired'
-                            : s.interested_at ? '👍 Interested' : 'Awaiting response'
+                            : s.interested_at ? '👍 Interested' : s.not_interested_at ? '👎 Passed' : 'Awaiting response'
                           return (
                             <div key={s.id} style={{fontSize:12,color:'#555',display:'flex',justifyContent:'space-between',gap:8}}>
                               <span>{sp ? sp.full_name : 'Profile'}</span>
@@ -2840,17 +2840,25 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                     )}
                   </div>
                 )}
-                {/* Client tapped "👍 Interested" on this profile — previously
-                    there was no way for a share-link client to signal this at
-                    all, and no record of which client a link was even for
-                    (audit gap, 2026-10-05). */}
+                {/* Client tapped "👍 Interested" or "Not for me" on this profile
+                    (Aryan, 2026-10-10: not_interested_at also shown here,
+                    sirf admin ke liye — client ko pata nahi chalta). */}
+                {l.not_interested_at && !l.interested_at && (
+                  <div style={{marginTop:8,fontSize:12,color:'#8e8e8e',display:'flex',alignItems:'center',gap:5}} title="Client passed on this profile">
+                    <ThumbsDown size={12} /> {new Date(l.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                  </div>
+                )}
                 {l.interested_at && (
                   <div style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
-                    {/* The word "Interested" was redundant next to the
-                        thumbs-up icon itself (Aryan, 2026-10-09 follow-up:
-                        "only logo hi kaafi hai"). */}
-                    <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}} title="Interested">
-                      <ThumbsUp size={12} /> {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                    <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                      <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5}} title="Interested">
+                        <ThumbsUp size={12} /> {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                      </div>
+                      {l.not_interested_at && (
+                        <div style={{fontSize:11,color:'#8e8e8e',display:'flex',alignItems:'center',gap:3}} title="Client later passed on this profile">
+                          <ThumbsDown size={11} /> {new Date(l.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                        </div>
+                      )}
                     </div>
                     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                       {client && (
@@ -3992,6 +4000,9 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   // hasn't acted on yet — audit gap, 2026-10-05: this signal didn't exist
   // before, and there was no way to tell which client a link was even for.
   const [shareInterest, setShareInterest] = useState([])
+  // Share-link clients who tapped "Not for me" (Aryan, 2026-10-10).
+  // Informational only — no dedicated ack column; admin sees it here and in Share Links.
+  const [shareNotInterested, setShareNotInterested] = useState([])
   // Admin-only: how much pending work each staff member is carrying, so a
   // bulk burst of new profiles/requests can be spread out instead of
   // landing on whoever happens to click first (scale audit #8).
@@ -4008,7 +4019,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     const nowIso = new Date().toISOString()
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
     const weekFromNow = new Date(Date.now() + 7*24*60*60*1000).toISOString()
-    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes] = await Promise.all([
+    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes, shareNotInterestedRes] = await Promise.all([
       // Was lte(nowIso) only — upcoming follow-ups (due later this week)
       // never got fetched at all, so there was nothing to group into an
       // "Upcoming" section (audit 2026-10-08, P1 #11 re-scope).
@@ -4024,6 +4035,8 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       supabase.from('introductions').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
       // Share-link clients who tapped "👍 Interested" — audit gap, 2026-10-05.
       supabase.from('share_links').select('*').not('interested_at', 'is', null).is('interest_acknowledged_at', null).order('interested_at', { ascending: false }).limit(20),
+      // Share-link clients who tapped "Not for me" — Aryan, 2026-10-10.
+      supabase.from('share_links').select('*').not('not_interested_at', 'is', null).order('not_interested_at', { ascending: false }).limit(20),
     ])
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
@@ -4033,7 +4046,8 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     const meetings = meetingsRes.data || []
     const pendingReqs = pendingCoordRes.data || []
     const shareInterestRows = shareInterestRes.data || []
-    const ids = [...new Set([...meetings, ...pendingReqs].flatMap(m => [m.from_profile, m.to_profile]).concat(shareInterestRows.flatMap(s => [s.profile_id, s.client_profile_id])).filter(Boolean))]
+    const shareNotInterestedRows = shareNotInterestedRes.data || []
+    const ids = [...new Set([...meetings, ...pendingReqs].flatMap(m => [m.from_profile, m.to_profile]).concat([...shareInterestRows, ...shareNotInterestedRows].flatMap(s => [s.profile_id, s.client_profile_id])).filter(Boolean))]
     let profilesById = {}
     if (ids.length > 0) {
       const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
@@ -4042,6 +4056,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     setUpcomingMeetings(meetings.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setPendingCoordination(pendingReqs.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setShareInterest(shareInterestRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id], clientProfile: s.client_profile_id ? profilesById[s.client_profile_id] : null })))
+    setShareNotInterested(shareNotInterestedRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id], clientProfile: s.client_profile_id ? profilesById[s.client_profile_id] : null })))
 
     // Team workload — admin-only (list_staff_with_email RPC is admin-gated).
     // Small number of staff, so one count query per staff member is fine
@@ -4133,6 +4148,27 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                 </div>
               </div>
             )} />
+          {shareNotInterested.length > 0 && (
+            <Section icon={ThumbsDown} title="Passed on shared profiles" items={inQueue(shareNotInterested, s => [...profileSearchBits(s.shownProfile), ...profileSearchBits(s.clientProfile), s.share_id])}
+              empty=""
+              renderItem={s => (
+                <div key={s.id} className="list-row" style={{borderColor:'#e5e5e5'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                    <div style={{fontSize:13,fontWeight:600}}>
+                      {s.shownProfile?.full_name || 'Profile'}
+                      {s.clientProfile && <span style={{fontWeight:400,color:'#8e8e8e'}}> · for {s.clientProfile.full_name}</span>}
+                    </div>
+                    {onOpenShareLinks && (
+                      <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
+                        onClick={onOpenShareLinks}>Open</button>
+                    )}
+                  </div>
+                  <div style={{fontSize:12,color:'#8e8e8e',marginTop:2}}>
+                    Passed {new Date(s.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                  </div>
+                </div>
+              )} />
+          )}
           <Section icon={Handshake} title="Coordination requests awaiting response" items={inQueue(pendingCoordination, r => [...profileSearchBits(r.fromProfile), ...profileSearchBits(r.toProfile), r.request_id, r.request_type])}
             empty="Nothing waiting on a member right now."
             renderItem={r => (
