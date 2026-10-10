@@ -70,7 +70,7 @@ create index if not exists notification_log_created_at_idx on public.notificatio
 -- running this migration never duplicates them.
 insert into public.whatsapp_templates (category, name, message)
 select * from (values
-  ('selfie_requested', 'Selfie request', 'Hi {{name}}, this is LOVEKUSH Global Matchmaking Services. To verify your profile and make it live, please upload a quick selfie from your dashboard. Thank you!'),
+  ('selfie_requested', 'Selfie request', 'Hi {{name}}, this is LOVEKUSH Matchmaking Services. To verify your profile and make it live, please upload a quick selfie from your dashboard. Thank you!'),
   ('profile_approved', 'Profile approved', 'Hi {{name}}, good news — your LOVEKUSH profile has been verified and is now live. You can start viewing matches on your dashboard.'),
   ('match_shared', 'Match share follow-up', 'Hi {{name}}, we just shared a match with you on LOVEKUSH. Please have a look and let us know if you''d like us to set up a talk.'),
   ('meeting_scheduled', 'Meeting confirm', 'Hi {{name}}, confirming your meeting/call with {{otherName}} on {{when}}. Please let us know if you need to reschedule.')

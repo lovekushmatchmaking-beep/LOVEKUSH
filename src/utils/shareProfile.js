@@ -6,7 +6,7 @@
 
 export function buildMaskedShareText(profile) {
   const lines = [
-    'LOVEKUSH Global Matchmaking Services',
+    'LOVEKUSH Matchmaking Services',
     '',
     `Profile ID: ${profile.profile_code}`,
     `${profile.gender} • ${profile.age} Years`,
@@ -14,7 +14,7 @@ export function buildMaskedShareText(profile) {
     [profile.religion, profile.community].filter(Boolean).join(' • '),
     profile.education,
     '',
-    'For full details and to connect, please contact LOVEKUSH Global Matchmaking Services.',
+    'For full details and to connect, please contact LOVEKUSH Matchmaking Services.',
   ].filter(Boolean)
   return lines.join('\n')
 }

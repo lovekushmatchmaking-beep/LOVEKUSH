@@ -202,7 +202,7 @@ export default function SharedProfile() {
               {profile.rm_phone && profile.rm_email && ' · '}
               {profile.rm_email && <a href={`mailto:${profile.rm_email}`} style={{color:'inherit'}}>{profile.rm_email}</a>}
             </>
-          ) : 'Please contact LOVEKUSH Global Matchmaking Services.'}
+          ) : 'Please contact LOVEKUSH Matchmaking Services.'}
         </div>
 
         <div style={{marginTop:16,fontSize:10,color:'#bbb',textAlign:'center'}}>

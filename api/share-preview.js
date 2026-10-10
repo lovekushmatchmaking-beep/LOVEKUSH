@@ -31,7 +31,7 @@ async function fetchPreview(token) {
 function buildCard(p) {
   if (!p) {
     return {
-      title: 'LOVEKUSH Global Matchmaking Services',
+      title: 'LOVEKUSH Matchmaking Services',
       description: 'This link has expired or is no longer available. Please ask LOVEKUSH to share a fresh link.',
     }
   }
@@ -51,7 +51,7 @@ function buildCard(p) {
   }
   return {
     title: [p.masked_name, p.age ? `${p.age} yrs` : '', place].filter(Boolean).join(' · '),
-    description: `${details ? details + '. ' : ''}Profile shared by LOVEKUSH Global Matchmaking Services.`,
+    description: `${details ? details + '. ' : ''}Profile shared by LOVEKUSH Matchmaking Services.`,
   }
 }
 
@@ -74,7 +74,7 @@ module.exports = async (req, res) => {
 <meta name="description" content="${esc(card.description)}" />
 <meta name="robots" content="noindex, nofollow" />
 <meta property="og:type" content="profile" />
-<meta property="og:site_name" content="LOVEKUSH Global Matchmaking Services" />
+<meta property="og:site_name" content="LOVEKUSH Matchmaking Services" />
 <meta property="og:title" content="${esc(card.title)}" />
 <meta property="og:description" content="${esc(card.description)}" />
 <meta property="og:url" content="${esc(pageUrl)}" />

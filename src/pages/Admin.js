@@ -1510,7 +1510,7 @@ export default function Admin({ staffUser }) {
             <div className="avatar" style={{ width: 48, height: 48 }}><UserRound size={22} /></div>
             <div>
               <div style={{ fontWeight: 600, fontSize: 15 }}>{staffUser.role === 'admin' ? 'Administrator' : 'Relationship Manager'}</div>
-              <div style={{ fontSize: 12, color: 'var(--gray3)' }}>Lovekush Global Matchmaking Services</div>
+              <div style={{ fontSize: 12, color: 'var(--gray3)' }}>Lovekush Matchmaking Services</div>
             </div>
           </div>
         </div>
@@ -2098,7 +2098,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
             const other = r.profile
             const isExpanded = expandedId === other.id
             const linkState = linkFor[other.id]
-            const mailLink = linkState?.url ? buildMailtoLink(profile.client_email, 'A match for you — LOVEKUSH', `Hi,\n\nWe found a match for you. View secure profile:\n${linkState.url}\n\n(This link expires in 7 days)\n\nRegards,\nLOVEKUSH Global Matchmaking Services`) : null
+            const mailLink = linkState?.url ? buildMailtoLink(profile.client_email, 'A match for you — LOVEKUSH', `Hi,\n\nWe found a match for you. View secure profile:\n${linkState.url}\n\n(This link expires in 7 days)\n\nRegards,\nLOVEKUSH Matchmaking Services`) : null
 
             return (
               <div key={other.id} className="list-row">
