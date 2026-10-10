@@ -21,7 +21,7 @@ export default function ForgotPassword() {
     // Chahe email registered ho ya na ho, same generic message dikhate
     // hain — warna koi bhi is form se pata laga sakta hai ki kaunsi
     // emails Lovekush par registered hain.
-    if (error) return setError('Kuch galat ho gaya, dobara try karein.')
+    if (error) return setError('Something went wrong, please try again.')
     setSent(true)
   }
 
@@ -32,13 +32,13 @@ export default function ForgotPassword() {
         <div style={{textAlign:'center',marginBottom:32}}>
           <AuthBrand />
           <h1 className="page-title">Forgot Password</h1>
-          <p className="page-subtitle">Apni email daalein, hum aapko reset link bhej denge</p>
+          <p className="page-subtitle">Enter your email and we will send you a reset link</p>
         </div>
 
         {sent ? (
           <div style={{textAlign:'center'}}>
             <div className="form-hint" style={{marginBottom:20,fontSize:14}}>
-              Agar yeh email Lovekush par registered hai, aapko thodi der mein password reset ka link mil jayega. Apna inbox (aur spam folder) check karein.
+              If this email is registered with LOVEKUSH, you will get a password reset link shortly. Please check your inbox (and spam folder).
             </div>
             <Link to="/login" className="btn btn-black btn-full btn-lg">Back to Login</Link>
           </div>

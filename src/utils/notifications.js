@@ -33,7 +33,7 @@ export const DEFAULT_MESSAGES = {
   // Share link par ek party ne "Interested" dabaya — doosri party ko
   // interested profile ka link bhejna (Aryan, 2026-10-09).
   interest_received: 'Hi {{name}}, good news from LOVEKUSH! {{otherName}} has shown interest in your profile. Please have a look at their profile below. Would you like to meet them or take this forward? Just reply here and we will arrange it.',
-  bureau_coordination: 'Namaskar {{name}} ji, aapki profile humare client ko pasand aayi hai. Kripya apni party se baat karke confirm kariye ki wo is match mein interested hain ya nahi. Dhanyavaad.',
+  bureau_coordination: 'Hello {{name}}, our client liked your profile. Please check with your family and confirm if they are interested in this match. Thank you.',
   general: 'Hi {{name}}, this is LOVEKUSH Matchmaking Services.',
 }
 

@@ -41,13 +41,13 @@ export default function ResetPassword() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    if (password.length < 6) return setError('Password kam se kam 6 characters ka hona chahiye')
-    if (password !== confirmPassword) return setError('Dono password match nahi kar rahe')
+    if (password.length < 6) return setError('Password must be at least 6 characters')
+    if (password !== confirmPassword) return setError('Passwords do not match')
 
     setLoading(true)
     const { error } = await supabase.auth.updateUser({ password })
     setLoading(false)
-    if (error) return setError('Password update nahi ho paaya, dobara try karein.')
+    if (error) return setError('Password update failed, please try again.')
     setDone(true)
     setTimeout(() => navigate('/login'), 2000)
   }
@@ -59,20 +59,20 @@ export default function ResetPassword() {
         <div style={{textAlign:'center',marginBottom:32}}>
           <AuthBrand />
           <h1 className="page-title">Reset Password</h1>
-          <p className="page-subtitle">Apna naya password set karein</p>
+          <p className="page-subtitle">Set your new password</p>
         </div>
 
         {linkInvalid ? (
           <div style={{textAlign:'center'}}>
             <div className="form-error" style={{marginBottom:20}}>
-              Yeh link invalid ya expire ho chuka hai. Naya reset link mangwayein.
+              This link is invalid or has expired. Please request a new reset link.
             </div>
             <Link to="/forgot-password" className="btn btn-black btn-full btn-lg">Request New Link</Link>
           </div>
         ) : done ? (
           <div style={{textAlign:'center'}}>
             <div className="form-hint" style={{marginBottom:20,fontSize:14}}>
-              Password update ho gaya! Aapko login page par bheja ja raha hai...
+              Password updated! Taking you to the login page...
             </div>
           </div>
         ) : ready ? (
@@ -85,7 +85,7 @@ export default function ResetPassword() {
 
             <div className="form-group">
               <FormLabel>Confirm Password</FormLabel>
-              <input className="form-input" type="password" placeholder="Password dobara likhein"
+              <input className="form-input" type="password" placeholder="Re-enter password"
                 value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} required />
             </div>
 

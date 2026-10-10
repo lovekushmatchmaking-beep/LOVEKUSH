@@ -109,7 +109,7 @@ export default function App() {
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, textAlign: 'center', padding: 20 }}>
         <div className="empty-state-icon" style={{ margin: 0 }}><Lock size={28} /></div>
         <div style={{ fontSize: 16, fontWeight: 600 }}>Account Blocked</div>
-        <div style={{ fontSize: 13, color: '#8e8e8e', maxWidth: 320 }}>Aapka account LOVEKUSH team ne block kar diya hai. Please support se sampark karein.</div>
+        <div style={{ fontSize: 13, color: '#8e8e8e', maxWidth: 320 }}>Your account has been blocked by the LOVEKUSH team. Please contact support.</div>
         <a className="btn btn-black btn-sm" style={{ textDecoration: 'none', marginTop: 8 }} href={`mailto:${SUPPORT_EMAIL}`}>Contact Support</a>
         <button className="btn btn-outline btn-sm" onClick={() => setBlocked(false)}>Back to Login</button>
       </div>
@@ -142,7 +142,7 @@ export default function App() {
                 : <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, textAlign: 'center', padding: 20 }}>
                     <div className="empty-state-icon" style={{ margin: 0 }}><Lock size={28} /></div>
                     <div style={{ fontSize: 16, fontWeight: 600 }}>Access Restricted</div>
-                    <div style={{ fontSize: 13, color: '#8e8e8e', maxWidth: 320 }}>Yeh page sirf LOVEKUSH staff ke liye hai. Agar aap staff hain aur yeh galti se dikh raha hai, apne administrator se sampark karein.</div>
+                    <div style={{ fontSize: 13, color: '#8e8e8e', maxWidth: 320 }}>This page is for LOVEKUSH staff only. If you are staff and see this by mistake, contact your administrator.</div>
                   </div>
           }
         />

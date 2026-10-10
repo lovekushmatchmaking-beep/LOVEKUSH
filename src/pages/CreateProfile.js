@@ -470,7 +470,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             onChange={e=>set('islamic_sub_caste_division',e.target.value)}>
             {ISLAMIC_SUB_CASTE_DIVISIONS.map(s=><option key={s}>{s}</option>)}
           </select>
-          <div className="form-hint">Optional — sab communities ke liye applicable nahi hota</div>
+          <div className="form-hint">Optional — does not apply to all communities</div>
         </div>
       ),
     },
@@ -516,7 +516,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               <option value="">Don't know</option>
               {(form.rashi ? nakshatrasForRashi(form.rashi) : NAKSHATRAS).map(n=><option key={n}>{n}</option>)}
             </select>
-            <div className="form-hint">Optional — kundli pe likha hota hai. Isse Guna Milan (36 gun) apne aap nikalta hai.</div>
+            <div className="form-hint">Optional — found on your kundli. Used to auto-calculate Guna Milan (36 gun).</div>
           </div>
         </div>
       ),
