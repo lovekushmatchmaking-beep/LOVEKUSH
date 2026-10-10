@@ -743,6 +743,13 @@ export default function Admin({ staffUser }) {
     if (selected?.id === id) setSelected(prev => ({ ...prev, external_bureau_name: name }))
   }
 
+  // Bureau's own coordination number — same sync pattern as the bureau name
+  // above; ProfileContact already wrote external_bureau_contact itself.
+  const updateExternalBureauContact = (id, contact) => {
+    setProfiles(prev => prev.map(p => p.id === id ? { ...p, external_bureau_contact: contact } : p))
+    if (selected?.id === id) setSelected(prev => ({ ...prev, external_bureau_contact: contact }))
+  }
+
   // Lead source — business-owner audit (2026-10-04). Signup/Create Client
   // already asks this; this is just so admin can set/correct it for a
   // walk-in that was entered without going through the full question.
@@ -1241,7 +1248,7 @@ export default function Admin({ staffUser }) {
                           details are usually missing/withheld (Aryan's ask,
                           2026-10-09). profiles.external_bureau_name set below
                           in the expanded Contact section. */}
-                      {p.external_bureau_name && <div className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }} title={`Sourced from ${p.external_bureau_name} — their contact details are typically missing/restricted`}><Building2 size={10} />External — {p.external_bureau_name}</div>}
+                      {p.external_bureau_name && <div className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }} title={p.external_bureau_contact ? `Sourced from ${p.external_bureau_name} — coordinate on ${p.external_bureau_contact}` : `Sourced from ${p.external_bureau_name} — their contact details are typically missing/restricted`}><Building2 size={10} />External — {p.external_bureau_name}</div>}
                       {/* Note draft keyed per-profile now (Aryan's audit, 2026-10-05) so it
                           survives switching to another client — this badge just surfaces
                           that an unsaved draft is still sitting here, waiting to be finished. */}
@@ -1310,6 +1317,7 @@ export default function Admin({ staffUser }) {
                     <ProfileContact key={p.id + (p.client_phone || '')} profile={p} staffUser={staffUser}
                       onSaved={phone => updateClientPhone(p.id, phone)}
                       onBureauSaved={name => updateExternalBureau(p.id, name)}
+                      onBureauContactSaved={contact => updateExternalBureauContact(p.id, contact)}
                       onAction={kind => startContactLog(p, kind)} showContactButtons={false} />
 
                     {/* Verification — compact: just icon + inline action buttons */}
@@ -1498,7 +1506,7 @@ export default function Admin({ staffUser }) {
           <AdminNavCard icon={ClipboardList} label="Caste Suggestions" subtitle="New castes/gotras members typed in" onClick={()=>setView('casteSuggestions')} />
           <AdminNavCard icon={Handshake} label="Coordination" subtitle="Talk/meeting requests between members" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
           <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" badge={stats.pendingShareInterest} onClick={()=>setView('shareLinks')} />
-          <AdminNavCard icon={MessageCircle} label="WhatsApp Templates" subtitle="Saved messages for reminders" onClick={()=>setView('whatsappTemplates')} />
+          <AdminNavCard icon={MessageCircle} label="Template Editor" subtitle="Saved messages — WhatsApp, SMS, email or anywhere" onClick={()=>setView('whatsappTemplates')} />
         </div>
       </div>
       )}
@@ -1810,7 +1818,15 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
   // list ka order nahi badal sakta, isliye client ka number ho to wa.me/<number>
   // seedha usi chat ko kholta hai. Number save na ho (self-signup profiles)
   // to yahin daal ke save kar sakte hain.
-  const [clientPhone, setClientPhone] = useState(profile.client_phone || '')
+  // External bureau profile (profile.external_bureau_name set) — client ka
+  // number aksar missing hota hai, par bureau apna coordination number de
+  // chuka ho sakta hai (external_bureau_contact), to seedha wahi use karo
+  // (Aryan's ask, 2026-10-10) instead of WhatsApp asking which chat to open.
+  const isBureauSourced = !!profile.external_bureau_name
+  const [clientPhone, setClientPhone] = useState(profile.client_phone || (isBureauSourced ? profile.external_bureau_contact || '' : ''))
+  // Bureau-sourced profiles get the polite bureau_coordination templates by
+  // default instead of the regular match_shared ones.
+  const shareEventType = isBureauSourced ? 'bureau_coordination' : 'match_shared'
   const [phoneDraft, setPhoneDraft] = useState('')
   const [phoneError, setPhoneError] = useState('')
 
@@ -1863,9 +1879,13 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
   const saveClientPhone = async () => {
     const digits = phoneDraft.replace(/\D/g, '')
     if (digits.length < 10) { setPhoneError('Enter a valid number (10 digits, or with country code)'); return }
-    const { error } = await supabase.from('profiles').update({ client_phone: phoneDraft.trim() }).eq('id', profile.id)
+    // Bureau-sourced profile — this is the OTHER bureau's own coordination
+    // number, not the client's, so it goes in external_bureau_contact, not
+    // client_phone (Aryan's ask, 2026-10-10).
+    const column = isBureauSourced ? 'external_bureau_contact' : 'client_phone'
+    const { error } = await supabase.from('profiles').update({ [column]: phoneDraft.trim() }).eq('id', profile.id)
     if (error) { setPhoneError('Could not save: ' + error.message); return }
-    await writeAuditLog(staffUser, 'client_phone_edit', profile.id, { new_phone: phoneDraft.trim() })
+    if (!isBureauSourced) await writeAuditLog(staffUser, 'client_phone_edit', profile.id, { new_phone: phoneDraft.trim() })
     setClientPhone(phoneDraft.trim()); setPhoneDraft(''); setPhoneError('')
   }
 
@@ -1972,7 +1992,11 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
 
       {!clientPhone && (
         <div style={{background:'#f9f9f9',borderRadius:12,padding:12,marginBottom:14}}>
-          <div style={{fontSize:12,marginBottom:6}}>Save {profile.full_name}'s WhatsApp number so matches open straight in their chat</div>
+          <div style={{fontSize:12,marginBottom:6}}>
+            {isBureauSourced
+              ? `Save ${profile.external_bureau_name}'s coordination number so matches open straight in their chat`
+              : `Save ${profile.full_name}'s WhatsApp number so matches open straight in their chat`}
+          </div>
           <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
             <input className="form-input" placeholder="9876543210" value={phoneDraft} inputMode="tel"
               onChange={e=>setPhoneDraft(e.target.value)} style={{flex:'1 1 160px',fontSize:13}} />
@@ -1987,8 +2011,8 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
           <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>
             {picked.length} selected — share all in one link
             {clientPhone
-              ? <span style={{fontWeight:400,color:'#8e8e8e'}}> · goes straight to client's WhatsApp ({clientPhone})</span>
-              : <span style={{fontWeight:400,color:'#8e8e8e'}}> · no client phone saved, WhatsApp will ask which chat</span>}
+              ? <span style={{fontWeight:400,color:'#8e8e8e'}}> · goes straight to {isBureauSourced ? `${profile.external_bureau_name}'s` : "client's"} WhatsApp ({clientPhone})</span>
+              : <span style={{fontWeight:400,color:'#8e8e8e'}}> · {isBureauSourced ? 'no bureau contact number saved' : 'no client phone saved'}, WhatsApp will ask which chat</span>}
           </div>
           {!bundle?.url ? (
             <button className="btn btn-black btn-sm" disabled={bundle?.generating} onClick={handleGenerateBundle}>
@@ -1996,7 +2020,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
             </button>
           ) : (
             <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-              <WhatsAppReminderButton profile={{ ...profile, client_phone: clientPhone }} eventType="match_shared"
+              <WhatsAppReminderButton profile={{ ...profile, client_phone: clientPhone }} eventType={shareEventType}
                 vars={{ count: picked.length }} appendText={bundle.url} staffUserId={staffUserId}
                 label="Send via WhatsApp" size="md" />
               {navigator.share && (
@@ -2153,11 +2177,13 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                         ✓ Link ready (expires in 7 days, one-click revoke available in "My Share Links")
                       </div>
                       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                        <WhatsAppReminderButton profile={{ ...profile, client_phone: clientPhone }} eventType="match_shared"
+                        <WhatsAppReminderButton profile={{ ...profile, client_phone: clientPhone }} eventType={shareEventType}
                           vars={{ otherName: other.full_name }} appendText={linkState.url} staffUserId={staffUserId}
                           label="Send via WhatsApp" size="md" />
                         {!clientPhone && (
-                          <span style={{fontSize:13,color:'#8e8e8e',alignSelf:'center'}}>No client phone saved, WhatsApp will ask which chat</span>
+                          <span style={{fontSize:13,color:'#8e8e8e',alignSelf:'center'}}>
+                            {isBureauSourced ? 'No bureau contact number saved' : 'No client phone saved'}, WhatsApp will ask which chat
+                          </span>
                         )}
                         {mailLink && <a href={mailLink} className="btn btn-outline btn-sm">✉ Send via Email</a>}
                       </div>
@@ -4177,9 +4203,9 @@ function WhatsAppTemplatesView({ staffUser, onBack }) {
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '20px' }}>
       <ToastView />
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back</button>
-      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>WhatsApp Templates</h2>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Template Editor</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>
-        Saved messages the WhatsApp reminder button fills in automatically. Use {'{{name}}'}, {'{{otherName}}'}, {'{{when}}'} - filled in from the profile.
+        Universal templates — plain text, not tied to WhatsApp. The reminder buttons fill them in automatically, or tap Copy to paste one into WhatsApp, SMS, email or anywhere else. Use {'{{name}}'}, {'{{otherName}}'}, {'{{when}}'}, {'{{count}}'} - filled in from the profile.
       </div>
 
       {isAdmin && (
@@ -4214,10 +4240,16 @@ function WhatsAppTemplatesView({ staffUser, onBack }) {
                   <div style={{fontSize:12,color:'#8e8e8e',marginBottom:6}}>{EVENT_LABELS[t.category] || t.category}</div>
                   <div style={{fontSize:13,color:'#555',background:'#f9f9f9',padding:'8px 10px',borderRadius:8}}>{t.message}</div>
                 </div>
-                {isAdmin && (
-                  <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626',flexShrink:0}}
-                    onClick={()=>deleteTemplate(t.id)}><Trash2 size={13} /></button>
-                )}
+                <div style={{display:'flex',gap:6,flexShrink:0}}>
+                  <button className="btn btn-outline btn-sm" title="Copy — paste into WhatsApp, SMS, email or anywhere"
+                    onClick={async()=>{ try { await navigator.clipboard.writeText(t.message); showToast('Copied') } catch { showToast('Could not copy') } }}>
+                    <Copy size={13} />
+                  </button>
+                  {isAdmin && (
+                    <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
+                      onClick={()=>deleteTemplate(t.id)}><Trash2 size={13} /></button>
+                  )}
+                </div>
               </div>
             </div>
           ))}

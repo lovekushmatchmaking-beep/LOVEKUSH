@@ -164,7 +164,7 @@ function QuickCallLog({ profile, kind, introductionId, onClose }) {
 // dikha chuki hai (Profiles list's own top quick-actions row) — number ko
 // phir bhi yahan hi edit kiya ja sakta hai, bas dusra Call/WhatsApp jodaa
 // nahi dikhta (Aryan's audit, 2026-10-08: duplicate Call/WhatsApp buttons).
-export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, logCalls = false, introductionId, staffUser, showContactButtons = true }) {
+export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBureauContactSaved, logCalls = false, introductionId, staffUser, showContactButtons = true }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(profile.client_phone || '')
   const [error, setError] = useState('')
@@ -175,6 +175,14 @@ export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, logC
   const [editingBureau, setEditingBureau] = useState(false)
   const [bureauDraft, setBureauDraft] = useState(bureau || '')
   const [bureauSaving, setBureauSaving] = useState(false)
+  // Bureau's OWN coordination number — separate from the client's phone,
+  // which the other bureau withholds on purpose (Aryan's ask, 2026-10-10).
+  // Lets "Send via WhatsApp" for this profile go straight to the bureau
+  // instead of asking which chat to open.
+  const bureauContact = profile.external_bureau_contact
+  const [editingBureauContact, setEditingBureauContact] = useState(false)
+  const [bureauContactDraft, setBureauContactDraft] = useState(bureauContact || '')
+  const [bureauContactSaving, setBureauContactSaving] = useState(false)
 
   const save = async () => {
     if (!normalizePhone(draft)) { setError('Enter a valid number (10 digits, or with country code)'); return }
@@ -206,6 +214,16 @@ export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, logC
     if (err) { setError('Could not save: ' + err.message); return }
     setError(''); setEditingBureau(false); setBureauDraft(value || '')
     onBureauSaved && onBureauSaved(value)
+  }
+
+  const saveBureauContact = async (raw = bureauContactDraft) => {
+    setBureauContactSaving(true)
+    const value = (raw || '').trim() || null
+    const { error: err } = await supabase.from('profiles').update({ external_bureau_contact: value }).eq('id', profile.id)
+    setBureauContactSaving(false)
+    if (err) { setError('Could not save: ' + err.message); return }
+    setError(''); setEditingBureauContact(false); setBureauContactDraft(value || '')
+    onBureauContactSaved && onBureauContactSaved(value)
   }
 
   return (
@@ -258,6 +276,30 @@ export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, logC
             onClick={() => setEditingBureau(true)}>+ Mark as external bureau profile</button>
         )}
       </div>
+      {bureau && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12, fontSize: 12 }}>
+          <Phone size={13} color="#8e8e8e" />
+          {editingBureauContact ? (
+            <>
+              <input className="form-input" placeholder="Bureau/matchmaker's WhatsApp number" value={bureauContactDraft} inputMode="tel"
+                onChange={e => setBureauContactDraft(e.target.value)} style={{ flex: '1 1 160px', fontSize: 12, maxWidth: 220 }} autoFocus />
+              <button className="btn btn-outline btn-sm" disabled={bureauContactSaving} onClick={saveBureauContact}>{bureauContactSaving ? 'Saving…' : 'Save'}</button>
+              <button className="btn btn-outline btn-sm" onClick={() => { setEditingBureauContact(false); setBureauContactDraft(bureauContact || '') }}>Cancel</button>
+            </>
+          ) : bureauContact ? (
+            <>
+              <span style={{ color: '#555' }} title={`Coordination for this match should go to ${bureau}'s own number, not the client's`}>
+                Bureau contact: <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{bureauContact}</span>
+              </span>
+              <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="Edit bureau contact number"
+                onClick={() => setEditingBureauContact(true)}><Pencil size={12} /></button>
+            </>
+          ) : (
+            <button className="btn btn-outline btn-sm" style={{ padding: '3px 8px', fontSize: 11, color: '#8e8e8e' }}
+              onClick={() => setEditingBureauContact(true)}>+ Add {bureau}'s coordination number</button>
+          )}
+        </div>
+      )}
       {error && <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 8 }}>{error}</div>}
     </div>
   )

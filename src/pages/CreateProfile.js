@@ -158,7 +158,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   const PERSONAL_QUESTIONS = useMemo(() => buildPersonalQuestions(adminMode), [adminMode])
 
   const [form, setForm] = useState({
-    client_phone:'', client_email:'', alternate_email:'', external_bureau_name:'',
+    client_phone:'', client_email:'', alternate_email:'', external_bureau_name:'', external_bureau_contact:'',
     blood_group:'', health_info:'',
     birth_time:'', birth_place:'', astrology_consent:false, horoscope_match_required:'',
     profession:'',
@@ -890,6 +890,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           profile_code: code,
           ...formToSave,
           external_bureau_name: form.external_bureau_name?.trim() || null,
+          external_bureau_contact: form.external_bureau_contact?.trim() || null,
           full_name: fullName,
           community: finalCommunity,
           mother_tongue: finalMotherTongue,
@@ -1236,6 +1237,18 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                   <input className="form-input" placeholder='e.g. "X.MB" — leave blank for your own clients' value={form.external_bureau_name}
                     onChange={e=>set('external_bureau_name',e.target.value)} />
                 </div>
+                {/* Coordination for a match goes to the OTHER bureau's own
+                    number, not this client's (which they withhold on
+                    purpose) — so capture it right alongside the bureau name
+                    (Aryan's ask, 2026-10-10). Only shown once a bureau name
+                    is entered. */}
+                {form.external_bureau_name?.trim() && (
+                  <div className="form-group" style={{marginTop:10}}>
+                    <FormLabel>{form.external_bureau_name.trim()}'s coordination number (optional)</FormLabel>
+                    <input className="form-input" placeholder="Their WhatsApp/mobile number, for sending matches back to them" value={form.external_bureau_contact}
+                      onChange={e=>set('external_bureau_contact',e.target.value)} />
+                  </div>
+                )}
                 {dupMatches.length > 0 && (
                   <div style={{marginTop:10,background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:'10px 12px'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#dc2626',marginBottom:4}}>⚠ Already registered — possible duplicate</div>
