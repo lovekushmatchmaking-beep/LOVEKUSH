@@ -1,5 +1,5 @@
 import {
-  parseBiodataText, parseDob, parseHeight, parseEducation, parseIncome, parseSiblings, parseTime,
+  parseBiodataText, BIODATA_CHATGPT_PROMPT, parseDob, parseHeight, parseEducation, parseIncome, parseSiblings, parseTime,
   parseRashi, parseNakshatra, extractLabeledValues,
 } from './biodataParser'
 
@@ -98,4 +98,67 @@ test('value parsers', () => {
 test('tolerates OCR misreading the colon', () => {
   expect(extractLabeledValues('Rashi + Vrishabh\nManglik No').rashi).toBe('Vrishabh')
   expect(extractLabeledValues('Rashi + Vrishabh\nManglik No').manglik).toBe('No')
+})
+
+test('pasted ChatGPT-style text (bold, bullets, numbering, table) parses', () => {
+  const md = [
+    '## 🌸 Biodata',
+    '**Name:** Rahul Kushwaha',
+    '- **Date of Birth:** 15/08/1996',
+    '1. Height: 5\'8"',
+    '| Education | B.Tech |',
+    '|---|---|',
+    '| Annual Income | 8 LPA |',
+    '* City: Lucknow, UP',
+    'About Me: Simple, family-oriented person working in Bangalore.',
+  ].join('\n')
+  const { values } = parseBiodataText(md)
+  expect(values.first_name).toBe('Rahul')
+  expect(values.last_name).toBe('Kushwaha')
+  expect(values.date_of_birth).toBe('1996-08-15')
+  expect(values.height).toBeTruthy()
+  expect(values.degree).toBeTruthy()
+  expect(values.annual_income).toBeTruthy()
+  expect(values.city).toBe('Lucknow')
+  expect(values.about_me).toMatch(/^Simple/)
+})
+
+test('every label in the ChatGPT prompt is recognised', () => {
+  const sample = `Name: Priya Sharma
+Gender: Female
+Date of Birth: 02/03/1998
+Birth Time: 10:30 AM
+Birth Place: Kanpur
+Height: 5'3"
+Marital Status: Never Married
+Religion: Hindu
+Caste: Kushwaha
+Sub Caste: Maurya
+Gotra: Kashyap
+Manglik: No
+Rashi: Mesh
+Nakshatra: Ashwini
+Mother Tongue: Hindi
+Education: MBA
+Occupation: Software Engineer
+Company: Infosys
+Annual Income: 12 LPA
+Complexion: Fair
+Diet: Vegetarian
+Blood Group: B+
+Father's Occupation: Retired
+Mother's Occupation: Homemaker
+Brothers: 2, 1 married
+Sisters: 1
+City: Lucknow
+Native Place: Gorakhpur
+Nationality: Indian
+Mobile: +91 98765 43210
+Email: priya@example.com
+About Me: Cheerful and grounded.`
+  const { found, unmatched } = parseBiodataText(sample, { includeContact: true })
+  const keys = found.map(f => f.key)
+  const promptLabels = BIODATA_CHATGPT_PROMPT.split('Biodata:')[0].split('\n').filter(l => /^[A-Z][^:]*:( \(.*\))?$/.test(l))
+  expect(keys.length + unmatched.length).toBe(promptLabels.length)
+  expect(unmatched).toEqual([])
 })

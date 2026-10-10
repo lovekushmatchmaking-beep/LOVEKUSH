@@ -1,22 +1,37 @@
 import React, { useRef, useState } from 'react'
-import { FileText, Check, X } from 'lucide-react'
+import { FileText, Check, X, ClipboardPaste, Copy } from 'lucide-react'
 import { extractTextFromBiodata } from '../utils/biodataExtract'
-import { parseBiodataText } from '../utils/biodataParser'
+import { parseBiodataText, BIODATA_CHATGPT_PROMPT } from '../utils/biodataParser'
 
 // Signup ke pehle screen par: "Biodata hai? Upload karo, jo fields mil
 // sakein woh apne aap bhar denge." User pehle dekh leta hai kya mila (har
 // field ke saath checkbox), phir "Fill" dabata hai — kuch bhi bina dikhaye
 // nahi bharta. Baaki wizard pehle jaisa hi chalta hai, bas jawab pehle se
 // bhare milte hain jinhe badla ja sakta hai.
+// Admin ke liye "Paste text" bhi: ChatGPT se saaf kiya hua (ya WhatsApp se
+// copy kiya) biodata text daalo, wahi parser chalta hai — OCR ki zaroorat nahi.
 
 export default function BiodataAutofill({ onApply, includeContact }) {
   const fileRef = useRef(null)
-  const [state, setState] = useState('idle') // idle | busy | review | done | error
+  const [state, setState] = useState('idle') // idle | busy | paste | review | done | error
   const [progress, setProgress] = useState('')
   const [result, setResult] = useState(null)
   const [unchecked, setUnchecked] = useState([])
   const [error, setError] = useState('')
   const [filledCount, setFilledCount] = useState(0)
+  const [pasted, setPasted] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  const review = (text, emptyMsg, failState = 'error') => {
+    const parsed = parseBiodataText(text, { includeContact })
+    if (parsed.found.length === 0) { setError(emptyMsg); setState(failState); return }
+    setResult(parsed); setUnchecked([]); setState('review')
+  }
+
+  const copyPrompt = async () => {
+    try { await navigator.clipboard.writeText(BIODATA_CHATGPT_PROMPT); setCopied(true); setTimeout(() => setCopied(false), 2000) }
+    catch { setError('Could not copy, please select the prompt text manually.') }
+  }
 
   const handleFile = async (file) => {
     if (!file) return
@@ -24,13 +39,7 @@ export default function BiodataAutofill({ onApply, includeContact }) {
     setState('busy'); setError(''); setProgress('Reading biodata...')
     try {
       const text = await extractTextFromBiodata(file, setProgress)
-      const parsed = parseBiodataText(text, { includeContact })
-      if (parsed.found.length === 0) {
-        setError("Couldn't find any details in this file. A clear, straight photo or the original PDF works best — or just fill the form below.")
-        setState('error')
-        return
-      }
-      setResult(parsed); setUnchecked([]); setState('review')
+      review(text, "Couldn't find any details in this file. A clear, straight photo or the original PDF works best — or just fill the form below.")
     } catch (e) {
       setError(e.message || 'Could not read this file.')
       setState('error')
@@ -63,10 +72,36 @@ export default function BiodataAutofill({ onApply, includeContact }) {
           <FileText size={22} style={{ flexShrink: 0, color: 'var(--primary)' }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Have a biodata already?</div>
-            <div style={{ fontSize: 12, color: 'var(--gray3)' }}>Upload the PDF or a photo and we'll fill in what we can. Nothing is uploaded, it's read on this device.</div>
+            <div style={{ fontSize: 12, color: 'var(--gray3)' }}>Upload the PDF or a photo, or paste the biodata text, and we'll fill in what we can. Nothing is uploaded, it's read on this device.</div>
             {state === 'error' && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 6 }}>{error}</div>}
           </div>
-          <button className="btn btn-outline btn-sm" style={{ flexShrink: 0 }} onClick={() => fileRef.current?.click()}>Upload</button>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button className="btn btn-outline btn-sm" onClick={() => fileRef.current?.click()}>Upload</button>
+            <button className="btn btn-outline btn-sm" onClick={() => { setError(''); setState('paste') }}><ClipboardPaste size={14} /> Paste text</button>
+          </div>
+        </div>
+      )}
+
+      {state === 'paste' && (
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Paste biodata text</div>
+          <div style={{ fontSize: 12, color: 'var(--gray3)', marginBottom: 8 }}>
+            Any "Label : Value" text works (English or Hindi). For messy biodata, copy our ChatGPT prompt, paste it in ChatGPT with the biodata, then paste ChatGPT's answer here.
+          </div>
+          <textarea className="form-textarea" autoFocus value={pasted} onChange={e => setPasted(e.target.value)}
+            placeholder={"Name: Rahul Kushwaha\nDate of Birth: 15/08/1996\nHeight: 5'8\"\nEducation: B.Tech\nCity: Lucknow\n..."}
+            style={{ minHeight: 200, fontSize: 13 }} />
+          {error && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 6 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <button className="btn btn-black btn-sm" disabled={!pasted.trim()}
+              onClick={() => review(pasted, "Couldn't find any details. Put each detail on its own line like \"Height: 5'6\"\", or use the ChatGPT prompt.", 'paste')}>
+              Read details
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={copyPrompt}>
+              {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy ChatGPT prompt</>}
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => { setError(''); setState('idle') }}><X size={14} /> Cancel</button>
+          </div>
         </div>
       )}
 
@@ -109,6 +144,7 @@ export default function BiodataAutofill({ onApply, includeContact }) {
           <Check size={18} style={{ color: '#16a34a', flexShrink: 0 }} />
           <span style={{ flex: 1 }}>{filledCount} fields filled from your biodata. Check each screen as you go.</span>
           <button className="btn btn-outline btn-sm" onClick={() => fileRef.current?.click()}>Another file</button>
+          <button className="btn btn-outline btn-sm" onClick={() => { setPasted(''); setError(''); setState('paste') }}>Paste text</button>
         </div>
       )}
     </div>
