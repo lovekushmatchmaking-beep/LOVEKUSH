@@ -333,9 +333,7 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 .bottom-nav {
   position: fixed;
   bottom: 0; left: 0; right: 0;
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255,255,255,0.97);
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
