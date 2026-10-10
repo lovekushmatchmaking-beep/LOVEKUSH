@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import {
-  House, Search, Heart, Inbox, UserRound, Bell, Menu, X, Settings, Lock,
+  House, Search, Heart, Inbox, UserRound, Menu, X, Settings, Lock,
   CircleHelp, LogOut, ScanSearch, Ban, FileText, Images,
 } from 'lucide-react'
 import SignedImage from './SignedImage'
@@ -96,7 +96,12 @@ export function SideDrawer({ open, onClose, profile, avatarPath, onNavigate, onL
   const items = [
     { icon: Settings, label: 'Account Settings', onClick: () => go('accountsettings') },
     { icon: Lock, label: 'Privacy', onClick: () => go('privacy') },
-    { icon: Bell, label: 'Notifications', onClick: () => go('activity') },
+    // This opens the Activity tab (likes/views), which is a different
+    // list from the real notification center (the bell, top-right) — was
+    // labelled "Notifications" before the bell existed and never updated,
+    // so it misled taps looking for the actual notifications (audit
+    // 2026-10-09: dead-end/wrong-destination notification entries).
+    { icon: Heart, label: 'Activity', onClick: () => go('activity') },
     { sep: true },
     { icon: ScanSearch, label: 'Search by Profile ID', onClick: () => go('searchid') },
     { icon: Images, label: 'Manage Photos', onClick: () => go('editphotos') },
