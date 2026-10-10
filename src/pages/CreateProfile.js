@@ -56,6 +56,7 @@ import SignupComplete from './SignupComplete'
 import BiodataAutofill from '../components/BiodataAutofill'
 import { APPLY_ORDER } from '../utils/biodataParser'
 import { BrandLockup } from '../components/BrandLogo'
+import { TermsGate } from '../components/TermsAndConditions'
 
 // Single-choice fields render as a native <select> dropdown — keeps the
 // screen compact instead of spreading every option out as chips. Long
@@ -154,6 +155,11 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   const [photoFiles, setPhotoFiles] = useState(Array(2).fill(null))
   const fileRefs = useRef(Array(2).fill(null).map(()=>React.createRef()))
   const [toast, setToast] = useState('')
+  // Terms & Conditions — mandatory one-time tick at signup (extracted from
+  // Aryan's original Google Form's Declaration & Consent section). Kept as
+  // local UI state, not part of `form`, since it's never edited later —
+  // only `terms_accepted_at` (set on successful submit) is persisted.
+  const [termsAccepted, setTermsAccepted] = useState(false)
 
   const PERSONAL_QUESTIONS = useMemo(() => buildPersonalQuestions(adminMode), [adminMode])
 
@@ -827,6 +833,9 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     if (!adminMode && !photos[0]) {
       showToast('Please upload a profile photo to continue'); return
     }
+    if (!termsAccepted) {
+      showToast('Please tick the Terms & Conditions checkbox to continue'); return
+    }
 
     const ageCheck = validateAge(form.date_of_birth, form.gender)
     if (!ageCheck.valid) {
@@ -889,6 +898,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           ...(adminMode ? { verification_status: 'verified', is_verified: true } : {}),
           profile_code: code,
           ...formToSave,
+          terms_accepted_at: new Date().toISOString(),
           external_bureau_name: form.external_bureau_name?.trim() || null,
           external_bureau_contact: form.external_bureau_contact?.trim() || null,
           full_name: fullName,
@@ -1150,7 +1160,13 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         )}
       </div>
 
-      <button className="btn btn-primary" style={{width:'100%'}} onClick={handleSubmit} disabled={saving || compressingIdx!==null}>
+      <div className="card" style={{marginBottom:16}}>
+        <SectionLabel style={{marginBottom:14}}>Terms & Conditions</SectionLabel>
+        <div className="form-hint" style={{marginBottom:10}}>Read this out to the client (or have them read it) and tick once they agree — same consent every self-signup member gives.</div>
+        <TermsGate accepted={termsAccepted} onChange={setTermsAccepted} />
+      </div>
+
+      <button className="btn btn-primary" style={{width:'100%'}} onClick={handleSubmit} disabled={saving || compressingIdx!==null || !termsAccepted}>
         {saving ? 'Creating...' : compressingIdx!==null ? 'Processing photo...' : <><Check size={18} style={{verticalAlign:'-3px',marginRight:6}} />Create Client</>}
       </button>
     </div>
@@ -1398,10 +1414,13 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               </div>
             </div>
 
-            <div className="notice" style={{display:'flex',gap:10,alignItems:'center'}}>
+            <div className="notice" style={{display:'flex',gap:10,alignItems:'center',marginBottom:20}}>
               <ShieldCheck size={18} style={{color:'var(--primary)',flexShrink:0}} />
               <span>Reviewed by our team in <strong>24-48 hrs</strong></span>
             </div>
+
+            <h2 className="page-title" style={{fontSize:18,marginBottom:4}}>Terms & Conditions</h2>
+            <TermsGate accepted={termsAccepted} onChange={setTermsAccepted} />
           </div>
         )}
 
@@ -1426,7 +1445,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               Continue <ArrowRight size={18} />
             </button>
           ) : (
-            <button className="btn btn-primary" style={{flex:2}} onClick={handleSubmit} disabled={saving || compressingIdx!==null}>
+            <button className="btn btn-primary" style={{flex:2}} onClick={handleSubmit} disabled={saving || compressingIdx!==null || !termsAccepted}>
               {saving ? 'Submitting...' : compressingIdx!==null ? 'Processing photo...' : <><Check size={18} /> Submit Profile</>}
             </button>
           )}

@@ -25,7 +25,10 @@ import { DIETS, EDUCATIONS, DEGREE_OPTIONS, HABITS, INCOME_RANGES, RELIGIONS, CA
   PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, COUNTRIES, MANGLIK_OPTIONS, KUNDLI_AVAILABLE, RESIDENCY_STATUSES, RELOCATION_PREFERENCES, EMPLOYMENT_TYPES, OWN_HOUSE_OPTIONS, FAMILY_INCOME_RANGES, USD_FAMILY_INCOME_RANGES, CURRENCIES, USD_INCOME_RANGES, PHYSICAL_DISABILITY_OPTIONS, PROFESSION_CATEGORIES, HEALTH_INFO_OPTIONS, BLOOD_GROUPS, LIVING_WITH_PARENTS_OPTIONS, HOBBIES_INTERESTS, HOBBIES_MAX_SELECT, CUISINES, SPORTS_LIST, TIME_OF_BIRTH_ACCURACY, CASTE_NO_BAR_OPTIONS, PRIVACY_LEVELS, FAMILY_FINANCIAL_STATUS, FAVOURITE_MUSIC, FAVOURITE_BOOKS, DRESS_STYLES,
   LANGUAGES_SPOKEN, HAVE_CHILDREN_OPTIONS, CHILDREN_LIVING_WITH_OPTIONS, GREW_UP_IN_OPTIONS,
   PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, formatHeightFromInches,
-  PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS, formatIncomeShort, PROFILE_FOR_OPTIONS, SCHOOL_ONLY_EDUCATIONS, profileManagedByLabel } from '../constants/profileOptions'
+  PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS, formatIncomeShort, PROFILE_FOR_OPTIONS, SCHOOL_ONLY_EDUCATIONS, profileManagedByLabel,
+  MARRIAGE_TIMELINE_OPTIONS, REGISTRATION_REASON_OPTIONS, CONTACT_MODE_OPTIONS, DECISION_MAKER_OPTIONS, COMMUNICATE_WITH_OPTIONS,
+  RELOCATE_TO_INDIA_OPTIONS, GOVERNMENT_ID_TYPES, PARTNER_MARITAL_STATUS_PREFERENCES, PARTNER_LIVING_ARRANGEMENT_OPTIONS,
+  PARTNER_LIFESTYLE_PREFERENCES } from '../constants/profileOptions'
 import { calculateSectionCompleteness } from '../utils/completeness'
 import { calculateAge, validateAge, dobInputBounds } from '../utils/ageUtils'
 import { rankMatches } from '../utils/matching'
@@ -1532,6 +1535,23 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     partner_education: profile.partner_education || 'Any',
     partner_education_level_preferences: profile.partner_education_level_preferences || [],
     partner_notes: profile.partner_notes || '',
+    // Extracted from Aryan's original Google Form (2026-10-10) — all optional.
+    marriage_timeline: profile.marriage_timeline || '',
+    registration_reason: profile.registration_reason || '',
+    alternate_phone: profile.alternate_phone || '',
+    preferred_contact_mode: profile.preferred_contact_mode || '',
+    decision_maker: profile.decision_maker || '',
+    communicate_with: profile.communicate_with || '',
+    reference_contact_name: profile.reference_contact_name || '',
+    reference_contact_phone: profile.reference_contact_phone || '',
+    willing_to_relocate_to_india: profile.willing_to_relocate_to_india || '',
+    open_to_video_verification: profile.open_to_video_verification || '',
+    marriage_custody_details: profile.marriage_custody_details || '',
+    id_document_type: profile.id_document_type || '',
+    partner_marital_status_preference: profile.partner_marital_status_preference || '',
+    partner_complexion_preference: profile.partner_complexion_preference || '',
+    partner_living_arrangement: profile.partner_living_arrangement || '',
+    partner_lifestyle_preferences: profile.partner_lifestyle_preferences || [],
   })
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
@@ -1829,6 +1849,14 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             )}
           </div>
         )}
+        {form.marital_status !== 'Never Married' && (
+          <div className="form-group">
+            <FormLabel>Anything about a previous marriage the other family should know?</FormLabel>
+            <textarea className="form-textarea" placeholder="Optional — e.g. child custody, alimony. Leave blank if not applicable."
+              value={form.marriage_custody_details} onChange={e=>set('marriage_custody_details',e.target.value)} style={{minHeight:70}} />
+            <div className="form-hint">Optional, but disclosing this upfront avoids problems later.</div>
+          </div>
+        )}
         <div className="form-group">
           <FormLabel>Physical Disability</FormLabel>
           <select className="form-select" value={form.physical_disability} onChange={e=>set('physical_disability',e.target.value)}>
@@ -1861,6 +1889,67 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
         <div className="form-group">
           <FormLabel>Alternate Email</FormLabel>
           <input className="form-input" value={form.alternate_email} onChange={e=>set('alternate_email',e.target.value)} />
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:12}}>
+        <SectionLabel style={{marginBottom:14}}>Registration Details</SectionLabel>
+        <div className="form-group">
+          <FormLabel>When are you planning to get married?</FormLabel>
+          <ChipSelect options={MARRIAGE_TIMELINE_OPTIONS} value={form.marriage_timeline} onChange={v=>set('marriage_timeline',v)} includeEmpty />
+        </div>
+        <div className="form-group">
+          <FormLabel>Why are you registering with LOVEKUSH?</FormLabel>
+          <ChipSelect options={REGISTRATION_REASON_OPTIONS} value={form.registration_reason} onChange={v=>set('registration_reason',v)} includeEmpty />
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <FormLabel>Who will take the final marriage decision?</FormLabel>
+            <ChipSelect options={DECISION_MAKER_OPTIONS} value={form.decision_maker} onChange={v=>set('decision_maker',v)} includeEmpty />
+          </div>
+          <div className="form-group">
+            <FormLabel>Who should our team primarily communicate with?</FormLabel>
+            <ChipSelect options={COMMUNICATE_WITH_OPTIONS} value={form.communicate_with} onChange={v=>set('communicate_with',v)} includeEmpty />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <FormLabel>Alternate / Secondary Contact Number</FormLabel>
+            <input className="form-input" placeholder="With country code" value={form.alternate_phone} onChange={e=>set('alternate_phone',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <FormLabel>Preferred Mode of Contact</FormLabel>
+            <ChipSelect options={CONTACT_MODE_OPTIONS} value={form.preferred_contact_mode} onChange={v=>set('preferred_contact_mode',v)} includeEmpty />
+          </div>
+        </div>
+        {form.nationality && form.nationality !== 'India' && (
+          <div className="form-group">
+            <FormLabel>Willing to relocate to India?</FormLabel>
+            <ChipSelect options={RELOCATE_TO_INDIA_OPTIONS} value={form.willing_to_relocate_to_india} onChange={v=>set('willing_to_relocate_to_india',v)} includeEmpty />
+          </div>
+        )}
+        <div className="form-row">
+          <div className="form-group">
+            <FormLabel>Reference Contact — Name</FormLabel>
+            <input className="form-input" placeholder="Optional — a relative or family friend who can vouch for you" value={form.reference_contact_name} onChange={e=>set('reference_contact_name',e.target.value)} />
+          </div>
+          <div className="form-group">
+            <FormLabel>Reference Contact — Phone</FormLabel>
+            <input className="form-input" placeholder="Optional" value={form.reference_contact_phone} onChange={e=>set('reference_contact_phone',e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:12}}>
+        <SectionLabel style={{marginBottom:14}}>Identity Verification</SectionLabel>
+        <div className="form-group">
+          <FormLabel>Which government ID can you provide for verification?</FormLabel>
+          <ChipSelect options={GOVERNMENT_ID_TYPES} value={form.id_document_type} onChange={v=>set('id_document_type',v)} includeEmpty />
+          <div className="form-hint">This just lets our team know what to ask for — kept confidential, never shown to other members.</div>
+        </div>
+        <div className="form-group">
+          <FormLabel>Open to a short video verification call if required?</FormLabel>
+          <ChipSelect options={['Yes','No']} value={form.open_to_video_verification} onChange={v=>set('open_to_video_verification',v)} includeEmpty />
         </div>
       </div>
 
@@ -2500,6 +2589,25 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <select className="form-select" value={form.partner_country_preference} onChange={e=>set('partner_country_preference',e.target.value)}>
             {COUNTRIES.map(c=><option key={c}>{c}</option>)}
           </select>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <FormLabel>Marital Status Preference</FormLabel>
+            <ChipSelect options={PARTNER_MARITAL_STATUS_PREFERENCES} value={form.partner_marital_status_preference} onChange={v=>set('partner_marital_status_preference',v)} includeEmpty emptyLabel="No preference" />
+          </div>
+          <div className="form-group">
+            <FormLabel>Complexion Preference</FormLabel>
+            <ChipSelect options={COMPLEXIONS} value={form.partner_complexion_preference} onChange={v=>set('partner_complexion_preference',v)} includeEmpty emptyLabel="No preference" />
+          </div>
+        </div>
+        <div className="form-group">
+          <FormLabel>Post-Marriage Living Preference</FormLabel>
+          <ChipSelect options={PARTNER_LIVING_ARRANGEMENT_OPTIONS} value={form.partner_living_arrangement} onChange={v=>set('partner_living_arrangement',v)} includeEmpty emptyLabel="Flexible / no preference" />
+        </div>
+        <div className="form-group">
+          <FormLabel>Lifestyle Preferences</FormLabel>
+          <CheckboxDropdown options={PARTNER_LIFESTYLE_PREFERENCES} selected={form.partner_lifestyle_preferences}
+            onChange={v=>set('partner_lifestyle_preferences',v)} placeholder="Select preferences..." />
         </div>
         <div className="form-group">
           <FormLabel>Additional Notes</FormLabel>
