@@ -1616,7 +1616,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
 
   const handleSave = async () => {
     if(!form.first_name || !form.last_name || !form.date_of_birth || !form.city) {
-      showToast('First Name, Last Name, Date of Birth aur City zaroori hai'); return
+      showToast('First Name, Last Name, Date of Birth and City are required'); return
     }
     if (!profile.is_admin_managed && form.client_phone && !normalizePhone(form.client_phone)) {
       showToast('Please enter a valid phone number'); return
@@ -1892,7 +1892,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             <option value="">Don't know</option>
             {NAKSHATRA_PADAS.map(n=><option key={n} value={n}>{n}</option>)}
           </select>
-          <div className="form-hint">Rashi aur Nakshatra kundli pe likhe hote hain — inse Guna Milan (36 gun) apne aap nikalta hai.</div>
+          <div className="form-hint">Rashi and Nakshatra are found on your kundli — used to auto-calculate Guna Milan (36 gun).</div>
         </div>
         {isAstrologyApiEnabled() && (
           <div className="form-group">
@@ -1909,7 +1909,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
               }}>
               {astroLoading ? 'Calculating…' : 'Calculate from birth details'}
             </button>
-            <div className="form-hint">Birth time aur place pehle save karein.</div>
+            <div className="form-hint">Please save birth time and place first.</div>
           </div>
         )}
         <div className="form-row">
@@ -2072,7 +2072,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
               onChange={e=>set('islamic_sub_caste_division',e.target.value)}>
               {ISLAMIC_SUB_CASTE_DIVISIONS.map(s=><option key={s}>{s}</option>)}
             </select>
-            <div className="form-hint">Optional — sab communities ke liye applicable nahi hota</div>
+            <div className="form-hint">Optional — does not apply to all communities</div>
           </div>
         )}
         <div className="form-row">
@@ -2102,7 +2102,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <div className="form-group">
             <FormLabel>Mother's Gotra</FormLabel>
             <input className="form-input" placeholder="Optional" value={form.mother_gotra} onChange={e=>set('mother_gotra',e.target.value)} />
-            <div className="form-hint">Optional — kai parivar maa ka gotra bhi milate hain.</div>
+            <div className="form-hint">Optional — some families also match the mother's gotra.</div>
           </div>
         )}
         <div className="form-group">

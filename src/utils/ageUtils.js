@@ -24,10 +24,10 @@ export function validateAge(dobString, gender) {
 
   const minAge = MIN_AGE[gender] || 18
   if (age < minAge) {
-    return { valid: false, age, message: `${gender === 'Female' ? 'Ladki' : 'Ladka'} ki minimum legal marriageable age ${minAge} saal hai (India ke hisaab se). Aapki age: ${age} saal.` }
+    return { valid: false, age, message: `Minimum legal marriageable age for ${gender === 'Female' ? 'a woman' : 'a man'} is ${minAge} years (as per Indian law). Your age: ${age} years.` }
   }
   if (age > MAX_AGE) {
-    return { valid: false, age, message: `Age ${age} lagta hai — kripya Date of Birth check karein.` }
+    return { valid: false, age, message: `Age looks like ${age} — please check the Date of Birth.` }
   }
   return { valid: true, age, message: '' }
 }

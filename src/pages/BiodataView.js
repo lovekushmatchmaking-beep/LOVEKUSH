@@ -57,7 +57,7 @@ export default function BiodataView({ profile: p, photo, onBack }) {
       const pdf = await generateBiodataPdf(nodeRef.current)
       pdf.save(fileName)
     } catch (e) {
-      setToast('PDF banane me dikkat hui, dobara try karein.')
+      setToast('Could not create PDF, please try again.')
     } finally {
       setBusy('')
     }
@@ -73,10 +73,10 @@ export default function BiodataView({ profile: p, photo, onBack }) {
         await navigator.share({ files: [file], title: 'Matrimonial Biodata', text: `${p.full_name}'s Biodata — LOVEKUSH` })
       } else {
         pdf.save(fileName)
-        setToast('Is browser me share support nahi hai, isliye PDF download kar diya gaya.')
+        setToast('Sharing is not supported in this browser, so the PDF was downloaded instead.')
       }
     } catch (e) {
-      if (e?.name !== 'AbortError') setToast('Share karne me dikkat hui, dobara try karein.')
+      if (e?.name !== 'AbortError') setToast('Could not share, please try again.')
     } finally {
       setBusy('')
     }
@@ -95,7 +95,7 @@ export default function BiodataView({ profile: p, photo, onBack }) {
       // kiya) to link yahin dikhate hain — WhatsApp/Copy button ke saath.
       if (!shared) setShareLink({ url: link.url, text })
     } catch (e) {
-      setToast('Link banane me dikkat hui, dobara try karein.')
+      setToast('Could not create link, please try again.')
     } finally {
       setBusy('')
     }

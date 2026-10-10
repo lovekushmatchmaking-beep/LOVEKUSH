@@ -15,7 +15,7 @@ export const isAstrologyApiEnabled = () => process.env.REACT_APP_ASTROLOGY_API_E
 // Returns the updated profile row ({ rashi, nakshatra, nakshatra_pada,
 // manglik, ... }) or throws with a readable message.
 export async function calculateMoonChartFromBirthDetails(supabase, profileId) {
-  if (!isAstrologyApiEnabled()) throw new Error('Astrology API abhi connect nahi hui hai')
+  if (!isAstrologyApiEnabled()) throw new Error('Astrology API is not connected yet')
   const { data, error } = await supabase.functions.invoke('astrology-chart', { body: { profile_id: profileId } })
   if (error) throw new Error(error.message || 'Astrology API call failed')
   if (data?.error) throw new Error(data.error)

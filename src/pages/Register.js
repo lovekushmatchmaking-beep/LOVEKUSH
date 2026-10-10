@@ -78,7 +78,7 @@ export default function Register() {
         {checkEmail ? (
           <div style={{textAlign:'center'}}>
             <div className="form-hint" style={{marginBottom:20,fontSize:14}}>
-              {`Aapka account ban gaya hai. ${form.email} par bheja gaya confirmation link open karke apni email verify karein, phir login karein.`}
+              {`Your account has been created. Open the confirmation link sent to ${form.email} to verify your email, then log in.`}
             </div>
             <Link to="/login" className="btn btn-black btn-full btn-lg">Go to Login</Link>
           </div>

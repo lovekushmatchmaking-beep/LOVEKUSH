@@ -2443,7 +2443,7 @@ export const ISLAMIC_SUB_CASTE_DIVISIONS = [
 // jab user inhe select kare (denomination-level sensitivity jaise
 // Ahmadiyya Step-2 mein hi handle ho jaati hai — yeh sirf community-level).
 export const SENSITIVE_COMMUNITIES = ['Alavi Bohra', 'Dawoodi Bohra', 'Sunni Bohra', 'Rohingya', 'Uyghur']
-export const SENSITIVE_COMMUNITY_NOTE = 'Yeh community ke liye extra privacy options available hain — aap chahein to apni profile mein isse zyada control mein rakh sakte hain.'
+export const SENSITIVE_COMMUNITY_NOTE = 'Extra privacy options are available for this community — you can keep more control over your profile if you choose.'
 
 // ===================== CHRISTIAN — Denomination / Community =====================
 // Sirf religion === 'Christian' hone par CreateProfile.js/Dashboard.js mein
