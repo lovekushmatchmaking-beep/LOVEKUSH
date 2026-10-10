@@ -206,6 +206,10 @@ export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBu
 
   // Bureau name — jab bhi set ho, "No number saved yet" ki jagah yeh batata
   // hai KYUN number nahi hai (woh dusra bureau client ka contact nahi deta).
+  // Buttons call saveBureau()/saveBureauContact() with NO argument — passing
+  // the function straight to onClick handed it the click event as `raw`,
+  // `.trim()` on that threw, and Save got stuck on "Saving…" without ever
+  // writing (Aryan, 2026-10-10: bureau name/number "doesn't save").
   const saveBureau = async (raw = bureauDraft) => {
     setBureauSaving(true)
     const value = (raw || '').trim() || null
@@ -259,7 +263,7 @@ export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBu
           <>
             <input className="form-input" placeholder='Bureau name, e.g. "X.MB"' value={bureauDraft}
               onChange={e => setBureauDraft(e.target.value)} style={{ flex: '1 1 160px', fontSize: 12, maxWidth: 220 }} autoFocus />
-            <button className="btn btn-outline btn-sm" disabled={bureauSaving} onClick={saveBureau}>{bureauSaving ? 'Saving…' : 'Save'}</button>
+            <button className="btn btn-outline btn-sm" disabled={bureauSaving} onClick={() => saveBureau()}>{bureauSaving ? 'Saving…' : 'Save'}</button>
             <button className="btn btn-outline btn-sm" onClick={() => { setEditingBureau(false); setBureauDraft(bureau || '') }}>Cancel</button>
           </>
         ) : bureau ? (
@@ -283,7 +287,7 @@ export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBu
             <>
               <input className="form-input" placeholder="Bureau/matchmaker's WhatsApp number" value={bureauContactDraft} inputMode="tel"
                 onChange={e => setBureauContactDraft(e.target.value)} style={{ flex: '1 1 160px', fontSize: 12, maxWidth: 220 }} autoFocus />
-              <button className="btn btn-outline btn-sm" disabled={bureauContactSaving} onClick={saveBureauContact}>{bureauContactSaving ? 'Saving…' : 'Save'}</button>
+              <button className="btn btn-outline btn-sm" disabled={bureauContactSaving} onClick={() => saveBureauContact()}>{bureauContactSaving ? 'Saving…' : 'Save'}</button>
               <button className="btn btn-outline btn-sm" onClick={() => { setEditingBureauContact(false); setBureauContactDraft(bureauContact || '') }}>Cancel</button>
             </>
           ) : bureauContact ? (

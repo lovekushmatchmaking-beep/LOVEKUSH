@@ -35,6 +35,7 @@ import NotificationBell from '../components/NotificationBell'
 import { EVENT_LABELS } from '../utils/notifications'
 import { gunaMilanFor } from '../utils/astrology'
 import { useToast } from '../components/ui'
+import { SHARED_MATCH_NOTE_PREFIX, parseProfileIds, formatSharedMatchNote, parseSharedMatchNote } from '../utils/sharedMatchLog'
 
 // SEARCH DESIGN NOTE: yeh search ab DATABASE se query karta hai (Supabase
 // .ilike()/.eq()/.gte() ke saath), poore profiles table ko browser mein
@@ -338,6 +339,7 @@ export default function Admin({ staffUser }) {
     return next
   })
   const [editingProfile, setEditingProfile] = useState(null)
+  const [sharedLogCode, setSharedLogCode] = useState(null) // profile_code pre-filled when Shared Matches is opened from a profile card
   const [viewingProfile, setViewingProfile] = useState(null) // read-only "Full Profile" view — separate from Edit, no accidental changes
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
   const [matchResults, setMatchResults] = useState([])
@@ -789,6 +791,22 @@ export default function Admin({ staffUser }) {
     if (selected?.id === id) setSelected(prev => ({ ...prev, external_bureau_contact: contact }))
   }
 
+  // One-tap "Share link" for any profile straight from its card — same
+  // generateShareLink the Biodata "Link" button uses. Share sheet khule to
+  // wahi; warna (desktop / browser ne block kiya) link copy ho jaata hai.
+  const shareProfileLink = async (p) => {
+    try {
+      const link = await generateShareLink(p.id, staffUser.user_id)
+      const shared = await nativeShare({ title: 'LOVEKUSH Profile', text: `Profile from LOVEKUSH (${p.profile_code})`, url: link.url })
+      if (!shared) {
+        await navigator.clipboard?.writeText(link.url)
+        showToast('Link copied — paste it in WhatsApp')
+      }
+    } catch (e) {
+      showToast(e.message || 'Could not create link')
+    }
+  }
+
   // Lead source — business-owner audit (2026-10-04). Signup/Create Client
   // already asks this; this is just so admin can set/correct it for a
   // walk-in that was entered without going through the full question.
@@ -954,6 +972,7 @@ export default function Admin({ staffUser }) {
     { id: 'verificationQueue', label: 'Verification', Icon: ShieldAlert, badge: stats.needsVerification, onClick: () => goToSectionView('queues', 'verificationQueue') },
     { id: 'reportsQueue', label: 'Reports', Icon: Flag, badge: stats.openReports, onClick: () => goToSectionView('queues', 'reportsQueue') },
     { id: 'shareLinks', label: 'Share Links', Icon: Link2, badge: (stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0), onClick: () => goToSectionView('tools', 'shareLinks') },
+    { id: 'sharedMatchLog', label: 'Shared Matches', Icon: ListChecks, onClick: () => goToSectionView('tools', 'sharedMatchLog') },
     { section: 'Tools' },
     { id: 'duplicateLeads', label: 'Duplicate Leads', Icon: Copy, onClick: () => goToSectionView('queues', 'duplicateLeads') },
     { id: 'casteSuggestions', label: 'Caste Suggestions', Icon: ClipboardList, onClick: () => goToSectionView('tools', 'casteSuggestions') },
@@ -964,7 +983,7 @@ export default function Admin({ staffUser }) {
   const isSidebarItemActive = (it) => (it.id === 'dashboard' || it.id === 'profiles' || it.id === 'account')
     ? effectiveSection === it.id && view === 'list'
     : view === it.id
-  const sectionForView = { verificationQueue:'queues', reportsQueue:'queues', myQueue:'queues', duplicateLeads:'queues', casteSuggestions:'tools', coordinationRequests:'tools', shareLinks:'tools', createClient:'profiles', editProfile:'profiles', fullProfile:'profiles', findMatches:'profiles' }
+  const sectionForView = { verificationQueue:'queues', reportsQueue:'queues', myQueue:'queues', duplicateLeads:'queues', casteSuggestions:'tools', coordinationRequests:'tools', shareLinks:'tools', sharedMatchLog:'tools', createClient:'profiles', editProfile:'profiles', fullProfile:'profiles', findMatches:'profiles' }
   const effectiveSection = view === 'list' ? section : (sectionForView[view] || section)
   const switchSection = (s) => { if (view !== 'list') navigate(-1); setSectionOnly(s) }
   // Jumping to a profile card from a sub-view other than Profiles (e.g.
@@ -1095,6 +1114,7 @@ export default function Admin({ staffUser }) {
             profile={viewingProfile}
             photo={photos[viewingProfile.id] ? { storage_path: photos[viewingProfile.id] } : null}
             onBack={()=>{ setView('list'); setViewingProfile(null) }}
+            shareAsUserId={staffUser.user_id}
           />
         </div>
       )}
@@ -1132,6 +1152,12 @@ export default function Admin({ staffUser }) {
 
       {view === 'staffManagement' && (
         <StaffManagementView staffUser={staffUser} onBack={()=>setView('list')} />
+      )}
+
+      {view === 'sharedMatchLog' && (
+        <SharedMatchLogView key={sharedLogCode || ''} staffUser={staffUser} initialCode={sharedLogCode}
+          onBack={()=>{ setView('list'); setSharedLogCode(null) }}
+          onOpenProfile={(p)=>{ setSharedLogCode(null); jumpToProfile(p) }} />
       )}
 
       {view === 'shareContact' && (
@@ -1381,6 +1407,8 @@ export default function Admin({ staffUser }) {
                       <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} externalBureauName={p.external_bureau_name} />
                       <OverflowMenu items={[
                         { label: 'View profile', icon: Eye, onClick: () => { setViewingProfile(p); setView('fullProfile') } },
+                        { label: 'Share link', icon: Link2, onClick: () => shareProfileLink(p) },
+                        { label: 'Shared matches log', icon: ListChecks, onClick: () => { setSharedLogCode(p.profile_code); setView('sharedMatchLog') } },
                         { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
                         { label: 'Find matches', icon: Search, onClick: () => findMatchesForProfile(p) },
                         { label: 'Approve', icon: CheckCircle2, onClick: () => updateStatus(p.id, 'active'), hidden: p.profile_status === 'active' },
@@ -1618,6 +1646,7 @@ export default function Admin({ staffUser }) {
           <AdminNavCard icon={ClipboardList} label="Caste Suggestions" subtitle="New castes/gotras members typed in" onClick={()=>setView('casteSuggestions')} />
           <AdminNavCard icon={Handshake} label="Coordination" subtitle="Talk/meeting requests between members" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
           <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" badge={(stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0)} onClick={()=>setView('shareLinks')} />
+          <AdminNavCard icon={ListChecks} label="Shared Matches" subtitle="How many matches each client has been sent" onClick={()=>setView('sharedMatchLog')} />
           <AdminNavCard icon={MessageCircle} label="Template Editor" subtitle="Saved messages — WhatsApp, SMS, email or anywhere" onClick={()=>setView('whatsappTemplates')} />
         </div>
       </div>
@@ -4301,6 +4330,198 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
 // set_share_contact() RPC (migration 20261010_editable_share_link_contact.sql)
 // — get_shared_profile/get_shared_bundle read staff_users live, so editing
 // here changes what EXISTING share links show too, not just new ones.
+// ===== SHARED MATCHES LOG — Aryan's ask (2026-10-10): ek client profile ID
+// ke liye kitne/kaun se matches bheje ja chuke hain, manually copy-paste se
+// track karna. Har entry = client ke profile par ek profile_notes row
+// (SHARED_MATCH_NOTE_PREFIX) — koi naya table nahi. Share Links se bheje
+// gaye matches (share_links.client_profile_id) bhi saath mein gine jaate
+// hain, taaki ek hi jagah poora count dikhe.
+function SharedMatchLogView({ staffUser, onBack, initialCode, onOpenProfile }) {
+  const [showToast, ToastView] = useToast()
+  const [code, setCode] = useState(initialCode || '')
+  const [client, setClient] = useState(null)
+  const [entries, setEntries] = useState([]) // profile_notes rows for this client
+  const [linkCodes, setLinkCodes] = useState([]) // profile codes sent via share links
+  const [paste, setPaste] = useState('')
+  const [remark, setRemark] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [recent, setRecent] = useState([]) // [{ profile, count, last }]
+
+  useEffect(() => { loadRecent(); if (initialCode) lookup(initialCode) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadRecent = async () => {
+    const { data } = await supabase.from('profile_notes')
+      .select('profile_id, note, created_at').like('note', SHARED_MATCH_NOTE_PREFIX + '%')
+      .order('created_at', { ascending: false }).limit(1000)
+    const byProfile = new Map()
+    for (const r of data || []) {
+      const cur = byProfile.get(r.profile_id) || { ids: new Set(), last: r.created_at }
+      parseSharedMatchNote(r.note).ids.forEach(id => cur.ids.add(id))
+      byProfile.set(r.profile_id, cur)
+    }
+    const ids = [...byProfile.keys()].slice(0, 50)
+    if (!ids.length) { setRecent([]); return }
+    const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code').in('id', ids)
+    const pById = Object.fromEntries((profs || []).map(p => [p.id, p]))
+    setRecent(ids.filter(id => pById[id]).map(id => ({ profile: pById[id], count: byProfile.get(id).ids.size, last: byProfile.get(id).last })))
+  }
+
+  const lookup = async (raw = code) => {
+    const c = parseProfileIds(raw)[0]
+    setError(''); setClient(null); setEntries([]); setLinkCodes([])
+    if (!c) return
+    setBusy(true)
+    const { data: prof } = await supabase.from('profiles').select('*').ilike('profile_code', c).maybeSingle()
+    if (!prof) { setBusy(false); setError(`No profile found with ID ${c}`); return }
+    const [{ data: notes }, { data: links }] = await Promise.all([
+      supabase.from('profile_notes').select('id, note, created_at').eq('profile_id', prof.id)
+        .like('note', SHARED_MATCH_NOTE_PREFIX + '%').order('created_at', { ascending: false }),
+      supabase.from('share_links').select('profile_id').eq('client_profile_id', prof.id),
+    ])
+    const linkIds = [...new Set((links || []).map(l => l.profile_id))]
+    let codes = []
+    if (linkIds.length) {
+      const { data: lp } = await supabase.from('profiles').select('profile_code').in('id', linkIds)
+      codes = (lp || []).map(p => (p.profile_code || '').toUpperCase()).filter(Boolean)
+    }
+    setClient(prof); setCode(prof.profile_code); setEntries(notes || []); setLinkCodes(codes)
+    setBusy(false)
+  }
+
+  const manualIds = useMemo(() => {
+    const s = new Set()
+    entries.forEach(e => parseSharedMatchNote(e.note).ids.forEach(id => s.add(id)))
+    return s
+  }, [entries])
+  const allSent = useMemo(() => new Set([...manualIds, ...linkCodes]), [manualIds, linkCodes])
+
+  const pasted = parseProfileIds(paste)
+  const alreadySent = pasted.filter(id => allSent.has(id))
+  const fresh = pasted.filter(id => !allSent.has(id) && id !== (client?.profile_code || '').toUpperCase())
+
+  const save = async () => {
+    if (!client || !fresh.length) return
+    setBusy(true)
+    const { data, error: err } = await supabase.from('profile_notes').insert({
+      profile_id: client.id, staff_user_id: staffUser.user_id, note: formatSharedMatchNote(fresh, remark),
+    }).select('id, note, created_at').single()
+    setBusy(false)
+    if (err) { showToast('Could not save: ' + err.message); return }
+    setEntries(prev => [data, ...prev]); setPaste(''); setRemark('')
+    showToast(`Logged ${fresh.length} ${fresh.length === 1 ? 'match' : 'matches'}${alreadySent.length ? ` (skipped ${alreadySent.length} already sent)` : ''}`)
+    loadRecent()
+  }
+
+  const remove = async (entry) => {
+    if (!window.confirm('Delete this entry?')) return
+    const { error: err } = await supabase.from('profile_notes').delete().eq('id', entry.id)
+    if (err) { showToast('Could not delete: ' + err.message); return }
+    setEntries(prev => prev.filter(e => e.id !== entry.id))
+    loadRecent()
+  }
+
+  return (
+    <div style={{ maxWidth: 640, margin: '0 auto', padding: '20px' }}>
+      <ToastView />
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back</button>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Shared Matches</h2>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:16}}>
+        Enter a client's profile ID to see how many matches were already sent to them, and log new ones by pasting their IDs.
+      </div>
+
+      <div style={{display:'flex',gap:8,marginBottom:16}}>
+        <input className="form-input" placeholder="Client profile ID, e.g. RV4H8NMM" value={code}
+          onChange={e=>setCode(e.target.value)} onKeyDown={e=>{ if (e.key === 'Enter') lookup() }}
+          style={{flex:1,fontFamily:'monospace',textTransform:'uppercase'}} />
+        <button className="btn btn-black btn-sm" disabled={busy || !code.trim()} onClick={()=>lookup()}>{busy && !client ? 'Finding…' : 'Open'}</button>
+      </div>
+      {error && <div style={{fontSize:12,color:'#dc2626',marginBottom:12}}>{error}</div>}
+
+      {client && (
+        <div className="list-row" style={{display:'flex',flexDirection:'column',gap:12,marginBottom:20}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+            <div>
+              <div style={{fontWeight:600,fontSize:15,cursor:onOpenProfile?'pointer':'default'}} onClick={()=>onOpenProfile && onOpenProfile(client)}>{client.full_name}</div>
+              <div style={{fontSize:12,color:'#8e8e8e',fontFamily:'monospace'}}>ID {client.profile_code}{client.gender ? ' · ' + client.gender : ''}{client.city ? ' · ' + client.city : ''}</div>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <div style={{fontSize:26,fontWeight:600,lineHeight:1}}>{allSent.size}</div>
+              <div style={{fontSize:11,color:'#8e8e8e'}}>matches sent</div>
+            </div>
+          </div>
+
+          <div>
+            <label className="form-label">Paste match IDs sent to this client</label>
+            <textarea className="form-input" rows={3} placeholder="One or many IDs — commas, spaces or new lines all work"
+              value={paste} onChange={e=>setPaste(e.target.value)} style={{fontFamily:'monospace',textTransform:'uppercase',resize:'vertical'}} />
+            <input className="form-input" placeholder="Note (optional), e.g. sent biodata on WhatsApp" value={remark}
+              onChange={e=>setRemark(e.target.value)} style={{marginTop:8}} />
+            {pasted.length > 0 && (
+              <div style={{fontSize:12,marginTop:6,color:'#555'}}>
+                {fresh.length} new{alreadySent.length > 0 && <span style={{color:'#b45309'}}> · already sent before: {alreadySent.join(', ')}</span>}
+              </div>
+            )}
+            <button className="btn btn-black btn-sm" style={{marginTop:8}} disabled={busy || !fresh.length} onClick={save}>
+              {busy ? 'Saving…' : `Log ${fresh.length || ''} ${fresh.length === 1 ? 'match' : 'matches'}`}
+            </button>
+          </div>
+
+          {entries.length > 0 && (
+            <div>
+              <div className="admin-section-header">Logged manually ({manualIds.size})</div>
+              {entries.map(e => {
+                const { ids, remark: r } = parseSharedMatchNote(e.note)
+                return (
+                  <div key={e.id} style={{display:'flex',gap:8,alignItems:'flex-start',padding:'8px 0',borderBottom:'1px solid rgba(0,0,0,0.06)',fontSize:12}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:'#8e8e8e',fontSize:11}}>{new Date(e.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {ids.length}</div>
+                      <div style={{fontFamily:'monospace',wordBreak:'break-word'}}>{ids.join(', ')}</div>
+                      {r && <div style={{color:'#555'}}>{r}</div>}
+                    </div>
+                    <button className="btn btn-outline btn-sm" style={{padding:'4px 6px'}} title="Copy IDs"
+                      onClick={()=>navigator.clipboard?.writeText(ids.join(', ')).then(()=>showToast('IDs copied'))}><Copy size={12} /></button>
+                    <button className="btn btn-outline btn-sm" style={{padding:'4px 6px',color:'#dc2626'}} title="Delete entry"
+                      onClick={()=>remove(e)}><Trash2 size={12} /></button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {linkCodes.length > 0 && (
+            <div>
+              <div className="admin-section-header">Sent via share links ({new Set(linkCodes).size})</div>
+              <div style={{fontFamily:'monospace',fontSize:12,wordBreak:'break-word'}}>{[...new Set(linkCodes)].join(', ')}</div>
+            </div>
+          )}
+          {allSent.size > 0 && (
+            <button className="btn btn-outline btn-sm" style={{alignSelf:'flex-start'}}
+              onClick={()=>navigator.clipboard?.writeText([...allSent].join(', ')).then(()=>showToast('All sent IDs copied'))}>
+              <Copy size={12} style={{verticalAlign:'-2px',marginRight:4}} />Copy all {allSent.size} sent IDs
+            </button>
+          )}
+        </div>
+      )}
+
+      {recent.length > 0 && (
+        <div>
+          <div className="admin-section-header">Recently logged clients</div>
+          {recent.map(({ profile: rp, count, last }) => (
+            <div key={rp.id} className="list-row" style={{display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer',marginBottom:6,padding:'10px 12px'}}
+              onClick={()=>{ setCode(rp.profile_code); setPaste(''); lookup(rp.profile_code) }}>
+              <div>
+                <div style={{fontWeight:500,fontSize:13}}>{rp.full_name}</div>
+                <div style={{fontSize:11,color:'#8e8e8e',fontFamily:'monospace'}}>ID {rp.profile_code} · last {new Date(last).toLocaleDateString('en-IN')}</div>
+              </div>
+              <div style={{fontWeight:600}}>{count}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ShareLinkContactView({ staffUser, onBack }) {
   const [showToast, ToastView] = useToast()
   const isAdmin = staffUser.role === 'admin'
