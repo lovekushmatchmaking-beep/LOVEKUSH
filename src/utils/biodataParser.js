@@ -9,7 +9,7 @@
 import {
   RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES, EDUCATIONS, DEGREE_OPTIONS, HEIGHT_RANGES,
   INCOME_RANGES, MARITAL_STATUSES, MANGLIK_OPTIONS, COMPLEXIONS, DIETS, BLOOD_GROUPS,
-  PROFESSION_CATEGORIES, COUNTRIES,
+  PROFESSION_CATEGORIES, COUNTRIES, FAMILY_TYPES,
 } from '../constants/profileOptions'
 import { RASHIS, NAKSHATRAS } from './astrology'
 
@@ -45,12 +45,27 @@ const LABELS = [
   ['blood_group', /(blood\s*group|रक्त\s*समूह)/i],
   ['brothers', /(brothers?|भाई)/i],
   ['sisters', /(sisters?|बहन|बहनें)/i],
+  ['family_city', /(family\s*(city|residence|location|lives?\s*in)|परिवार\s*(का)?\s*निवास)/i],
   ['city', /(current\s*city|city|residing\s*(at|in)|location|शहर|निवास)/i],
+  ['state', /(state|राज्य|प्रदेश)/i],
   ['native_place', /(native\s*place|native|hometown|मूल\s*निवास|पैतृक\s*गांव)/i],
   ['nationality', /(nationality|citizenship|राष्ट्रीयता)/i],
   ['phone', /(mobile|phone|contact\s*(no|number)?|whatsapp|मोबाइल|संपर्क)/i],
   ['email', /(e-?mail|ईमेल)/i],
+  ['family_type', /(family\s*type|परिवार\s*(का)?\s*प्रकार)/i],
+  ['smoking', /(smok\w*|धूम्रपान)/i],
+  ['drinking', /(drink\w*|alcohol|शराब|मद्यपान)/i],
+  ['own_house', /(own\s*house|house|home|मकान|घर)/i],
+  ['vehicle', /(vehicle|car|two[\s-]*wheeler|वाहन|गाड़ी)/i],
+  ['college', /(college|university|institute|कॉलेज|विश्वविद्यालय)/i],
+  ['hobbies', /(hobbies|hobby|interests|शौक)/i],
+  ['about_me', /(about\s*(me|myself|him|her|the\s*(boy|girl|candidate))|self\s*description|introduction|परिचय)/i],
+  ['partner_notes', /(partner\s*(expectations?|preferences?|requirements?)|expectations?(\s*from\s*partner)?|looking\s*for|जीवनसाथी\s*(से)?\s*अपेक्षा|अपेक्षा)/i],
 ]
+
+// In labels ki value aksar kai lines mein hoti hai (paragraph) — agli
+// lines bhi jodte hain jab tak koi naya "Label :" ya section heading na aaye.
+const MULTILINE_KEYS = ['about_me', 'partner_notes', 'hobbies']
 
 const HUMAN_LABELS = {
   name: 'Name', dob: 'Date of Birth', birth_time: 'Birth Time', birth_place: 'Birth Place',
@@ -62,11 +77,17 @@ const HUMAN_LABELS = {
   mother_profession: "Mother's Profession", brothers: 'Brothers', sisters: 'Sisters',
   city: 'City', native_place: 'Native Place', nationality: 'Nationality', phone: 'Phone',
   email: 'Email', gender: 'Gender', weight: 'Weight', father_name: "Father's Name", mother_name: "Mother's Name",
+  family_city: 'Family City', state: 'State', family_type: 'Family Type', smoking: 'Smoking', drinking: 'Drinking',
+  own_house: 'Own House', vehicle: 'Vehicle', college: 'College', hobbies: 'Hobbies', about_me: 'About',
+  partner_notes: 'Partner Expectations',
 }
 
 const DEVANAGARI_DIGITS = '०१२३४५६७८९'
 const normDigits = (s) => s.replace(/[०-९]/g, d => String(DEVANAGARI_DIGITS.indexOf(d)))
 const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+// "FAMILY DETAILS", "PARTNER PREFERENCE" jaise chhote all-caps headings
+const isSectionHeading = (line) => line.length <= 40 && /[A-Z]/.test(line) && line === line.toUpperCase()
 
 // ---- Text -> { labelKey: rawValue } ----
 export function extractLabeledValues(text) {
@@ -90,6 +111,11 @@ export function extractLabeledValues(text) {
       // "Name :" akela line pe ho to value agli line mein hoti hai
       if (!value && lines[i + 1] && !/:/.test(lines[i + 1])) value = lines[i + 1].trim()
       value = value.replace(/^[:\-–=|\s]+/, '').trim()
+      if (value && MULTILINE_KEYS.includes(key)) {
+        while (lines[i + 1] && !/[:=|]/.test(lines[i + 1]) && !isSectionHeading(lines[i + 1]) && value.length < 1000) {
+          value += ' ' + lines[++i]
+        }
+      }
       if (value) { out[key] = value; break }
     }
   }
@@ -403,6 +429,47 @@ export function parseName(raw) {
   }
 }
 
+// "62 kg", "62kg", "62" -> existing WEIGHT_RANGES slab
+export function parseWeight(raw) {
+  const m = String(raw).match(/(\d{2,3}(?:\.\d+)?)/)
+  if (!m) return null
+  const kg = parseFloat(m[1])
+  if (kg < 30 || kg > 200) return null
+  if (kg < 45) return 'Below 45kg'
+  if (kg < 55) return '45–55kg'
+  if (kg < 65) return '55–65kg'
+  if (kg < 75) return '65–75kg'
+  if (kg < 85) return '75–85kg'
+  return 'Above 85kg'
+}
+
+// Smoking/Drinking -> HABITS (Never / Occasionally / Yes)
+export function parseHabit(raw) {
+  const s = String(raw).toLowerCase()
+  if (/occasional|social|sometimes|कभी/.test(s)) return 'Occasionally'
+  if (/^(no|nil|none|never|non|nahi|नहीं)|non[\s-]*(smok|drink|alcohol)|never|don'?t|doesn'?t|teetotal/.test(s)) return 'Never'
+  if (/^(yes|regular|हाँ|हां)|regularly|smokes|drinks/.test(s)) return 'Yes'
+  return null
+}
+
+export function parseYesNo(raw) {
+  const s = String(raw).toLowerCase().trim()
+  if (/^(yes|own|owned|haan|हाँ|हां|है|apna|अपना)/.test(s)) return 'Yes'
+  if (/^(no|rent|rented|nahi|नहीं|किराय)/.test(s)) return 'No'
+  return null
+}
+
+export function parseVehicle(raw) {
+  const s = String(raw).toLowerCase()
+  const car = /car|four[\s-]*wheeler|कार/.test(s)
+  const two = /two[\s-]*wheeler|bike|scooty|scooter|motorcycle|बाइक/.test(s)
+  if (car && two) return 'Both'
+  if (car) return 'Car'
+  if (two) return 'Two-Wheeler'
+  if (/^(no|nil|none|nahi|नहीं)/.test(s.trim())) return 'No'
+  return null
+}
+
 // ---- Main: text -> fields for CreateProfile form ----
 // Returns { values: {formKey: value}, found: [{label, raw, shown}], unmatched: [{label, raw}] }
 export function parseBiodataText(text, { includeContact = false } = {}) {
@@ -489,6 +556,19 @@ export function parseBiodataText(text, { includeContact = false } = {}) {
   })
   tryField('city', v => { const c = v.split(',')[0].trim().slice(0, 60); return c ? { fields: { city: c }, shown: c } : null })
   tryField('native_place', v => ({ fields: { native_place: v.slice(0, 80) }, shown: v.slice(0, 80) }))
+  const freeText = (key, max) => (v) => { const t = v.slice(0, max).trim(); return t ? { fields: { [key]: t }, shown: t.length > 60 ? t.slice(0, 60) + '…' : t } : null }
+  tryField('family_city', freeText('family_city', 60))
+  tryField('state', freeText('state', 60))
+  tryField('weight', single('weight', parseWeight))
+  tryField('family_type', single('family_type', v => /joint|संयुक्त/i.test(v) ? 'Joint' : /nuclear|एकल/i.test(v) ? 'Nuclear' : matchOption(v, FAMILY_TYPES)))
+  tryField('smoking', single('smoking', parseHabit))
+  tryField('drinking', single('drinking', parseHabit))
+  tryField('own_house', single('own_house', parseYesNo))
+  tryField('vehicle', single('vehicle_ownership', parseVehicle))
+  tryField('college', freeText('college_name', 100))
+  tryField('hobbies', freeText('hobbies', 300))
+  tryField('about_me', freeText('about_me', 1000))
+  tryField('partner_notes', freeText('partner_notes', 1000))
   if (includeContact) {
     tryField('phone', v => {
       const d = v.replace(/[^\d+]/g, '').replace(/^\+?91(?=\d{10}$)/, '')

@@ -99,3 +99,35 @@ test('tolerates OCR misreading the colon', () => {
   expect(extractLabeledValues('Rashi + Vrishabh\nManglik No').rashi).toBe('Vrishabh')
   expect(extractLabeledValues('Rashi + Vrishabh\nManglik No').manglik).toBe('No')
 })
+
+// Pasted text in the format the "Copy ChatGPT prompt" button asks for
+const CHATGPT_FORMAT = `Name: Rahul Kushwaha
+Gender: Male
+Date of Birth: 03/08/1995
+Height: 5'9"
+Weight: 72 kg
+Smoking: Never
+Drinking: Occasionally
+State: Uttar Pradesh
+Family Type: Joint
+Family City: Varanasi
+Own House: Yes
+Vehicle: Car and bike
+College: IIT Kanpur
+Hobbies: Cricket, music
+About Me: Calm and family oriented.
+Works in Noida, visits home every month.
+Partner Expectations: Educated girl from a cultured family.
+Mobile: 9876543210`
+
+test('parses ChatGPT-formatted pasted text including extra fields', () => {
+  const { values } = parseBiodataText(CHATGPT_FORMAT, { includeContact: true })
+  expect(values).toMatchObject({
+    first_name: 'Rahul', last_name: 'Kushwaha', gender: 'Male', date_of_birth: '1995-08-03',
+    weight: '65–75kg', smoking: 'Never', drinking: 'Occasionally', state: 'Uttar Pradesh',
+    family_type: 'Joint', family_city: 'Varanasi', own_house: 'Yes', vehicle_ownership: 'Both',
+    college_name: 'IIT Kanpur', hobbies: 'Cricket, music',
+    about_me: 'Calm and family oriented. Works in Noida, visits home every month.',
+    partner_notes: 'Educated girl from a cultured family.', client_phone: '9876543210',
+  })
+})
