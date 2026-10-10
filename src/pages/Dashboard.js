@@ -6,6 +6,8 @@ import MatchSearch from './MatchSearch'
 import ProfileView from './ProfileView'
 import ActivityTab from './ActivityTab'
 import SearchByProfileId from './SearchByProfileId'
+import ProfileFilterGroups from '../components/ProfileFilterGroups'
+import { profileMatchesFilters, profileMatchesSearch, activeFilterKeys, filterChips, MEMBER_SEARCH_COLUMNS } from '../utils/profileFilters'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import {
@@ -109,6 +111,12 @@ export default function Dashboard({ user }) {
   const [myIntroductions, setMyIntroductions] = useState([]) // introductions (Talk/Meeting requests) involving me
   const [myPhotoRequests, setMyPhotoRequests] = useState([]) // photo_requests (Request Photo) involving me — sent + received
   const [viewingMatchId, setViewingMatchId] = useState(null) // set when a match card is tapped, opens ProfileView
+  // Matches tab quick search + filters (2026-10-10, universal search ask) —
+  // narrows the already-loaded match list by any public profile field.
+  // Saved "Search" preferences (MatchSearch.js) still decide who's a match.
+  const [matchQuery, setMatchQuery] = useState('')
+  const [matchFilters, setMatchFilters] = useState({})
+  const [showMatchFilters, setShowMatchFilters] = useState(false)
   const [receivedActions, setReceivedActions] = useState([]) // match_actions rows where target = me (others' interest in me)
   const [profileViewsCount, setProfileViewsCount] = useState(0)
   const [activityViewProfile, setActivityViewProfile] = useState(null) // set when a row in Activity tab is tapped, opens ProfileView
@@ -686,6 +694,34 @@ export default function Dashboard({ user }) {
               <span style={{flex:1}}>What are you looking for?</span>
               <SlidersHorizontal size={18} />
             </div>
+            {profile.profile_status === 'active' && matches.length > 0 && (() => {
+              const chips = filterChips(matchFilters, setMatchFilters)
+              return (
+                <div style={{marginTop:-6,marginBottom:16}}>
+                  <div style={{display:'flex',gap:8}}>
+                    <input className="form-input" value={matchQuery} onChange={e=>setMatchQuery(e.target.value)}
+                      placeholder="Search matches: ID, city, caste, education..." style={{flex:1,minWidth:0,fontSize:13}} />
+                    <button className={'btn btn-sm ' + (showMatchFilters ? 'btn-primary' : 'btn-outline')} style={{flex:'0 0 auto'}}
+                      onClick={()=>setShowMatchFilters(v=>!v)}>
+                      <SlidersHorizontal size={14} /> Filters{activeFilterKeys(matchFilters).length > 0 ? ` (${activeFilterKeys(matchFilters).length})` : ''}
+                    </button>
+                  </div>
+                  {showMatchFilters && (
+                    <div style={{marginTop:10}}>
+                      <ProfileFilterGroups scope="member" values={matchFilters} onChange={setMatchFilters} optionRows={matches} />
+                    </div>
+                  )}
+                  {(chips.length > 0 || matchQuery) && (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:10}}>
+                      {chips.map(c => (
+                        <button key={c.key} className="chip chip-muted" style={{textTransform:'none',cursor:'pointer',border:'none'}} onClick={c.clear}>{c.label} ✕</button>
+                      ))}
+                      <button className="btn btn-outline btn-sm" onClick={()=>{ setMatchFilters({}); setMatchQuery('') }}>Clear all</button>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
             {profile.profile_status !== 'active' ? (
               <EmptyState icon={ShieldCheck} title="Matches unlock after verification"
                 text="Once our team verifies your profile, it goes live and your matches appear here"
@@ -693,9 +729,12 @@ export default function Dashboard({ user }) {
             ) : matches.length === 0 ? (
               <EmptyState icon={Heart} title="No matches yet" text="A complete profile gets better matches"
                 action={<button className="btn btn-soft btn-sm" onClick={()=>setActiveTab('editprofile')}><Pencil size={14} /> Complete profile</button>} />
+            ) : !matches.some(m => profileMatchesSearch(m, matchQuery, MEMBER_SEARCH_COLUMNS) && profileMatchesFilters(m, matchFilters)) ? (
+              <EmptyState icon={Search} title="No matches for this search" text="Try fewer words or remove a filter"
+                action={<button className="btn btn-soft btn-sm" onClick={()=>{ setMatchFilters({}); setMatchQuery('') }}>Clear search & filters</button>} />
             ) : (
               <div style={{display:'flex',flexDirection:'column',gap:14}}>
-                {matches.map((m)=>(
+                {matches.filter(m => profileMatchesSearch(m, matchQuery, MEMBER_SEARCH_COLUMNS) && profileMatchesFilters(m, matchFilters)).map((m)=>(
                   <MatchCard key={m.id} match={m} viewerProfileId={profile.id} viewerIsPremium={!!profile.is_premium}
                     myAction={myActions.find(a => a.target_profile_id === m.id)?.action || null}
                     introSent={myIntroductions.some(i => i.from_profile === profile.id && i.to_profile === m.id)}
