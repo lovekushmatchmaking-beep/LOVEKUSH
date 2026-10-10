@@ -35,7 +35,12 @@ function useDataUrlForPhoto(photo) {
   return dataUrl
 }
 
-export default function BiodataView({ profile: p, photo, onBack }) {
+// `shareAsUserId`: Admin passes the logged-in staff member's user_id — admin
+// view mein "Link" button har profile par dikhe (admin-created profiles ka
+// user_id null hota hai, isliye pehle button mobile View Profile par gayab
+// tha), aur link staff ke naam se bane (share_links RLS: created_by =
+// auth.uid()) taaki Share Links screen mein bhi dikhe.
+export default function BiodataView({ profile: p, photo, onBack, shareAsUserId }) {
   const nodeRef = useRef(null)
   const [busy, setBusy] = useState('') // '' | 'download' | 'share'
   const [toast, setToast] = useState('')
@@ -88,8 +93,8 @@ export default function BiodataView({ profile: p, photo, onBack }) {
   const handleShareLink = async () => {
     setBusy('link')
     try {
-      const link = await generateShareLink(p.id, p.user_id)
-      const text = `My profile on LOVEKUSH (${p.profile_code})`
+      const link = await generateShareLink(p.id, shareAsUserId || p.user_id)
+      const text = shareAsUserId ? `Profile from LOVEKUSH (${p.profile_code})` : `My profile on LOVEKUSH (${p.profile_code})`
       const shared = await nativeShare({ title: 'LOVEKUSH Profile', text, url: link.url })
       // Share sheet na khule (desktop, ya browser ne await ke baad block
       // kiya) to link yahin dikhate hain — WhatsApp/Copy button ke saath.
@@ -108,7 +113,7 @@ export default function BiodataView({ profile: p, photo, onBack }) {
         <button className="btn btn-outline" style={{ flex: 1 }} onClick={handleShare} disabled={!!busy}>
           <Share2 size={16} /> {busy === 'share' ? 'Generating...' : 'Share'}
         </button>
-        {p.user_id && (
+        {(shareAsUserId || p.user_id) && (
           <button className="btn btn-outline" style={{ flex: 1 }} onClick={handleShareLink} disabled={!!busy}>
             <Link2 size={16} /> {busy === 'link' ? 'Creating...' : 'Link'}
           </button>
