@@ -18,6 +18,9 @@ import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS, LEAD_SOURCE_OPTIONS, p
   LIVING_WITH_PARENTS_OPTIONS, PROFESSION_CATEGORIES } from '../constants/profileOptions'
 import DualRangeSlider from '../components/DualRangeSlider'
 import CheckboxDropdown from '../components/CheckboxDropdown'
+import ProfileFilterGroups from '../components/ProfileFilterGroups'
+import { applyFiltersToQuery, applySearchToQuery, profileMatchesFilters, profileMatchesSearch, activeFilterKeys,
+  filterChips, fieldsForScope, ADMIN_SEARCH_COLUMNS, searchTokens, withDataOptions, OPTION_COLUMNS } from '../utils/profileFilters'
 import CreateProfile from './CreateProfile'
 import BiodataView from './BiodataView'
 import { EditProfileForm } from './Dashboard'
@@ -215,11 +218,19 @@ function ListSearch({ value, onChange, placeholder }) {
   )
 }
 
+// Multi-word (2026-10-10, universal search): every word must match some
+// field — "ramesh delhi" or a phone typed as "+91 98765 43210" both work.
 const matchesSearch = (q, ...fields) => {
-  const needle = q.trim().toLowerCase()
-  if (!needle) return true
-  return fields.some(f => f && String(f).toLowerCase().includes(needle))
+  const tokens = searchTokens(q).map(t => t.toLowerCase())
+  if (tokens.length === 0) return true
+  const hay = fields.filter(f => f != null && f !== '').map(f => {
+    const str = String(f).toLowerCase()
+    return str + ' ' + str.replace(/\D/g, '')
+  }).join(' | ')
+  return tokens.every(t => hay.includes(t))
 }
+// Searchable bits of a profile row for the queue lists.
+const profileSearchBits = (p) => p ? [p.full_name, p.profile_code, p.client_phone, p.city, p.client_email] : []
 
 // "now" in the local <input type="datetime-local"> format (no timezone,
 // minute precision) — used as `min` so past dates can't be picked (audit
@@ -353,6 +364,10 @@ export default function Admin({ staffUser }) {
   const DEFAULT_FILTERS = {
     religion: [], community: [], city: '', gender: '',
     ageMin: '', ageMax: '', maritalStatus: [], education: [], assignedToMe: false,
+    // Universal filters (Aryan's ask, 2026-10-10: "saari fields se filter
+    // kar sakoon") — every other profile field, keyed by column name, from
+    // the shared catalog in utils/profileFilters.js.
+    extra: {},
   }
   // Filters panel ab apna last-used state (open/closed + jo filters chune
   // the) localStorage mein yaad rakhta hai, taaki roz same filter (jaise
@@ -373,6 +388,7 @@ export default function Admin({ staffUser }) {
       ;['religion', 'community', 'maritalStatus', 'education'].forEach(k => {
         if (!Array.isArray(merged[k])) merged[k] = merged[k] ? [merged[k]] : []
       })
+      if (!merged.extra || typeof merged.extra !== 'object') merged.extra = {}
       return merged
     } catch { return DEFAULT_FILTERS }
   })
@@ -380,6 +396,18 @@ export default function Admin({ staffUser }) {
   useEffect(() => {
     try { localStorage.setItem('admin_filters_open', showFilters ? '1' : '0') } catch {}
   }, [showFilters])
+  // Real values present in the data (imported profiles often use values
+  // outside the fixed option lists) — loaded once, only when the filter
+  // panel is opened, and only the dropdown columns.
+  const [filterOptionRows, setFilterOptionRows] = useState(null)
+  useEffect(() => {
+    if (!showFilters || filterOptionRows) return
+    supabase.from('profiles').select(OPTION_COLUMNS.join(',')).limit(5000)
+      .then(({ data, error }) => {
+        if (error) console.error('Filter options load failed:', error.message)
+        setFilterOptionRows(data || [])
+      })
+  }, [showFilters, filterOptionRows])
   useEffect(() => {
     try { localStorage.setItem('admin_filters_state', JSON.stringify(filters)) } catch {}
   }, [filters])
@@ -505,15 +533,13 @@ export default function Admin({ staffUser }) {
     if (activeTab !== 'all') q = q.eq('profile_status', activeTab)
 
     if (search) {
-      // PostgREST ke .or() syntax mein comma/bracket jaise characters
-      // special meaning rakhte hain — search text se hata dete hain
-      // taaki koi query-syntax error na aaye ya unexpected result na mile.
-      const safeSearch = search.replace(/[,()%*]/g, '')
-      if (safeSearch) {
-        // Registered mobile number (client_phone) bhi search karte hain —
-        // partial match, taaki pura number yaad na ho to bhi profile mil jaaye.
-        q = q.or(`profile_code.ilike.%${safeSearch}%,full_name.ilike.%${safeSearch}%,client_phone.ilike.%${safeSearch}%`)
-      }
+      // Universal search (2026-10-10): pehle sirf Profile ID / name / phone
+      // dekhta tha. Ab har shabd (word) ~30 text fields mein dhoondha jaata
+      // hai — city, caste, gotra, job, employer, college, email, alternate
+      // phone, bureau, about me... — aur har word match hona chahiye, to
+      // "kushwaha delhi" sirf Delhi ke Kushwaha laata hai. Special
+      // characters applySearchToQuery khud hata deta hai.
+      q = applySearchToQuery(q, search, ADMIN_SEARCH_COLUMNS)
     }
     if (filters.religion.length > 0) q = q.in('religion', filters.religion)
     if (filters.community.length > 0) q = q.in('community', filters.community)
@@ -524,6 +550,7 @@ export default function Admin({ staffUser }) {
     if (filters.ageMin) q = q.gte('age', parseInt(filters.ageMin))
     if (filters.ageMax) q = q.lte('age', parseInt(filters.ageMax))
     if (filters.assignedToMe) q = q.eq('managed_by_staff_id', staffUser.user_id)
+    q = applyFiltersToQuery(q, filters.extra)
 
     return q
   }
@@ -607,7 +634,8 @@ export default function Admin({ staffUser }) {
 
   // Arrays (religion/community/maritalStatus/education) count as "active"
   // only when non-empty — Boolean([]) is otherwise always true.
-  const activeFilterCount = Object.values(filters).filter(v => Array.isArray(v) ? v.length > 0 : Boolean(v)).length
+  const activeFilterCount = Object.entries(filters).filter(([k, v]) => k !== 'extra' && (Array.isArray(v) ? v.length > 0 : Boolean(v))).length
+    + activeFilterKeys(filters.extra).length
   // Status bhi ab ek filter field ki tarah count hota hai (combined Search &
   // Filter control) — "X results found", Filters badge aur "Clear all" teeno
   // search + status + panel filters ko ek saath treat karte hain.
@@ -632,10 +660,11 @@ export default function Admin({ staffUser }) {
       key: k + ':' + v, label: v,
       clear: () => setFilters(f => ({ ...f, [k]: f[k].filter(x => x !== v) })),
     }))),
-    ...Object.entries(filters).filter(([k, v]) => !Array.isArray(v) && v).map(([k, v]) => ({
+    ...Object.entries(filters).filter(([k, v]) => k !== 'extra' && !Array.isArray(v) && v).map(([k, v]) => ({
       key: k, label: FILTER_CHIP_LABELS[k] ? FILTER_CHIP_LABELS[k](v) : String(v),
       clear: () => setFilters(f => ({ ...f, [k]: DEFAULT_FILTERS[k] })),
     })),
+    ...filterChips(filters.extra, v => setFilters(f => ({ ...f, extra: v }))),
   ]
 
   const logAuditEntry = (action, entityId, metadata) => writeAuditLog(staffUser, action, entityId, metadata)
@@ -855,6 +884,27 @@ export default function Admin({ staffUser }) {
       showToast('Could not load candidates: ' + error.message)
       setMatchesLoading(false)
       return
+    }
+
+    // profiles_public_view mein kuch filterable fields nahi hain
+    // (profession, employment type, living with parents, family income,
+    // languages...) — isliye Find Matches ke wo filters pehle har match ko
+    // hata dete the. Staff ke liye sirf un filter columns ko `profiles` se
+    // laake candidates mein jodte hain (masked name/employer/college wahi
+    // rehte hain — sirf missing filter fields add hote hain).
+    const extraCols = fieldsForScope('matches').map(f => f.key).filter(k => !(candidates || []).some(c => k in c))
+    if (extraCols.length > 0 && (candidates || []).length > 0) {
+      const ids = candidates.map(c => c.id)
+      const chunks = []
+      for (let i = 0; i < ids.length; i += 100) chunks.push(ids.slice(i, i + 100))
+      const extraRows = (await Promise.all(chunks.map(chunk =>
+        supabase.from('profiles').select(['id', ...extraCols].join(',')).in('id', chunk)
+      ))).flatMap(r => r.data || [])
+      const extraById = Object.fromEntries(extraRows.map(r => [r.id, r]))
+      candidates.forEach(c => {
+        const extra = extraById[c.id]
+        if (extra) extraCols.forEach(k => { c[k] = extra[k] })
+      })
     }
 
     const ranked = rankMatches(profile, candidates || [])
@@ -1118,7 +1168,8 @@ export default function Admin({ staffUser }) {
             <Search size={14} color="#8e8e8e" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             <input
               type="text"
-              placeholder="Search name or phone..."
+              placeholder="Search ID, name, phone, city, caste, job..."
+              title="Har word match hota hai — e.g. 'kushwaha delhi engineer'. Profile ID, name, phone, email, city, state, caste, gotra, profession, employer, college, family, bureau, about me — sab mein dhoondta hai."
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
               style={{
@@ -1176,9 +1227,9 @@ export default function Admin({ staffUser }) {
           <div className="list-row" style={{ marginBottom: 0 }}>
             <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Religion & Community</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-              <CheckboxDropdown options={RELIGIONS} selected={filters.religion}
+              <CheckboxDropdown options={withDataOptions(RELIGIONS, filterOptionRows, 'religion')} selected={filters.religion}
                 onChange={v=>setFilters(f=>({...f,religion:v}))} placeholder="Any Religion" />
-              <CheckboxDropdown options={CASTES} selected={filters.community}
+              <CheckboxDropdown options={withDataOptions(CASTES, filterOptionRows, 'community')} selected={filters.community}
                 onChange={v=>setFilters(f=>({...f,community:v}))} placeholder="Any Community" />
             </div>
 
@@ -1198,15 +1249,21 @@ export default function Admin({ staffUser }) {
 
             <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Marital Status & Education</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <CheckboxDropdown options={MARITAL_STATUSES} selected={filters.maritalStatus}
+              <CheckboxDropdown options={withDataOptions(MARITAL_STATUSES, filterOptionRows, 'marital_status')} selected={filters.maritalStatus}
                 onChange={v=>setFilters(f=>({...f,maritalStatus:v}))} placeholder="Any Marital Status" />
-              <CheckboxDropdown options={EDUCATIONS} selected={filters.education}
+              <CheckboxDropdown options={withDataOptions(EDUCATIONS, filterOptionRows, 'education')} selected={filters.education}
                 onChange={v=>setFilters(f=>({...f,education:v}))} placeholder="Any Education" />
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 14, cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.assignedToMe} onChange={e=>setFilters(f=>({...f,assignedToMe:e.target.checked}))} />
               Assigned to me only <span style={{ color: '#8e8e8e', fontSize: 13 }}>(all statuses — today's pending to-dos are in Queues → My Queue)</span>
             </label>
+
+            {/* Every other profile field — universal filters (2026-10-10) */}
+            <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '16px 0 6px' }}>All profile fields</div>
+            <ProfileFilterGroups scope="admin" values={filters.extra} optionRows={filterOptionRows}
+              onChange={v => setFilters(f => ({ ...f, extra: v }))}
+              exclude={['religion', 'community', 'city', 'marital_status', 'education']} />
             {totalFilterCount > 0 && (
               <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={clearAllSearchFilters}>Clear all</button>
             )}
@@ -1244,7 +1301,7 @@ export default function Admin({ staffUser }) {
         {!loading && profiles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#8e8e8e', fontSize: 14 }}>
             {search || activeFilterCount > 0
-              ? <>No profiles match your search. Try a different Profile ID, name, phone number, or fewer filters.</>
+              ? <>No profiles match your search. Try fewer words, a different Profile ID/name/phone/city, or fewer filters.</>
               : 'No profiles in this category'}
           </div>
         ) : (
@@ -1832,6 +1889,8 @@ function FunnelView({ profiles, capped, refreshKey }) {
 function DuplicateLeadsView({ onBack, onOpenProfile }) {
   const [loading, setLoading] = useState(true)
   const [groups, setGroups] = useState([])
+  const [query, setQuery] = useState('')
+  const visibleGroups = groups.filter(g => matchesSearch(query, g.value, ...g.profiles.flatMap(profileSearchBits)))
 
   useEffect(() => { load() }, [])
 
@@ -1851,14 +1910,17 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Duplicate Leads</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles sharing the same phone number or email — same person registered twice?</div>
+      {groups.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search name, Profile ID, phone, email, city..." />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Checking...</div>
       ) : groups.length === 0 ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No duplicate phone numbers or emails found. 🎉</div>
+      ) : visibleGroups.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No duplicates match "{query}".</div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
-          {groups.map(g => (
+          {visibleGroups.map(g => (
             <div key={g.key} className="list-row">
               <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
                 <Copy size={14} color="#dc2626" />
@@ -1887,6 +1949,11 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
 }
 
 // ===== FIND MATCHES VIEW — reuses existing matching.js, adds masked sharing =====
+// Search box columns for the loaded match list (public view + the filter
+// columns findMatchesForProfile adds).
+const FIND_MATCHES_SEARCH_COLUMNS = ['profile_code', 'full_name', 'city', 'state', 'country', 'family_city',
+  'native_place', 'religion', 'community', 'sub_caste', 'gotra', 'mother_tongue', 'education', 'degree',
+  'profession', 'employment_type', 'father_profession', 'mother_profession', 'about_me']
 // All of a profile's filled fields, grouped and compact — Aryan asked
 // (voice note, 2026-10-10) that opening a profile's full view in Find
 // Matches should show every field that's filled in, however many there
@@ -2043,8 +2110,14 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
     // More filters (Aryan's ask, 2026-10-10): complexion, profession/
     // employment status, mother tongue, living with parents — same
     // multi-select pattern, same existing option lists, no new fields.
-    complexion: [], profession: [], employmentType: [], motherTongue: [], livingWithParents: [] }
+    complexion: [], profession: [], employmentType: [], motherTongue: [], livingWithParents: [],
+    // Universal filters (2026-10-10) — every other profile field, same
+    // catalog as the Admin Profiles list (utils/profileFilters.js).
+    extra: {} }
   const [showFilters, setShowFilters] = useState(false)
+  // Quick search across the loaded matches — Profile ID, city, caste,
+  // gotra, education, profession... every word must match.
+  const [matchQuery, setMatchQuery] = useState('')
   // Age/height/income ab slider-based range hain (DualRangeSlider, same
   // component jo member-facing Search screen par use hota hai) — pehle
   // number-input/text the (Aryan's ask, 2026-10-09: "filter mein sliders
@@ -2059,9 +2132,14 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
     + (filters.ageMin !== showFiltersDefault.ageMin || filters.ageMax !== showFiltersDefault.ageMax ? 1 : 0)
     + (filters.heightMin !== showFiltersDefault.heightMin || filters.heightMax !== showFiltersDefault.heightMax ? 1 : 0)
     + (filters.incomeMin !== showFiltersDefault.incomeMin || filters.incomeMax !== showFiltersDefault.incomeMax || filters.incomeCurrency !== showFiltersDefault.incomeCurrency ? 1 : 0)
+    + activeFilterKeys(filters.extra).length
+  const extraChips = filterChips(filters.extra, v => setFilter('extra', v))
+  const resultProfiles = useMemo(() => results.map(r => r.profile), [results])
 
   const filteredResults = results.filter(r => {
     const o = r.profile
+    if (!profileMatchesSearch(o, matchQuery, FIND_MATCHES_SEARCH_COLUMNS)) return false
+    if (!profileMatchesFilters(o, filters.extra)) return false
     if (o.age && (o.age < filters.ageMin || o.age > filters.ageMax)) return false
     if (filters.city && !(o.city || '').toLowerCase().includes(filters.city.trim().toLowerCase())) return false
     if (filters.state && !(o.state || '').toLowerCase().includes(filters.state.trim().toLowerCase())) return false
@@ -2226,6 +2304,12 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
 
       {!loading && results.length > 0 && (
         <div style={{marginBottom:14}}>
+          <div style={{position:'relative',marginBottom:8}}>
+            <Search size={14} color="#8e8e8e" style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}} />
+            <input type="text" className="form-input" value={matchQuery} onChange={e=>setMatchQuery(e.target.value)}
+              placeholder="Search matches — ID, city, caste, gotra, education, job..."
+              style={{paddingLeft:34,fontSize:13}} />
+          </div>
           <button className="btn btn-outline btn-sm" onClick={()=>setShowFilters(v=>!v)}>
             <SlidersHorizontal size={14} style={{verticalAlign:'-2px',marginRight:4}} />
             {showFilters ? 'Hide filters' : 'Filter results'}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
@@ -2272,19 +2356,19 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
               </div>
               <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
                 <div style={{maxWidth:180,flex:'1 1 160px'}}>
-                  <CheckboxDropdown options={RELIGIONS} selected={filters.religion}
+                  <CheckboxDropdown options={withDataOptions(RELIGIONS, resultProfiles, 'religion')} selected={filters.religion}
                     onChange={v=>setFilter('religion', v)} placeholder="All religions" />
                 </div>
                 <div style={{maxWidth:200,flex:'1 1 180px'}}>
-                  <CheckboxDropdown options={CASTES} selected={filters.community}
+                  <CheckboxDropdown options={withDataOptions(CASTES, resultProfiles, 'community')} selected={filters.community}
                     onChange={v=>setFilter('community', v)} placeholder="All castes / communities" />
                 </div>
                 <div style={{maxWidth:190,flex:'1 1 170px'}}>
-                  <CheckboxDropdown options={MARITAL_STATUSES} selected={filters.maritalStatus}
+                  <CheckboxDropdown options={withDataOptions(MARITAL_STATUSES, resultProfiles, 'marital_status')} selected={filters.maritalStatus}
                     onChange={v=>setFilter('maritalStatus', v)} placeholder="All marital statuses" />
                 </div>
                 <div style={{maxWidth:190,flex:'1 1 170px'}}>
-                  <CheckboxDropdown options={EDUCATIONS} selected={filters.education}
+                  <CheckboxDropdown options={withDataOptions(EDUCATIONS, resultProfiles, 'education')} selected={filters.education}
                     onChange={v=>setFilter('education', v)} placeholder="All education levels" />
                 </div>
                 {/* More filters (Aryan's ask, 2026-10-10): complexion,
@@ -2292,27 +2376,39 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                     with parents — same CheckboxDropdown pattern, same
                     existing option lists. */}
                 <div style={{maxWidth:180,flex:'1 1 160px'}}>
-                  <CheckboxDropdown options={COMPLEXIONS} selected={filters.complexion}
+                  <CheckboxDropdown options={withDataOptions(COMPLEXIONS, resultProfiles, 'complexion')} selected={filters.complexion}
                     onChange={v=>setFilter('complexion', v)} placeholder="All complexions" />
                 </div>
                 <div style={{maxWidth:190,flex:'1 1 170px'}}>
-                  <CheckboxDropdown options={PROFESSION_CATEGORIES} selected={filters.profession}
+                  <CheckboxDropdown options={withDataOptions(PROFESSION_CATEGORIES, resultProfiles, 'profession')} selected={filters.profession}
                     onChange={v=>setFilter('profession', v)} placeholder="All professions" />
                 </div>
                 <div style={{maxWidth:190,flex:'1 1 170px'}}>
-                  <CheckboxDropdown options={EMPLOYMENT_TYPES} selected={filters.employmentType}
+                  <CheckboxDropdown options={withDataOptions(EMPLOYMENT_TYPES, resultProfiles, 'employment_type')} selected={filters.employmentType}
                     onChange={v=>setFilter('employmentType', v)} placeholder="All employment types" />
                 </div>
                 <div style={{maxWidth:190,flex:'1 1 170px'}}>
-                  <CheckboxDropdown options={MOTHER_TONGUES} selected={filters.motherTongue}
+                  <CheckboxDropdown options={withDataOptions(MOTHER_TONGUES, resultProfiles, 'mother_tongue')} selected={filters.motherTongue}
                     onChange={v=>setFilter('motherTongue', v)} placeholder="All mother tongues" />
                 </div>
                 <div style={{maxWidth:190,flex:'1 1 170px'}}>
-                  <CheckboxDropdown options={LIVING_WITH_PARENTS_OPTIONS} selected={filters.livingWithParents}
+                  <CheckboxDropdown options={withDataOptions(LIVING_WITH_PARENTS_OPTIONS, resultProfiles, 'living_with_parents')} selected={filters.livingWithParents}
                     onChange={v=>setFilter('livingWithParents', v)} placeholder="Living with parents: Any" />
                 </div>
                 {activeFilterCount > 0 && <button className="btn btn-outline btn-sm" onClick={clearFilters}>Clear filters</button>}
               </div>
+              <div style={{fontSize:12,color:'#8e8e8e',letterSpacing:'0.08em',textTransform:'uppercase',margin:'4px 0 6px'}}>All profile fields</div>
+              <ProfileFilterGroups scope="matches" values={filters.extra} onChange={v=>setFilter('extra', v)} optionRows={resultProfiles}
+                exclude={['religion', 'community', 'marital_status', 'education', 'complexion', 'profession',
+                  'employment_type', 'mother_tongue', 'living_with_parents', 'city', 'state']} />
+            </div>
+          )}
+          {extraChips.length > 0 && (
+            <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:8}}>
+              {extraChips.map(c => (
+                <button key={c.key} className="chip chip-muted" style={{textTransform:'none',cursor:'pointer',border:'none'}}
+                  onClick={c.clear} title="Remove this filter">{c.label} ✕</button>
+              ))}
             </div>
           )}
         </div>
@@ -2326,7 +2422,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
         </div>
       ) : filteredResults.length === 0 ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
-          No matches meet these filters. <button className="btn btn-outline btn-sm" style={{marginLeft:6}} onClick={clearFilters}>Clear filters</button>
+          No matches meet these filters{matchQuery ? ` / "${matchQuery}"` : ''}. <button className="btn btn-outline btn-sm" style={{marginLeft:6}} onClick={()=>{ clearFilters(); setMatchQuery('') }}>Clear filters</button>
         </div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -3193,7 +3289,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   // isn't limited to whichever tab/page happens to be on screen.
   const filteredRequests = (searchResults ?? requests).filter(r => {
     const a = profilesById[r.from_profile], b = profilesById[r.to_profile]
-    return matchesSearch(query, a?.full_name, a?.profile_code, a?.client_phone, b?.full_name, b?.profile_code, b?.client_phone, r.request_id)
+    return matchesSearch(query, ...profileSearchBits(a), ...profileSearchBits(b), r.request_id, r.request_type, r.status, coordStatusLabel(r.status), r.location)
   })
 
   return (
@@ -3201,7 +3297,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} label={backLabel} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:14}}>Coordination Requests</h2>
-      {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by name, Profile ID, mobile or Request ID..." />}
+      {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search name, Profile ID, mobile, city, Request ID, status..." />}
 
       {/* Tab labels spelled out (audit 2026-10-08, P0 #9: "Open" and
           "Pending" read as contradictory statuses when both are just
@@ -3585,6 +3681,7 @@ function VerificationQueueView({ staffUser, onBack }) {
   // as the Profiles list's bulk Approve/Block (audit 2026-10-08, P2 #15).
   const [selectedReq, setSelectedReq] = useState(new Set())
   const [bulkRequesting, setBulkRequesting] = useState(false)
+  const [query, setQuery] = useState('')
   const toggleReqSelected = (id) => setSelectedReq(prev => {
     const next = new Set(prev)
     next.has(id) ? next.delete(id) : next.add(id)
@@ -3637,10 +3734,12 @@ function VerificationQueueView({ staffUser, onBack }) {
     setBulkRequesting(false)
   }
 
+  // Search (2026-10-10) — loaded queue rows by name/ID/phone/city.
+  const searched = profiles.filter(p => matchesSearch(query, ...profileSearchBits(p)))
   const sections = [
-    { key: 'review', title: 'Selfie received — compare & verify', items: profiles.filter(p => p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'selfie_requested')) },
-    { key: 'request', title: 'New sign-ups — request a selfie', items: profiles.filter(p => !p.is_admin_managed && ['not_started', 'rejected'].includes(p.verification_status || 'not_started') && !p.id_document_uploaded) },
-    { key: 'waiting', title: 'Waiting for the user\'s selfie', items: profiles.filter(p => p.verification_status === 'selfie_requested') },
+    { key: 'review', title: 'Selfie received — compare & verify', items: searched.filter(p => p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'selfie_requested')) },
+    { key: 'request', title: 'New sign-ups — request a selfie', items: searched.filter(p => !p.is_admin_managed && ['not_started', 'rejected'].includes(p.verification_status || 'not_started') && !p.id_document_uploaded) },
+    { key: 'waiting', title: 'Waiting for the user\'s selfie', items: searched.filter(p => p.verification_status === 'selfie_requested') },
   ]
 
   return (
@@ -3649,11 +3748,14 @@ function VerificationQueueView({ staffUser, onBack }) {
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Verification Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Self-signup profiles go live only after their selfie is matched with their photo and verified</div>
+      {profiles.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search name, Profile ID, phone, city..." />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
       ) : profiles.length === 0 ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Nothing waiting on verification right now.</div>
+      ) : searched.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No profiles in this queue match "{query}".</div>
       ) : sections.filter(sec => sec.items.length > 0).map(sec => (
         <div key={sec.key} style={{marginBottom:24}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
@@ -3894,6 +3996,10 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   // bulk burst of new profiles/requests can be spread out instead of
   // landing on whoever happens to click first (scale audit #8).
   const [staffWorkload, setStaffWorkload] = useState(null) // null = not loaded / not admin
+  // One search box across every My Queue section (2026-10-10, universal
+  // search ask) — name / Profile ID / phone / city / note / location.
+  const [query, setQuery] = useState('')
+  const inQueue = (list, bitsOf) => list.filter(x => matchesSearch(query, ...bitsOf(x)))
 
   useEffect(() => { load() }, [])
 
@@ -3996,12 +4102,13 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>My Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Coordination requests, today's follow-ups, your assigned profiles, and new submissions</div>
+      {!loading && <ListSearch value={query} onChange={setQuery} placeholder="Search across My Queue — name, Profile ID, phone, city, note..." />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
       ) : (
         <>
-          <Section icon={ThumbsUp} title="Clients interested in shared matches" items={shareInterest}
+          <Section icon={ThumbsUp} title="Clients interested in shared matches" items={inQueue(shareInterest, s => [...profileSearchBits(s.shownProfile), ...profileSearchBits(s.clientProfile), s.share_id])}
             empty="No unread interest from share links right now."
             renderItem={s => (
               <div key={s.id} className="list-row" style={{borderColor:'#16a34a',background:'#f0fdf4'}}>
@@ -4026,7 +4133,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                 </div>
               </div>
             )} />
-          <Section icon={Handshake} title="Coordination requests awaiting response" items={pendingCoordination}
+          <Section icon={Handshake} title="Coordination requests awaiting response" items={inQueue(pendingCoordination, r => [...profileSearchBits(r.fromProfile), ...profileSearchBits(r.toProfile), r.request_id, r.request_type])}
             empty="Nothing waiting on a member right now."
             renderItem={r => (
               <div key={r.id} className="list-row">
@@ -4051,7 +4158,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                 </div>
               </div>
             )} />
-          <Section icon={CalendarClock} title="Calls & meetings (next 7 days)" items={upcomingMeetings} empty="Nothing scheduled."
+          <Section icon={CalendarClock} title="Calls & meetings (next 7 days)" items={inQueue(upcomingMeetings, m => [...profileSearchBits(m.fromProfile), ...profileSearchBits(m.toProfile), m.request_id, m.location])} empty="Nothing scheduled."
             hint={meetingsTotal > upcomingMeetings.length ? `Showing the first ${upcomingMeetings.length} — +${meetingsTotal - upcomingMeetings.length} more scheduled this week. Manage from Coordination Requests to see them all.` : null}
             renderItem={m => (
               <div key={m.id} className="list-row" style={isToday(m.scheduled_at) ? { borderColor: '#2563eb' } : {}}>
@@ -4086,8 +4193,8 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                 </div>
               </div>
             )} />
-          <FollowUpsSection items={overdueFollowUps} onOpenProfile={onOpenProfile} />
-          <Section icon={ListChecks} title="Your pending profiles (to-do)" items={assignedPending} empty="No pending profiles assigned to you."
+          <FollowUpsSection items={inQueue(overdueFollowUps, n => [...profileSearchBits(n.profiles), n.note])} onOpenProfile={onOpenProfile} />
+          <Section icon={ListChecks} title="Your pending profiles (to-do)" items={inQueue(assignedPending, profileSearchBits)} empty="No pending profiles assigned to you."
             hint="Only your assigned profiles still pending approval (up to 20). For everything assigned to you, use Profiles → Filters → Assigned to me."
             renderItem={p => (
               <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
@@ -4100,7 +4207,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                 </div>
               </div>
             )} />
-          <Section icon={Users} title="New submissions this week" items={newSubmissions} empty="No new submissions this week."
+          <Section icon={Users} title="New submissions this week" items={inQueue(newSubmissions, profileSearchBits)} empty="No new submissions this week."
             renderItem={p => (
               <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
