@@ -3737,7 +3737,10 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                 </div>
                 {/* Schedule a call/meeting time — My Queue ke "Today" section mein
                     dikhta hai. min=now blocks past dates (audit 2026-10-08, P1 #14);
-                    location field reuses introductions.location (audit P1 #15). */}
+                    location field reuses introductions.location (audit P1 #15).
+                    Guard: scheduling/rescheduling blocked on closed deals — a
+                    closed request must stay closed (audit 2026-10-10 bug fix). */}
+                {r.status !== 'closed' && (
                 <div style={{display:'flex',alignItems:'center',gap:6,marginTop:8,flexWrap:'wrap'}} onClick={e=>e.stopPropagation()}>
                   <CalendarClock size={13} color="#8e8e8e" />
                   <input type="datetime-local" className="form-input" style={{fontSize:12,padding:'7px 12px',width:190}}
@@ -3758,6 +3761,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                       onClick={()=>handleUnschedule(r.id)}>Clear</button>
                   )}
                 </div>
+                )}
                 <div style={{display:'flex',gap:6,marginTop:8,alignItems:'center'}}>
                   <OverflowMenu items={[
                     { label: 'Mark viewed', icon: Eye, onClick: () => handleMarkViewed(r.id), hidden: !!r.viewed_at },
@@ -4362,10 +4366,12 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       supabase.from('profile_notes').select('*, profiles(id, full_name, profile_code, client_phone)').lte('follow_up_at', weekFromNow).order('follow_up_at', { ascending: true }).limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, profile_status, client_phone').eq('managed_by_staff_id', staffUser.user_id).eq('profile_status', 'pending').limit(20),
       supabase.from('profiles').select('id, full_name, profile_code, age, city, created_at, client_phone').eq('profile_status', 'pending').gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(20),
-      // Scheduled calls/meetings (introductions.scheduled_at) due in the next 7 days, soonest first
-      supabase.from('introductions').select('*').gte('scheduled_at', nowIso).lte('scheduled_at', weekFromNow).order('scheduled_at', { ascending: true }).limit(20),
-      // Same window, just the count — so a burst of >20 meetings shows "+N more" instead of silently hiding them (scale audit #7)
-      supabase.from('introductions').select('*', { count: 'exact', head: true }).gte('scheduled_at', nowIso).lte('scheduled_at', weekFromNow),
+      // Scheduled calls/meetings (introductions.scheduled_at) due in the next 7 days, soonest first.
+      // Filter out closed deals — a closed deal with a past meeting date was showing indefinitely as
+      // "upcoming call" in My Queue, confusing staff into thinking it was still active (audit 2026-10-10).
+      supabase.from('introductions').select('*').gte('scheduled_at', nowIso).lte('scheduled_at', weekFromNow).neq('status', 'closed').order('scheduled_at', { ascending: true }).limit(20),
+      // Same window + same closed filter — so a burst of >20 meetings shows "+N more" instead of silently hiding them (scale audit #7)
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).gte('scheduled_at', nowIso).lte('scheduled_at', weekFromNow).neq('status', 'closed'),
       // Coordination requests awaiting the receiver's accept/decline — previously
       // invisible to admin anywhere. Folded in here per Aryan's ask (2026-10-03).
       supabase.from('introductions').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
