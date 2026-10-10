@@ -35,6 +35,13 @@ drop policy if exists "active share link viewer can view photos" on storage.obje
 create policy "active share link viewer can view photos" on storage.objects for select
   using (bucket_id = 'lovekush-photos' and public.can_view_shared_photo(name));
 
+-- Naye photo_path/photo_path_2 OUT columns jodne ke liye Postgres
+-- CREATE OR REPLACE allow nahi karta jab return type (OUT param list)
+-- badalta hai ("cannot change return type of existing function") — pehle
+-- DROP zaroori hai; dono functions turant neeche recreate ho jaate hain.
+drop function if exists public.get_shared_profile(text);
+drop function if exists public.get_shared_bundle(text);
+
 create or replace function public.get_shared_profile(p_token text)
 returns table(
   profile_code text, masked_name text, age integer, gender text, city text, state text,
