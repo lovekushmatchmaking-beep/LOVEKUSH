@@ -845,23 +845,32 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 
 .admin-sidebar {
   display: none; width: 220px; background: var(--white);
-  border-right: 1px solid var(--border); padding: 20px 10px;
-  flex-direction: column; gap: 2px;
+  border-right: 1px solid var(--border); padding: 18px 10px;
+  flex-direction: column; gap: 1px;
   position: sticky; top: 0; height: 100vh; overflow-y: auto;
 }
-.admin-sidebar-brand { padding: 4px 14px 24px; font-weight: 700; font-size: 15px; color: var(--ink); }
+.admin-sidebar-brand { padding: 4px 14px 18px; font-weight: 700; font-size: 15px; color: var(--ink); }
 
 .admin-sidebar-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px; border: none; background: transparent;
+  display: flex; align-items: center; gap: 11px;
+  padding: 8px 14px; border: none; background: transparent;
   border-radius: var(--radius-sm); font-family: var(--font-body);
-  font-size: 14px; color: var(--gray3); cursor: pointer;
+  font-size: 13.5px; color: var(--gray3); cursor: pointer;
   transition: all 0.2s var(--ease); width: 100%; text-align: left;
 }
 .admin-sidebar-item:hover { background: var(--gray1); color: var(--ink); }
 .admin-sidebar-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
 .admin-sidebar-item.danger { color: var(--danger); }
 .admin-sidebar-item.danger:hover { background: var(--danger-soft); }
+
+/* Sidebar group labels (Work / Tools) — small caps divider between flat
+   nav sections, so an expanded 10+ item sidebar still reads as grouped
+   at a glance (Aryan's 2026-10-10 sidebar-nav ask). */
+.admin-sidebar-section {
+  padding: 14px 14px 4px; font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray3);
+}
+.admin-sidebar-divider { height: 1px; background: var(--border); margin: 10px 4px; }
 
 .admin-main { flex: 1; min-width: 0; padding-bottom: 80px; }
 .admin-page { max-width: 800px; margin: 0 auto; padding: 20px 16px; }

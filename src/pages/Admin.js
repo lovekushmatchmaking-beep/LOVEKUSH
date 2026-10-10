@@ -876,6 +876,8 @@ export default function Admin({ staffUser }) {
 
   const needsAttention = (stats.needsVerification || 0) + (stats.openReports || 0)
 
+  // Mobile bottom nav stays grouped (Queues/Tools) — five tabs is already a
+  // tight fit on a phone-width bar. navItems is unchanged from before.
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', Icon: BarChart3 },
     { id: 'profiles', label: 'Profiles', Icon: Users },
@@ -883,6 +885,32 @@ export default function Admin({ staffUser }) {
     { id: 'tools', label: 'Tools', Icon: Wrench },
     { id: 'account', label: 'Account', Icon: UserRound },
   ]
+
+  // Laptop sidebar — expanded, flat list (Aryan's 2026-10-10 ask, reference
+  // wireframe: Dashboard/Profiles/Coordination/Meetings/Follow-ups/Shared
+  // Links/Reports/Templates/Settings as direct links, not grouped behind
+  // "Queues"/"Tools" tiles). Desktop only — rendered by .admin-sidebar,
+  // which is display:none below 768px (see App.css), so this doesn't
+  // affect the mobile bottom nav above.
+  const sidebarItems = [
+    { id: 'dashboard', label: 'Dashboard', Icon: BarChart3, onClick: () => switchSection('dashboard') },
+    { id: 'profiles', label: 'Profiles', Icon: Users, onClick: () => switchSection('profiles') },
+    { section: 'Work' },
+    { id: 'myQueue', label: 'My Queue', Icon: ListChecks, badge: stats.overdueFollowUps, onClick: () => goToSectionView('queues', 'myQueue') },
+    { id: 'coordinationRequests', label: 'Coordination', Icon: Handshake, badge: stats.pendingCoordination, onClick: () => goToSectionView('tools', 'coordinationRequests') },
+    { id: 'verificationQueue', label: 'Verification', Icon: ShieldAlert, badge: stats.needsVerification, onClick: () => goToSectionView('queues', 'verificationQueue') },
+    { id: 'reportsQueue', label: 'Reports', Icon: Flag, badge: stats.openReports, onClick: () => goToSectionView('queues', 'reportsQueue') },
+    { id: 'shareLinks', label: 'Share Links', Icon: Link2, badge: stats.pendingShareInterest, onClick: () => goToSectionView('tools', 'shareLinks') },
+    { section: 'Tools' },
+    { id: 'duplicateLeads', label: 'Duplicate Leads', Icon: Copy, onClick: () => goToSectionView('queues', 'duplicateLeads') },
+    { id: 'casteSuggestions', label: 'Caste Suggestions', Icon: ClipboardList, onClick: () => goToSectionView('tools', 'casteSuggestions') },
+    { id: 'whatsappTemplates', label: 'Templates', Icon: MessageCircle, onClick: () => goToSectionView('tools', 'whatsappTemplates') },
+    { section: null },
+    { id: 'account', label: 'Account', Icon: UserRound, onClick: () => switchSection('account') },
+  ]
+  const isSidebarItemActive = (it) => (it.id === 'dashboard' || it.id === 'profiles' || it.id === 'account')
+    ? effectiveSection === it.id && view === 'list'
+    : view === it.id
   const sectionForView = { verificationQueue:'queues', reportsQueue:'queues', myQueue:'queues', duplicateLeads:'queues', casteSuggestions:'tools', coordinationRequests:'tools', shareLinks:'tools', createClient:'profiles', editProfile:'profiles', fullProfile:'profiles', findMatches:'profiles' }
   const effectiveSection = view === 'list' ? section : (sectionForView[view] || section)
   const switchSection = (s) => { if (view !== 'list') navigate(-1); setSectionOnly(s) }
@@ -940,13 +968,17 @@ export default function Admin({ staffUser }) {
         <div className="admin-sidebar-brand">
           <span className="gradient-text" style={{ fontFamily:'var(--font-display)', fontSize: 13, fontWeight:600, letterSpacing:'0.3em' }}>ADMIN</span>
         </div>
-        {navItems.map(it => (
-          <button key={it.id} className={'admin-sidebar-item' + (effectiveSection === it.id ? ' active' : '')}
-            onClick={() => switchSection(it.id)}>
-            <it.Icon size={19} />
-            <span style={{ flex: 1 }}>{it.label}</span>
-            {!!it.badge && <span className="chip chip-primary" style={{ marginLeft: 'auto' }}>{it.badge}</span>}
-          </button>
+        {sidebarItems.map((it, i) => (
+          'section' in it ? (
+            it.section ? <div key={'s' + i} className="admin-sidebar-section">{it.section}</div> : <div key={'s' + i} className="admin-sidebar-divider" />
+          ) : (
+            <button key={it.id} className={'admin-sidebar-item' + (isSidebarItemActive(it) ? ' active' : '')}
+              onClick={it.onClick}>
+              <it.Icon size={18} />
+              <span style={{ flex: 1 }}>{it.label}</span>
+              {!!it.badge && <span className="chip chip-primary" style={{ marginLeft: 'auto' }}>{it.badge}</span>}
+            </button>
+          )
         ))}
         <div style={{ padding: '0 14px 10px' }}>
           <NotificationBell userId={staffUser.user_id} onNavigate={handleNotifNavigate} align="left" />
