@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { Lock, ThumbsUp, Check } from 'lucide-react'
+import { Lock, ThumbsUp, Check, ThumbsDown } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { BrandLockup } from '../components/BrandLogo'
 import { shareSafeAboutMe } from '../utils/shareProfile'
-import { markShareLinkInterest } from '../utils/shareLinks'
+import { markShareLinkInterest, markShareLinkNotInterested } from '../utils/shareLinks'
 import ZoomablePhoto from '../components/ZoomablePhoto'
 
 // Yeh page KISI KO BHI (bina login ke) khulti hai jab woh secure share
@@ -18,16 +18,29 @@ export default function SharedProfile() {
   const [profile, setProfile] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [interestState, setInterestState] = useState(null) // null | 'sending' | 'done' | 'error'
+  // null | 'int-sending' | 'int-done' | 'int-error' | 'ni-sending' | 'ni-done'
+  const [actionState, setActionState] = useState(null)
 
   const markInterested = async () => {
-    if (interestState) return
-    setInterestState('sending')
+    if (actionState) return
+    setActionState('int-sending')
     try {
       await markShareLinkInterest(token)
-      setInterestState('done')
+      setActionState('int-done')
     } catch (err) {
-      setInterestState('error')
+      setActionState('int-error')
+    }
+  }
+
+  const markNotInterested = async () => {
+    if (actionState) return
+    setActionState('ni-sending')
+    try {
+      await markShareLinkNotInterested(token)
+      setActionState('ni-done')
+    } catch (err) {
+      // Silently ignore errors — client doesn't need to know
+      setActionState('ni-done')
     }
   }
 
@@ -171,38 +184,84 @@ export default function SharedProfile() {
             {renderRows(familyRows)}
           </>}
 
-          <button
-            onClick={markInterested}
-            disabled={interestState === 'sending' || interestState === 'done'}
-            style={{
+          {/* Action buttons — Interested + Not for me (Aryan, 2026-10-10).
+              "Not for me" is subtle (outlined, smaller) so it doesn't look
+              like a rejection form; after tapping, neutral "Thanks for
+              browsing" — no negative language shown to client. */}
+          {actionState === 'ni-done' ? (
+            <div style={{marginTop:16,padding:'12px 0',textAlign:'center',fontSize:13,color:'#8e8e8e'}}>
+              Thanks for browsing.
+            </div>
+          ) : actionState === 'int-done' ? (
+            <button disabled style={{
               marginTop:16, width:'100%', padding:'12px 0', borderRadius:10, border:'none',
               fontSize:14, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-              background: interestState === 'done' ? '#ecfdf5' : '#111',
-              color: interestState === 'done' ? '#16a34a' : '#fff',
-              cursor: interestState === 'done' ? 'default' : 'pointer',
+              background:'#ecfdf5', color:'#16a34a', cursor:'default',
             }}>
-            {interestState === 'done'
-              ? (<><Check size={14} /> Marked as Interested — we'll be in touch</>)
-              : (<><ThumbsUp size={14} /> {interestState === 'sending' ? 'Sending...' : 'Interested'}</>)}
-          </button>
-          {interestState === 'error' && (
+              <Check size={14} /> Marked as Interested — we'll be in touch
+            </button>
+          ) : (
+            <div style={{marginTop:16,display:'flex',gap:8}}>
+              <button
+                onClick={markInterested}
+                disabled={!!actionState}
+                style={{
+                  flex:1, padding:'12px 0', borderRadius:10, border:'none',
+                  fontSize:14, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                  background:'#111', color:'#fff', cursor: actionState ? 'default' : 'pointer',
+                }}>
+                <ThumbsUp size={14} /> {actionState === 'int-sending' ? 'Sending...' : 'Interested'}
+              </button>
+              <button
+                onClick={markNotInterested}
+                disabled={!!actionState}
+                style={{
+                  padding:'12px 14px', borderRadius:10, border:'1px solid #e5e5e5',
+                  fontSize:13, fontWeight:500, display:'flex', alignItems:'center', gap:5,
+                  background:'#fff', color:'#8e8e8e', cursor: actionState ? 'default' : 'pointer',
+                }}
+                title="Not for me">
+                <ThumbsDown size={14} /> Not for me
+              </button>
+            </div>
+          )}
+          {actionState === 'int-error' && (
             <div style={{marginTop:6,fontSize:11,color:'#dc2626',textAlign:'center'}}>
               Could not send. Please try again, or contact LOVEKUSH directly.
             </div>
           )}
         </div>
 
-        <div style={{marginTop:20,fontSize:12,color:'#8e8e8e',textAlign:'center',lineHeight:1.6}}>
-          Contact details are shared confidentially — please reach your Relationship Manager.<br/>
+        {/* RM contact — highlighted box so Aryan's name/number clearly
+            stands out (Aryan, 2026-10-10: "bold aur highlight hona chahiye,
+            dikhna chahiye acche se"). */}
+        <div style={{marginTop:20,borderRadius:12,border:'1.5px solid #e5e5e5',background:'#fafafa',padding:'14px 16px',textAlign:'center'}}>
+          <div style={{fontSize:11,color:'#8e8e8e',marginBottom:6,letterSpacing:'0.03em',textTransform:'uppercase',fontWeight:600}}>
+            Your Relationship Manager
+          </div>
           {(profile.rm_name || profile.rm_phone || profile.rm_email) ? (
             <>
-              {profile.rm_name && <strong style={{color:'#111'}}>{profile.rm_name}</strong>}
-              {profile.rm_name && (profile.rm_phone || profile.rm_email) && ' · '}
-              {profile.rm_phone && <a href={`tel:${profile.rm_phone.replace(/\s+/g,'')}`} style={{color:'inherit'}}>{profile.rm_phone}</a>}
-              {profile.rm_phone && profile.rm_email && ' · '}
-              {profile.rm_email && <a href={`mailto:${profile.rm_email}`} style={{color:'inherit'}}>{profile.rm_email}</a>}
+              {profile.rm_name && (
+                <div style={{fontSize:16,fontWeight:700,color:'#111',marginBottom:4}}>{profile.rm_name}</div>
+              )}
+              <div style={{display:'flex',justifyContent:'center',gap:12,flexWrap:'wrap'}}>
+                {profile.rm_phone && (
+                  <a href={`tel:${profile.rm_phone.replace(/\s+/g,'')}`}
+                    style={{fontSize:15,fontWeight:700,color:'#111',textDecoration:'none',letterSpacing:'0.02em'}}>
+                    {profile.rm_phone}
+                  </a>
+                )}
+                {profile.rm_email && (
+                  <a href={`mailto:${profile.rm_email}`}
+                    style={{fontSize:13,fontWeight:500,color:'#555',textDecoration:'none'}}>
+                    {profile.rm_email}
+                  </a>
+                )}
+              </div>
             </>
-          ) : 'Please contact LOVEKUSH Matchmaking Services.'}
+          ) : (
+            <div style={{fontSize:13,color:'#555'}}>Please contact LOVEKUSH Matchmaking Services.</div>
+          )}
         </div>
 
         <div style={{marginTop:16,fontSize:10,color:'#bbb',textAlign:'center'}}>

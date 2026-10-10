@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { Lock, ThumbsUp, Check } from 'lucide-react'
+import { Lock, ThumbsUp, Check, ThumbsDown } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { BrandLockup } from '../components/BrandLogo'
 import { shareSafeAboutMe } from '../utils/shareProfile'
-import { markShareLinkInterest } from '../utils/shareLinks'
+import { markShareLinkInterest, markShareLinkNotInterested } from '../utils/shareLinks'
 import ZoomablePhoto from '../components/ZoomablePhoto'
 
 // Ek hi link mein kai matches (Admin "Find Matches" se chune hue) — bina
@@ -18,19 +18,30 @@ export default function SharedMatches() {
   const [profiles, setProfiles] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  // token -> 'sending' | 'done' | error message — client (no login) ke
-  // "👍 Interested" tap ko server mein likhta hai (audit gap, 2026-10-05):
-  // pehle yahan koi action hi nahi tha, sirf "Profile ID reply karo" text.
-  const [interest, setInterest] = useState({})
+  // token -> null | 'int-sending' | 'int-done' | 'int-error' | 'ni-sending' | 'ni-done'
+  // Client (no login) ke action ko server mein likhta hai (audit gap, 2026-10-05).
+  const [actionStates, setActionStates] = useState({})
 
-  const markInterested = async (token) => {
-    if (interest[token]) return
-    setInterest(prev => ({ ...prev, [token]: 'sending' }))
+  const markInterested = async (tok) => {
+    if (actionStates[tok]) return
+    setActionStates(prev => ({ ...prev, [tok]: 'int-sending' }))
     try {
-      await markShareLinkInterest(token)
-      setInterest(prev => ({ ...prev, [token]: 'done' }))
+      await markShareLinkInterest(tok)
+      setActionStates(prev => ({ ...prev, [tok]: 'int-done' }))
     } catch (err) {
-      setInterest(prev => ({ ...prev, [token]: 'error' }))
+      setActionStates(prev => ({ ...prev, [tok]: 'int-error' }))
+    }
+  }
+
+  const markNotInterested = async (tok) => {
+    if (actionStates[tok]) return
+    setActionStates(prev => ({ ...prev, [tok]: 'ni-sending' }))
+    try {
+      await markShareLinkNotInterested(tok)
+      setActionStates(prev => ({ ...prev, [tok]: 'ni-done' }))
+    } catch (err) {
+      // Silently ignore errors — client doesn't need to know
+      setActionStates(prev => ({ ...prev, [tok]: 'ni-done' }))
     }
   }
 
@@ -149,21 +160,47 @@ export default function SharedMatches() {
                     <span style={{fontWeight:500,textAlign:'right'}}>{v}</span>
                   </div>
                 ))}
-                <button
-                  onClick={()=>markInterested(p.token)}
-                  disabled={interest[p.token] === 'sending' || interest[p.token] === 'done'}
-                  style={{
+                {/* Action buttons — same two-button pattern as SharedProfile
+                    (Aryan, 2026-10-10). "Not for me" → neutral "Thanks for
+                    browsing" so client never feels bad. */}
+                {actionStates[p.token] === 'ni-done' ? (
+                  <div style={{marginTop:14,padding:'11px 0',textAlign:'center',fontSize:13,color:'#8e8e8e'}}>
+                    Thanks for browsing.
+                  </div>
+                ) : actionStates[p.token] === 'int-done' ? (
+                  <button disabled style={{
                     marginTop:14, width:'100%', padding:'11px 0', borderRadius:10, border:'none',
                     fontSize:13, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                    background: interest[p.token] === 'done' ? '#ecfdf5' : '#111',
-                    color: interest[p.token] === 'done' ? '#16a34a' : '#fff',
-                    cursor: interest[p.token] === 'done' ? 'default' : 'pointer',
+                    background:'#ecfdf5', color:'#16a34a', cursor:'default',
                   }}>
-                  {interest[p.token] === 'done'
-                    ? (<><Check size={14} /> Marked as Interested — we'll be in touch</>)
-                    : (<><ThumbsUp size={14} /> {interest[p.token] === 'sending' ? 'Sending...' : 'Interested'}</>)}
-                </button>
-                {interest[p.token] === 'error' && (
+                    <Check size={14} /> Marked as Interested — we'll be in touch
+                  </button>
+                ) : (
+                  <div style={{marginTop:14,display:'flex',gap:8}}>
+                    <button
+                      onClick={()=>markInterested(p.token)}
+                      disabled={!!actionStates[p.token]}
+                      style={{
+                        flex:1, padding:'11px 0', borderRadius:10, border:'none',
+                        fontSize:13, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                        background:'#111', color:'#fff', cursor: actionStates[p.token] ? 'default' : 'pointer',
+                      }}>
+                      <ThumbsUp size={14} /> {actionStates[p.token] === 'int-sending' ? 'Sending...' : 'Interested'}
+                    </button>
+                    <button
+                      onClick={()=>markNotInterested(p.token)}
+                      disabled={!!actionStates[p.token]}
+                      style={{
+                        padding:'11px 12px', borderRadius:10, border:'1px solid #e5e5e5',
+                        fontSize:12, fontWeight:500, display:'flex', alignItems:'center', gap:5,
+                        background:'#fff', color:'#8e8e8e', cursor: actionStates[p.token] ? 'default' : 'pointer',
+                      }}
+                      title="Not for me">
+                      <ThumbsDown size={14} /> Not for me
+                    </button>
+                  </div>
+                )}
+                {actionStates[p.token] === 'int-error' && (
                   <div style={{marginTop:6,fontSize:11,color:'#dc2626',textAlign:'center'}}>
                     Could not send. Please try again, or reply with the Profile ID.
                   </div>
@@ -173,17 +210,35 @@ export default function SharedMatches() {
           })}
         </div>
 
-        <div style={{marginTop:20,fontSize:12,color:'#8e8e8e',textAlign:'center',lineHeight:1.6}}>
-          Contact details are shared confidentially — please reach your Relationship Manager.<br/>
+        {/* RM contact — highlighted box (Aryan, 2026-10-10: "bold aur
+            highlight hona chahiye, dikhna chahiye acche se"). */}
+        <div style={{marginTop:20,borderRadius:12,border:'1.5px solid #e5e5e5',background:'#fafafa',padding:'14px 16px',textAlign:'center'}}>
+          <div style={{fontSize:11,color:'#8e8e8e',marginBottom:6,letterSpacing:'0.03em',textTransform:'uppercase',fontWeight:600}}>
+            Your Relationship Manager
+          </div>
           {(profiles[0]?.rm_name || profiles[0]?.rm_phone || profiles[0]?.rm_email) ? (
             <>
-              {profiles[0].rm_name && <strong style={{color:'#111'}}>{profiles[0].rm_name}</strong>}
-              {profiles[0].rm_name && (profiles[0].rm_phone || profiles[0].rm_email) && ' · '}
-              {profiles[0].rm_phone && <a href={`tel:${profiles[0].rm_phone.replace(/\s+/g,'')}`} style={{color:'inherit'}}>{profiles[0].rm_phone}</a>}
-              {profiles[0].rm_phone && profiles[0].rm_email && ' · '}
-              {profiles[0].rm_email && <a href={`mailto:${profiles[0].rm_email}`} style={{color:'inherit'}}>{profiles[0].rm_email}</a>}
+              {profiles[0].rm_name && (
+                <div style={{fontSize:16,fontWeight:700,color:'#111',marginBottom:4}}>{profiles[0].rm_name}</div>
+              )}
+              <div style={{display:'flex',justifyContent:'center',gap:12,flexWrap:'wrap'}}>
+                {profiles[0].rm_phone && (
+                  <a href={`tel:${profiles[0].rm_phone.replace(/\s+/g,'')}`}
+                    style={{fontSize:15,fontWeight:700,color:'#111',textDecoration:'none',letterSpacing:'0.02em'}}>
+                    {profiles[0].rm_phone}
+                  </a>
+                )}
+                {profiles[0].rm_email && (
+                  <a href={`mailto:${profiles[0].rm_email}`}
+                    style={{fontSize:13,fontWeight:500,color:'#555',textDecoration:'none'}}>
+                    {profiles[0].rm_email}
+                  </a>
+                )}
+              </div>
             </>
-          ) : 'Tap "Interested" on a profile, or reply to LOVEKUSH with the Profile ID.'}
+          ) : (
+            <div style={{fontSize:13,color:'#555'}}>Please contact LOVEKUSH Matchmaking Services.</div>
+          )}
         </div>
 
         {expiresAt && (
