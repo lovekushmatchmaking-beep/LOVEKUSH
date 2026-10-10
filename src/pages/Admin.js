@@ -242,7 +242,7 @@ export default function Admin({ staffUser }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
-  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0, overdueFollowUps: 0, pendingShareInterest: 0 })
+  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0, overdueFollowUps: 0, pendingShareInterest: 0, todayMeetings: 0 })
   const [statsUpdatedAt, setStatsUpdatedAt] = useState(null)
   const [listUpdatedAt, setListUpdatedAt] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
@@ -471,6 +471,11 @@ export default function Admin({ staffUser }) {
       // acknowledged yet (audit gap, 2026-10-05) — previously this signal
       // didn't exist at all.
       supabase.from('share_links').select('*', { count: 'exact', head: true }).not('interested_at', 'is', null).is('interest_acknowledged_at', null),
+      // Today's scheduled calls/meetings — the single most time-sensitive
+      // item on a given day, so it leads the Dashboard's priority section
+      // (Aryan's ask, 2026-10-10: priority items should show first).
+      supabase.from('introductions').select('*', { count: 'exact', head: true })
+        .gte('scheduled_at', startOfToday.toISOString()).lt('scheduled_at', new Date(startOfToday.getTime() + 86400000).toISOString()),
     ])
     setStats({
       total: counts[0].count || 0,
@@ -486,6 +491,7 @@ export default function Admin({ staffUser }) {
       pendingCoordination: counts[10].count || 0,
       overdueFollowUps: counts[11].count || 0,
       pendingShareInterest: counts[12].count || 0,
+      todayMeetings: counts[13].count || 0,
     })
     setStatsUpdatedAt(new Date())
     setStatsLoading(false)
@@ -1070,29 +1076,39 @@ export default function Admin({ staffUser }) {
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Profiles</div>
-          <button className="btn btn-black btn-sm" onClick={()=>setView('createClient')}>
-            <Plus size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Create Client
+          <button className="btn btn-black btn-sm" style={{ padding: '7px 10px' }} onClick={()=>setView('createClient')} title="Create Client">
+            <Plus size={16} />
           </button>
         </div>
         <div style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          <input
-            type="text"
-            placeholder="Search name, Profile ID, or phone..."
-            value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            style={{
-              flex: 1, minWidth: 0, padding: '10px 14px', borderRadius: 'var(--radius)',
-              border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, outline: 'none',
-              background: '#fafafa',
-            }}
-          />
+          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+            <Search size={14} color="#8e8e8e" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            <input
+              type="text"
+              placeholder="Search name or phone..."
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              style={{
+                width: '100%', minWidth: 0, padding: '10px 14px 10px 34px', borderRadius: 'var(--radius)',
+                border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, outline: 'none',
+                background: '#fafafa', boxSizing: 'border-box',
+              }}
+            />
+          </div>
           <button
             className={'btn btn-sm ' + (showFilters ? 'btn-black' : 'btn-outline')}
             onClick={() => setShowFilters(!showFilters)}
-            style={{ position: 'relative', flex: '0 0 auto' }}
+            style={{ position: 'relative', flex: '0 0 auto', padding: '7px 10px' }}
+            title="Filters"
           >
-            <SlidersHorizontal size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+            <SlidersHorizontal size={14} />
+            {activeFilterCount > 0 && (
+              <span style={{ position: 'absolute', top: -4, right: -4, background: '#dc2626', color: '#fff', borderRadius: 10,
+                fontSize: 10, fontWeight: 600, minWidth: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                {activeFilterCount}
+              </span>
+            )}
           </button>
           <button className="btn btn-outline btn-sm" style={{ flex: '0 0 auto' }} onClick={() => runQuery(0)}>
             {loading ? '...' : <RefreshCw size={14} />}
@@ -1425,13 +1441,10 @@ export default function Admin({ staffUser }) {
                     </div>
 
                     {idMetadata[p.id] && (
-                      <>
-                        <div className="admin-section-header"><Info size={13} />Metadata</div>
-                        <div style={{ fontSize: 13, color: '#8e8e8e', background: '#f5f5f5', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
-                          🔒 Admin only — Profile ID <strong style={{ fontFamily: 'monospace' }}>{p.profile_code}</strong> generated {new Date(idMetadata[p.id].created_at).toLocaleString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
-                          {idMetadata[p.id].created_by && <> (staff id: {idMetadata[p.id].created_by.slice(0, 8)})</>}
-                        </div>
-                      </>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#bbb', marginBottom: 10 }}>
+                        <Info size={11} />
+                        {new Date(idMetadata[p.id].created_at).toLocaleDateString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
+                      </div>
                     )}
                     {/* View/Edit/Matches now in overflow menu at top */}
                   </div>
@@ -1457,6 +1470,11 @@ export default function Admin({ staffUser }) {
             {statsLoading ? '...' : <RefreshCw size={14} />}
           </button>
         </div>
+        {/* Today's priority — the things that actually need action today,
+            surfaced above everything else so Aryan doesn't have to hunt
+            through tabs to find out what's urgent (2026-10-10 ask: priority
+            items should show first, fewer clicks, less wasted time). */}
+        <PriorityActions stats={stats} onOpen={(v) => setView(v)} />
         {/* Stat tiles */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(90px,1fr))', gap: 6, marginBottom: 16 }}>
           {[
@@ -1557,6 +1575,45 @@ export default function Admin({ staffUser }) {
           </button>
         ))}
       </nav>
+    </div>
+  )
+}
+
+// ===== PRIORITY ACTIONS — Dashboard's "what needs me right now" row,
+// above the stat tiles. Only actionable (count > 0) items show, ranked by
+// urgency, so a review day starts with "what do I need to do" instead of
+// "let me go hunting across tabs" (Aryan's 2026-10-10 ask: priority items
+// first, fewer clicks, less wasted time). All counts already come from
+// the Dashboard's existing loadStats() — no extra fetch here.
+function PriorityActions({ stats, onOpen }) {
+  const items = [
+    { key: 'todayMeetings', count: stats.todayMeetings, label: "Today's calls & meetings", icon: CalendarClock, bg: '#eff6ff', fg: '#2563eb', view: 'myQueue' },
+    { key: 'overdueFollowUps', count: stats.overdueFollowUps, label: 'Overdue follow-ups', icon: Clock, bg: '#fef2f2', fg: '#dc2626', view: 'myQueue' },
+    { key: 'needsVerification', count: stats.needsVerification, label: 'Needs verification', icon: ShieldAlert, bg: '#fff8e1', fg: '#b45309', view: 'verificationQueue' },
+    { key: 'openReports', count: stats.openReports, label: 'Open reports', icon: Flag, bg: '#fdf4ff', fg: '#9333ea', view: 'reportsQueue' },
+    { key: 'pendingCoordination', count: stats.pendingCoordination, label: 'Awaiting response', icon: Handshake, bg: '#f5f3ff', fg: '#7c3aed', view: 'coordinationRequests' },
+    { key: 'pendingShareInterest', count: stats.pendingShareInterest, label: 'Clients interested', icon: ThumbsUp, bg: '#f0fdf4', fg: '#16a34a', view: 'shareLinks' },
+  ].filter(i => i.count > 0)
+
+  if (items.length === 0) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#16a34a', background: '#f0fdf4', borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
+        <CheckCircle2 size={16} />All caught up — nothing urgent right now.
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+      {items.map(i => (
+        <button key={i.key} type="button" onClick={() => onOpen(i.view)}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', border: 'none',
+            background: i.bg, borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}>
+          <i.icon size={16} color={i.fg} />
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: '#333' }}>{i.label}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: i.fg }}>{i.count}</span>
+        </button>
+      ))}
     </div>
   )
 }
