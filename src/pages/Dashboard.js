@@ -1670,16 +1670,15 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
   }
 
   const handleSave = async () => {
-    if(!form.first_name || !form.date_of_birth || !form.city) {
-      showToast('First Name, Date of Birth and City are required'); return
-    }
     if (!profile.is_admin_managed && form.client_phone && !normalizePhone(form.client_phone)) {
       showToast('Please enter a valid phone number'); return
     }
-    const ageCheck = validateAge(form.date_of_birth, form.gender)
-    if (!ageCheck.valid) {
-      showToast(ageCheck.message)
-      return
+    if (form.date_of_birth) {
+      const ageCheck = validateAge(form.date_of_birth, form.gender)
+      if (!ageCheck.valid) {
+        showToast(ageCheck.message)
+        return
+      }
     }
     setSaving(true)
     try {
