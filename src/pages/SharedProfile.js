@@ -5,6 +5,7 @@ import { supabase } from '../supabase'
 import { BrandLockup } from '../components/BrandLogo'
 import { shareSafeAboutMe } from '../utils/shareProfile'
 import { markShareLinkInterest } from '../utils/shareLinks'
+import ZoomablePhoto from '../components/ZoomablePhoto'
 
 // Yeh page KISI KO BHI (bina login ke) khulti hai jab woh secure share
 // link kholega. Data seedha "get_shared_profile" Postgres function se
@@ -135,7 +136,16 @@ export default function SharedProfile() {
 
         <div style={{background:'#f9f9f9',borderRadius:16,padding:24}}>
           <div style={{fontSize:20,fontWeight:600,marginBottom:4}}>{profile.full_name || profile.masked_name}</div>
-          <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20,fontFamily:'monospace'}}>{profile.profile_code}</div>
+          <div style={{fontSize:12,color:'#8e8e8e',marginBottom:16,fontFamily:'monospace'}}>{profile.profile_code}</div>
+
+          {/* Dono saved (already-compressed) photos — tap karke zoom (Aryan,
+              2026-10-10). Reuses EditPhotos ki wahi photos table/storage. */}
+          {(profile.photo_path || profile.photo_path_2) && (
+            <div style={{display:'flex',gap:10,marginBottom:20}}>
+              {profile.photo_path && <ZoomablePhoto path={profile.photo_path} alt={profile.masked_name} size={110} />}
+              {profile.photo_path_2 && <ZoomablePhoto path={profile.photo_path_2} alt={profile.masked_name} size={110} />}
+            </div>
+          )}
 
           {/* Poora naam (Aryan, 2026-10-09 — share link par full name, sirf
               contact details nahi). About Me se client-import ka raw note aur
@@ -183,7 +193,7 @@ export default function SharedProfile() {
         </div>
 
         <div style={{marginTop:20,fontSize:12,color:'#8e8e8e',textAlign:'center',lineHeight:1.6}}>
-          Contact details and photos are shared confidentially — please reach your Relationship Manager.<br/>
+          Contact details are shared confidentially — please reach your Relationship Manager.<br/>
           {(profile.rm_name || profile.rm_phone || profile.rm_email) ? (
             <>
               {profile.rm_name && <strong style={{color:'#111'}}>{profile.rm_name}</strong>}
