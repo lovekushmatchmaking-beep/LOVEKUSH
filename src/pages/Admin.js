@@ -3183,6 +3183,111 @@ function CasteSuggestionsView({ onBack, staffUser }) {
 const COORD_ALL_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'meeting_done', 'closed']
 const COORD_OPEN_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'meeting_done']
 
+// "Schedule Meeting" directly (Aryan, 2026-10-10): fix a meeting between a
+// client and one or more profiles by Profile ID — no share link / Interested
+// tap needed first. 1 client + several profiles = one meeting block (same
+// date/time/place). Each pair becomes a normal introductions row via the
+// admin_schedule_meeting RPC (migration 20261010_admin_direct_meeting.sql),
+// so Met -> 48-hour decision -> next round all work exactly as before.
+function ScheduleMeetingPanel({ staffUser, onDone, onCancel, showToast }) {
+  const [clientCode, setClientCode] = useState('')
+  const [otherCodes, setOtherCodes] = useState('')
+  const [when, setWhen] = useState('')
+  const [location, setLocation] = useState('')
+  const [byCode, setByCode] = useState({}) // PROFILE_CODE -> profile row (or null if not found)
+  const [saving, setSaving] = useState(false)
+
+  const client = parseProfileIds(clientCode)[0] || ''
+  const others = parseProfileIds(otherCodes).filter(c => c !== client)
+
+  // Live lookup so admin sees the names before fixing the meeting.
+  useEffect(() => {
+    const codes = [client, ...others].filter(c => c && !(c in byCode))
+    if (codes.length === 0) return
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('profiles').select('id, full_name, profile_code, gender, age, city').in('profile_code', codes)
+      const found = {}
+      codes.forEach(c => { found[c] = null })
+      ;(data || []).forEach(p => { found[p.profile_code.toUpperCase()] = p })
+      setByCode(prev => ({ ...prev, ...found }))
+    }, 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientCode, otherCodes])
+
+  const who = (code) => {
+    if (!(code in byCode)) return <span style={{color:'#bbb'}}>{code} — checking...</span>
+    const p = byCode[code]
+    if (!p) return <span style={{color:'#dc2626'}}>{code} — not found</span>
+    return <span>{p.gender === 'Male' ? '👦' : p.gender === 'Female' ? '👧' : '●'} {p.full_name} · {p.profile_code}{p.age ? ` · ${p.age}y` : ''}{p.city ? ` · ${p.city}` : ''}</span>
+  }
+
+  const clientRow = client ? byCode[client] : null
+  const otherRows = others.map(c => byCode[c])
+  const sameGender = clientRow && otherRows.some(o => o && o.gender && o.gender === clientRow.gender)
+  const ready = clientRow && others.length > 0 && otherRows.every(Boolean) && when && !saving
+
+  const submit = async () => {
+    if (!ready) return
+    if (new Date(when).getTime() < Date.now() - 60000) { showToast('Meeting time cannot be in the past.'); return }
+    setSaving(true)
+    const scheduledAt = new Date(when).toISOString()
+    const { data, error } = await supabase.rpc('admin_schedule_meeting', {
+      p_client: clientRow.id,
+      p_others: otherRows.map(o => o.id),
+      p_scheduled_at: scheduledAt,
+      p_location: location.trim() || null,
+    })
+    setSaving(false)
+    if (error) {
+      showToast(/admin_schedule_meeting/.test(error.message)
+        ? 'Run the 20261010_admin_direct_meeting.sql migration in Supabase first.'
+        : error.message)
+      return
+    }
+    await writeAuditLog(staffUser, 'admin_meeting_scheduled', clientRow.id, {
+      other_profile_ids: otherRows.map(o => o.id), scheduled_at: scheduledAt, location: location.trim() || null,
+      introduction_ids: (data || []).map(r => r.introduction_id),
+    })
+    showToast(`Meeting fixed with ${others.length} profile${others.length === 1 ? '' : 's'}.`)
+    onDone((data || [])[0]?.introduction_id)
+  }
+
+  return (
+    <div className="card" style={{marginBottom:16,padding:16}}>
+      <div style={{fontSize:15,fontWeight:600,marginBottom:4}}>Schedule a meeting</div>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:12}}>No share link needed. Add more than one Profile ID to fix one meeting with several profiles.</div>
+      <div className="form-group">
+        <label className="form-label">Client Profile ID</label>
+        <input className="form-input" placeholder="e.g. MB00012" value={clientCode} onChange={e=>setClientCode(e.target.value)} />
+        {client && <div style={{fontSize:12,marginTop:4}}>{who(client)}</div>}
+      </div>
+      <div className="form-group">
+        <label className="form-label">Meeting with (Profile IDs)</label>
+        <input className="form-input" placeholder="e.g. MB00045, MB00078" value={otherCodes} onChange={e=>setOtherCodes(e.target.value)} />
+        {others.map(c => <div key={c} style={{fontSize:12,marginTop:4}}>{who(c)}</div>)}
+        {sameGender && <div style={{fontSize:12,color:'#b45309',marginTop:4}}>⚠ Same gender as the client — check the Profile IDs.</div>}
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Date & time</label>
+          <input type="datetime-local" className="form-input" min={nowForDatetimeLocalMin()} value={when} onChange={e=>setWhen(e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Location</label>
+          <input className="form-input" placeholder="e.g. Cafe Coffee Day, Hazratganj" value={location} onChange={e=>setLocation(e.target.value)} />
+        </div>
+      </div>
+      <div style={{display:'flex',gap:8}}>
+        <button className="btn btn-black btn-sm" disabled={!ready} onClick={submit}>
+          {saving ? 'Saving...' : `Fix meeting${others.length > 1 ? ` (${others.length} profiles)` : ''}`}
+        </button>
+        <button className="btn btn-outline btn-sm" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  )
+}
+
 function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, staffUser }) {
   const [showToast, ToastView] = useToast()
   const [requests, setRequests] = useState([])
@@ -3210,6 +3315,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   // runs its own broader fetch across every status instead.
   const [searchResults, setSearchResults] = useState(null) // null = not searching, else rows from every status
   const [searching, setSearching] = useState(false)
+  const [showScheduler, setShowScheduler] = useState(false)
 
   const buildQuery = (forTab, from, to) => {
     let q = supabase.from('introductions').select('*').order('created_at', { ascending: false }).range(from, to)
@@ -3509,7 +3615,19 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} label={backLabel} />
-      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:14}}>Coordination Requests</h2>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+        <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,margin:0}}>Coordination Requests</h2>
+        {!showScheduler && (
+          <button className="btn btn-black btn-sm" onClick={()=>setShowScheduler(true)}>
+            <CalendarClock size={14} /> Schedule Meeting
+          </button>
+        )}
+      </div>
+      {showScheduler && (
+        <ScheduleMeetingPanel staffUser={staffUser} showToast={showToast}
+          onCancel={()=>setShowScheduler(false)}
+          onDone={()=>{ setShowScheduler(false); setQuery(''); if (tab === 'open') load(); else setTab('open') }} />
+      )}
       {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search name, Profile ID, mobile, city, Request ID, status..." />}
 
       {/* Tab labels spelled out (audit 2026-10-08, P0 #9: "Open" and
@@ -3563,6 +3681,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                     <div style={{fontSize:12,color:'#8e8e8e',marginTop:2,textTransform:'capitalize'}}>
                       {r.request_type === 'meeting' ? 'Meeting request' : 'Talk request'}
                       {r.source === 'share_link' && <span style={{marginLeft:6,color:'#16a34a'}}>· forwarded from a shared link</span>}
+                      {r.source === 'admin' && <span style={{marginLeft:6,color:'#2563eb'}}>· created by admin</span>}
                     </div>
                     <div style={{fontSize:12,color:'#bbb',marginTop:2,display:'flex',alignItems:'center',gap:8}}>
                       {new Date(r.created_at).toLocaleDateString('en-IN')}

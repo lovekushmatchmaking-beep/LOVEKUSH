@@ -155,10 +155,41 @@ Native Place: Gorakhpur
 Nationality: Indian
 Mobile: +91 98765 43210
 Email: priya@example.com
-About Me: Cheerful and grounded.`
+Weight: 55 kg
+Smoking: Never
+Drinking: Never
+College: Lucknow University
+State: Uttar Pradesh
+Family Type: Nuclear
+Family City: Lucknow
+Own House: Yes
+Vehicle: Car
+Hobbies: Reading
+About Me: Cheerful and grounded.
+Partner Expectations: Well educated, kind.`
   const { found, unmatched } = parseBiodataText(sample, { includeContact: true })
   const keys = found.map(f => f.key)
   const promptLabels = BIODATA_CHATGPT_PROMPT.split('Biodata:')[0].split('\n').filter(l => /^[A-Z][^:]*:( \(.*\))?$/.test(l))
   expect(keys.length + unmatched.length).toBe(promptLabels.length)
   expect(unmatched).toEqual([])
+})
+
+test('reads the extra profile fields from the ChatGPT prompt format', () => {
+  const { values } = parseBiodataText(`Name: Rahul Kushwaha
+Weight: 72 kg
+Smoking: Never
+Drinking: Occasionally
+State: Uttar Pradesh
+Family Type: Joint
+Family City: Varanasi
+Own House: Yes
+Vehicle: Car and bike
+College: IIT Kanpur
+Hobbies: Cricket, music
+Partner Expectations: Educated girl from a cultured family.`)
+  expect(values).toMatchObject({
+    weight: '65–75kg', smoking: 'Never', drinking: 'Occasionally', state: 'Uttar Pradesh',
+    family_type: 'Joint', family_city: 'Varanasi', own_house: 'Yes', vehicle_ownership: 'Both',
+    college_name: 'IIT Kanpur', hobbies: 'Cricket, music', partner_notes: 'Educated girl from a cultured family.',
+  })
 })
