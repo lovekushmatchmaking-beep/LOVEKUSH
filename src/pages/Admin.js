@@ -1034,6 +1034,10 @@ export default function Admin({ staffUser }) {
         <StaffManagementView staffUser={staffUser} onBack={()=>setView('list')} />
       )}
 
+      {view === 'shareContact' && (
+        <ShareLinkContactView staffUser={staffUser} onBack={()=>setView('list')} />
+      )}
+
       {view === 'whatsappTemplates' && (
         <WhatsAppTemplatesView staffUser={staffUser} onBack={()=>setView('list')} />
       )}
@@ -1510,6 +1514,12 @@ export default function Admin({ staffUser }) {
             </div>
           </div>
         </div>
+        {/* Share-link contact (2026-10-10): rm_name/rm_phone/rm_email shown on
+            every share link come from staff_users — any staff member edits
+            their own here; admin can also fix another staff member's. */}
+        <button className="btn btn-outline btn-sm" style={{ marginBottom: 16, marginRight: 8 }} onClick={() => setView('shareContact')}>
+          <Link2 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Share Link Contact
+        </button>
         {staffUser.role === 'admin' && (
           <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={() => setView('staffManagement')}>
             <UserCog size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Manage Staff
@@ -3885,6 +3895,108 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
             </div>
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+// ===== SHARE LINK CONTACT — Aryan (2026-10-10): the RM name/phone/email
+// shown on every client-facing share link (SharedProfile.js/SharedMatches.js)
+// used to be fixed (seeded once in staff_users.rm_name/rm_phone, email fell
+// back to the staff login email). This lets a staff member edit their own
+// three fields; an admin can also fix another staff member's. Saved via
+// set_share_contact() RPC (migration 20261010_editable_share_link_contact.sql)
+// — get_shared_profile/get_shared_bundle read staff_users live, so editing
+// here changes what EXISTING share links show too, not just new ones.
+function ShareLinkContactView({ staffUser, onBack }) {
+  const [showToast, ToastView] = useToast()
+  const isAdmin = staffUser.role === 'admin'
+  const [staffList, setStaffList] = useState([])
+  const [targetUserId, setTargetUserId] = useState(staffUser.user_id)
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    if (isAdmin) {
+      const { data } = await supabase.rpc('list_staff_with_email')
+      setStaffList(data || [])
+    }
+    await loadContact(staffUser.user_id)
+    setLoading(false)
+  }
+
+  const loadContact = async (userId) => {
+    const { data } = await supabase.from('staff_users')
+      .select('rm_name, rm_phone, rm_email').eq('user_id', userId).maybeSingle()
+    setName(data?.rm_name || '')
+    setPhone(data?.rm_phone || '')
+    setEmail(data?.rm_email || '')
+  }
+
+  const onPickStaff = async (userId) => {
+    setTargetUserId(userId)
+    setLoading(true)
+    await loadContact(userId)
+    setLoading(false)
+  }
+
+  const save = async () => {
+    setSaving(true)
+    const { error } = await supabase.rpc('set_share_contact', {
+      p_name: name, p_phone: phone, p_email: email,
+      p_target_user_id: isAdmin ? targetUserId : null,
+    })
+    setSaving(false)
+    if (error) { showToast(error.message); return }
+    showToast('Saved — new share links will use this contact.')
+  }
+
+  return (
+    <div style={{ maxWidth: 500, margin: '0 auto', padding: '20px' }}>
+      <ToastView />
+      <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to Account</button>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Share Link Contact</h2>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>
+        This name, phone and email show on every share link you generate, so clients know who to contact. Change it any time — it updates existing links too.
+      </div>
+
+      {isAdmin && staffList.length > 1 && (
+        <div className="form-row" style={{marginBottom:16}}>
+          <label className="form-label">Editing contact for</label>
+          <select className="form-select" value={targetUserId} onChange={e=>onPickStaff(e.target.value)}>
+            {staffList.map(s => (
+              <option key={s.user_id} value={s.user_id}>{s.email}{s.user_id === staffUser.user_id ? ' (me)' : ''}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : (
+        <div className="list-row" style={{display:'flex',flexDirection:'column',gap:12}}>
+          <div className="form-row">
+            <label className="form-label">RM Name</label>
+            <input className="form-input" placeholder="e.g. Aryan Kushwaha" value={name} onChange={e=>setName(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <label className="form-label">RM Phone</label>
+            <input className="form-input" placeholder="e.g. +91 8376981829" value={phone} onChange={e=>setPhone(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <label className="form-label">RM Email</label>
+            <input className="form-input" type="email" placeholder="e.g. rm@lovekushmatchmaking.com" value={email} onChange={e=>setEmail(e.target.value)} />
+          </div>
+          <button className="btn btn-black btn-sm" disabled={saving} onClick={save} style={{alignSelf:'flex-start'}}>
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
       )}
     </div>
   )
