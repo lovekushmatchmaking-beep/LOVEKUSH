@@ -84,6 +84,14 @@ export async function markInterestSent(linkId) {
   if (error) throw new Error('Could not update: ' + error.message)
 }
 
+// Admin ne "Not for me" signal dekh/action le liya — permanent badge se hata
+// deta hai. Requires not_interest_acknowledged_at column (migration
+// 20261010_admin_gaps.sql in supabase/migrations).
+export async function acknowledgeShareLinkNotInterested(linkId) {
+  const { error } = await supabase.from('share_links').update({ not_interest_acknowledged_at: new Date().toISOString() }).eq('id', linkId)
+  if (error) throw new Error('Could not update: ' + error.message)
+}
+
 // Ab tak "Interested" sirf admin ke liye dikhta tha ("Mark as noted") —
 // jiss profile ko dikhaya gaya use kabhi pata nahi chalta tha ki kisi ne
 // usse interest dikhaya hai (Model 2 ka sabse bada gap, audit 2026-10-06).

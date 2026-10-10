@@ -30,7 +30,7 @@ import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, co
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildMailtoLink } from '../utils/shareProfile'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
-import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, forwardShareLinkInterest, markInterestSent } from '../utils/shareLinks'
+import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, acknowledgeShareLinkNotInterested, forwardShareLinkInterest, markInterestSent } from '../utils/shareLinks'
 import { WhatsAppReminderButton, ReminderSheet } from '../components/WhatsAppReminder'
 import NotificationBell from '../components/NotificationBell'
 import { EVENT_LABELS } from '../utils/notifications'
@@ -527,13 +527,16 @@ export default function Admin({ staffUser }) {
       // acknowledged yet (audit gap, 2026-10-05) — previously this signal
       // didn't exist at all.
       supabase.from('share_links').select('*', { count: 'exact', head: true }).not('interested_at', 'is', null).is('interest_acknowledged_at', null),
-      // Share-link clients who tapped "Not for me" (Aryan, 2026-10-10).
-      supabase.from('share_links').select('*', { count: 'exact', head: true }).not('not_interested_at', 'is', null),
+      // Share-link clients who tapped "Not for me" — only unacknowledged ones
+      // (audit gap, 2026-10-10: was a permanent badge because nothing cleared it).
+      supabase.from('share_links').select('*', { count: 'exact', head: true }).not('not_interested_at', 'is', null).is('not_interest_acknowledged_at', null),
       // Today's scheduled calls/meetings — the single most time-sensitive
       // item on a given day, so it leads the Dashboard's priority section
       // (Aryan's ask, 2026-10-10: priority items should show first).
+      // Exclude closed requests (audit gap, 2026-10-10) — todayMeetings count
+      // was inflated by meetings whose coordination is already closed.
       supabase.from('introductions').select('*', { count: 'exact', head: true })
-        .gte('scheduled_at', startOfToday.toISOString()).lt('scheduled_at', new Date(startOfToday.getTime() + 86400000).toISOString()),
+        .gte('scheduled_at', startOfToday.toISOString()).lt('scheduled_at', new Date(startOfToday.getTime() + 86400000).toISOString()).neq('status', 'closed'),
     ])
     setStats({
       total: counts[0].count || 0,
@@ -2287,7 +2290,54 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
       setPhonesById(map)
     })
   }, [results])
+
+  // Profile codes already sent to this client (from manual Shared Matches
+  // log + share links) — shown as a "✓ Sent" badge on each match row
+  // (audit gap, 2026-10-10: no way to tell at a glance which matches have
+  // already been shared with this client from within Find Matches).
+  const [allSentCodes, setAllSentCodes] = useState(new Set())
+  useEffect(() => {
+    if (!profile.id) return
+    Promise.all([
+      supabase.from('profile_notes').select('note').eq('profile_id', profile.id).like('note', SHARED_MATCH_NOTE_PREFIX + '%'),
+      supabase.from('share_links').select('profile_id').eq('client_profile_id', profile.id),
+    ]).then(async ([notesRes, linksRes]) => {
+      const ids = new Set()
+      for (const row of (notesRes.data || [])) {
+        parseSharedMatchNote(row.note).ids.forEach(id => ids.add(id.toUpperCase()))
+      }
+      const linkProfileIds = (linksRes.data || []).map(r => r.profile_id).filter(Boolean)
+      if (linkProfileIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('profile_code').in('id', linkProfileIds)
+        ;(profs || []).forEach(p => { if (p.profile_code) ids.add(p.profile_code.toUpperCase()) })
+      }
+      setAllSentCodes(ids)
+    })
+  }, [profile.id])
   const [bundle, setBundle] = useState(null) // { url, generating, error, copied }
+
+  // Admin-initiated coordination request between this client and a match
+  // (audit gap, 2026-10-10: no way to start a Talk/Meeting from admin
+  // without going through a share-link interest forward). Inserts an
+  // introductions row directly. Requires migration 20261010_admin_gaps.sql
+  // (adds 'admin' to the source check constraint).
+  const [introFor, setIntroFor] = useState({}) // otherId -> { loading, done, error }
+  const handleCreateIntro = async (other) => {
+    setIntroFor(prev => ({ ...prev, [other.id]: { loading: true } }))
+    const { error } = await supabase.from('introductions').insert({
+      from_profile: profile.id,
+      to_profile: other.id,
+      status: 'pending',
+      request_type: 'meeting',
+      source: 'admin',
+    })
+    if (error) {
+      setIntroFor(prev => ({ ...prev, [other.id]: { error: error.message } }))
+      return
+    }
+    await writeAuditLog(staffUser, 'admin_coordination_created', profile.id, { other_profile_id: other.id, request_type: 'meeting' })
+    setIntroFor(prev => ({ ...prev, [other.id]: { done: true } }))
+  }
 
   const togglePicked = (id) => {
     setBundle(null)
@@ -2542,13 +2592,16 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                       : <UserRound size={18} color="#bbb" />}
                   </div>
                   <div style={{flex:1,cursor:'pointer'}} onClick={()=>setExpandedId(isExpanded?null:other.id)}>
-                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
                       <span style={{fontWeight:600,fontSize:14}}>{other.full_name}</span>
                       <span style={{fontSize:12,fontWeight:600,padding:'6px 12px',borderRadius:20,
                         background: r.score>=70?'#f0fdf4':r.score>=40?'#fff8e1':'#f5f5f5',
                         color: r.score>=70?'#16a34a':r.score>=40?'#b45309':'#8e8e8e'}}>
                         {r.score}% match
                       </span>
+                      {allSentCodes.has((other.profile_code || '').toUpperCase()) && (
+                        <span style={{fontSize:11,padding:'3px 8px',borderRadius:10,background:'#f0fdf4',color:'#16a34a',fontWeight:500}}>✓ Sent</span>
+                      )}
                     </div>
                     <div style={{fontSize:13,color:'#8e8e8e'}}>{other.age}y • {other.city} • {other.profile_code}</div>
                   </div>
@@ -2603,6 +2656,24 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                     </div>
                   )}
                   {linkState?.error && <div style={{fontSize:13,color:'#dc2626',marginTop:6}}>{linkState.error}</div>}
+                </div>
+
+                {/* Admin-initiated Talk/Meeting request — previously the only
+                    way to start coordination was via a share-link interest
+                    forward (audit gap, 2026-10-10). */}
+                <div style={{marginTop:8}}>
+                  {introFor[other.id]?.done ? (
+                    <span style={{fontSize:12,color:'#16a34a',display:'flex',alignItems:'center',gap:5}}>
+                      <Handshake size={13} /> Coordination request created — visible in Coordination Requests
+                    </span>
+                  ) : (
+                    <button className="btn btn-outline btn-sm" disabled={introFor[other.id]?.loading}
+                      onClick={()=>handleCreateIntro(other)}>
+                      <Handshake size={13} style={{verticalAlign:'-2px',marginRight:4}} />
+                      {introFor[other.id]?.loading ? 'Creating...' : 'Start Coordination'}
+                    </button>
+                  )}
+                  {introFor[other.id]?.error && <div style={{fontSize:12,color:'#dc2626',marginTop:4}}>{introFor[other.id].error}</div>}
                 </div>
               </div>
             )
@@ -2669,6 +2740,17 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
     try {
       await acknowledgeShareLinkInterest(linkId)
       setLinks(prev => prev.map(l => l.id === linkId ? { ...l, interest_acknowledged_at: new Date().toISOString() } : l))
+    } catch (err) {
+      showToast(err.message)
+    }
+  }
+
+  // "Not for me" signal ko dismiss karta hai — permanent red badge hata
+  // deta hai (audit gap, 2026-10-10). Requires migration 20261010_admin_gaps.sql.
+  const handleNoteNotInterested = async (linkId) => {
+    try {
+      await acknowledgeShareLinkNotInterested(linkId)
+      setLinks(prev => prev.map(l => l.id === linkId ? { ...l, not_interest_acknowledged_at: new Date().toISOString() } : l))
     } catch (err) {
       showToast(err.message)
     }
@@ -2942,8 +3024,16 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                     (Aryan, 2026-10-10: not_interested_at also shown here,
                     sirf admin ke liye — client ko pata nahi chalta). */}
                 {l.not_interested_at && !l.interested_at && (
-                  <div style={{marginTop:8,fontSize:12,color:'#8e8e8e',display:'flex',alignItems:'center',gap:5}} title="Client passed on this profile">
-                    <ThumbsDown size={12} /> {new Date(l.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                  <div style={{marginTop:8,fontSize:12,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                    <span style={{color: l.not_interest_acknowledged_at ? '#8e8e8e' : '#b45309', display:'flex',alignItems:'center',gap:5}}
+                      title={l.not_interest_acknowledged_at ? `Noted ${new Date(l.not_interest_acknowledged_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}` : 'Client passed on this profile'}>
+                      <ThumbsDown size={12} /> {new Date(l.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                    </span>
+                    {l.not_interest_acknowledged_at
+                      ? <span style={{fontSize:11,color:'#8e8e8e'}}>✓ Noted</span>
+                      : <button className="btn btn-outline btn-sm" style={{padding:'3px 8px',fontSize:11}}
+                          onClick={()=>handleNoteNotInterested(l.id)}>Noted</button>
+                    }
                   </div>
                 )}
                 {l.interested_at && (
@@ -4162,8 +4252,8 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       supabase.from('introductions').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
       // Share-link clients who tapped "👍 Interested" — audit gap, 2026-10-05.
       supabase.from('share_links').select('*').not('interested_at', 'is', null).is('interest_acknowledged_at', null).order('interested_at', { ascending: false }).limit(20),
-      // Share-link clients who tapped "Not for me" — Aryan, 2026-10-10.
-      supabase.from('share_links').select('*').not('not_interested_at', 'is', null).order('not_interested_at', { ascending: false }).limit(20),
+      // Share-link clients who tapped "Not for me" — only unacknowledged (audit gap, 2026-10-10).
+      supabase.from('share_links').select('*').not('not_interested_at', 'is', null).is('not_interest_acknowledged_at', null).order('not_interested_at', { ascending: false }).limit(20),
     ])
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
@@ -4854,6 +4944,8 @@ function WhatsAppTemplatesView({ staffUser, onBack }) {
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState({ category: 'general', name: '', message: '' })
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editDraft, setEditDraft] = useState({})
   const isAdmin = staffUser.role === 'admin'
 
   useEffect(() => { load() }, [])
@@ -4885,6 +4977,19 @@ function WhatsAppTemplatesView({ staffUser, onBack }) {
     const { error } = await supabase.from('whatsapp_templates').delete().eq('id', id)
     if (error) { showToast(error.message); return }
     setTemplates(prev => prev.filter(t => t.id !== id))
+  }
+
+  const startEdit = (t) => { setEditingId(t.id); setEditDraft({ category: t.category, name: t.name, message: t.message }) }
+  const cancelEdit = () => { setEditingId(null); setEditDraft({}) }
+
+  const saveEdit = async () => {
+    if (!editDraft.name?.trim() || !editDraft.message?.trim()) { showToast('Name and message are required'); return }
+    const { error } = await supabase.from('whatsapp_templates').update({
+      category: editDraft.category, name: editDraft.name.trim(), message: editDraft.message.trim(),
+    }).eq('id', editingId)
+    if (error) { showToast(error.message); return }
+    setTemplates(prev => prev.map(t => t.id === editingId ? { ...t, category: editDraft.category, name: editDraft.name.trim(), message: editDraft.message.trim() } : t))
+    cancelEdit()
   }
 
   return (
@@ -4922,23 +5027,44 @@ function WhatsAppTemplatesView({ staffUser, onBack }) {
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
           {templates.map(t => (
             <div key={t.id} className="list-row">
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:600}}>{t.name}</div>
-                  <div style={{fontSize:12,color:'#8e8e8e',marginBottom:6}}>{EVENT_LABELS[t.category] || t.category}</div>
-                  <div style={{fontSize:13,color:'#555',background:'#f9f9f9',padding:'8px 10px',borderRadius:8}}>{t.message}</div>
+              {editingId === t.id ? (
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  <select className="form-select" value={editDraft.category} onChange={e=>setEditDraft(d=>({...d, category: e.target.value}))}>
+                    {Object.entries(EVENT_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                  </select>
+                  <input className="form-input" placeholder="Template name" value={editDraft.name}
+                    onChange={e=>setEditDraft(d=>({...d, name: e.target.value}))} />
+                  <textarea className="form-input" placeholder="Hi {{name}}, ..." rows={3} value={editDraft.message}
+                    onChange={e=>setEditDraft(d=>({...d, message: e.target.value}))} style={{resize:'vertical'}} />
+                  <div style={{display:'flex',gap:8}}>
+                    <button className="btn btn-black btn-sm" onClick={saveEdit}>Save</button>
+                    <button className="btn btn-outline btn-sm" onClick={cancelEdit}>Cancel</button>
+                  </div>
                 </div>
-                <div style={{display:'flex',gap:6,flexShrink:0}}>
-                  <button className="btn btn-outline btn-sm" title="Copy — paste into WhatsApp, SMS, email or anywhere"
-                    onClick={async()=>{ try { await navigator.clipboard.writeText(t.message); showToast('Copied') } catch { showToast('Could not copy') } }}>
-                    <Copy size={13} />
-                  </button>
-                  {isAdmin && (
-                    <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
-                      onClick={()=>deleteTemplate(t.id)}><Trash2 size={13} /></button>
-                  )}
+              ) : (
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600}}>{t.name}</div>
+                    <div style={{fontSize:12,color:'#8e8e8e',marginBottom:6}}>{EVENT_LABELS[t.category] || t.category}</div>
+                    <div style={{fontSize:13,color:'#555',background:'#f9f9f9',padding:'8px 10px',borderRadius:8}}>{t.message}</div>
+                  </div>
+                  <div style={{display:'flex',gap:6,flexShrink:0}}>
+                    <button className="btn btn-outline btn-sm" title="Copy — paste into WhatsApp, SMS, email or anywhere"
+                      onClick={async()=>{ try { await navigator.clipboard.writeText(t.message); showToast('Copied') } catch { showToast('Could not copy') } }}>
+                      <Copy size={13} />
+                    </button>
+                    {isAdmin && (
+                      <>
+                        <button className="btn btn-outline btn-sm" title="Edit template" onClick={()=>startEdit(t)}>
+                          <Pencil size={13} />
+                        </button>
+                        <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
+                          onClick={()=>deleteTemplate(t.id)}><Trash2 size={13} /></button>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ))}
         </div>
