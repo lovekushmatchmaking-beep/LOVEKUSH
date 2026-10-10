@@ -1670,8 +1670,8 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
   }
 
   const handleSave = async () => {
-    if(!form.first_name || !form.last_name || !form.date_of_birth || !form.city) {
-      showToast('First Name, Last Name, Date of Birth and City are required'); return
+    if(!form.first_name || !form.date_of_birth || !form.city) {
+      showToast('First Name, Date of Birth and City are required'); return
     }
     if (!profile.is_admin_managed && form.client_phone && !normalizePhone(form.client_phone)) {
       showToast('Please enter a valid phone number'); return
@@ -1716,7 +1716,9 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
       }
 
       const { community_other, mother_tongue_other, gotra_other, custom_caste_text_gotra,
-        father_profession_other, mother_profession_other, ...formToSave } = form
+        father_profession_other, mother_profession_other,
+        id_document_type: rawIdDocType,
+        ...formToSave } = form
 
       // Rashi/Nakshatra badle to source 'self' mark karte hain (API se aayi
       // values 'api' rehti hain jab tak user khud na badle).
@@ -1754,6 +1756,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           partner_height_max: parseInt(form.partner_height_max) || null,
           partner_income_min: parseInt(form.partner_income_min) || null,
           partner_income_max: parseInt(form.partner_income_max) || null,
+          id_document_type: rawIdDocType || null,
           profile_completeness: breakdown.overall,
           completeness_breakdown: breakdown,
         })
