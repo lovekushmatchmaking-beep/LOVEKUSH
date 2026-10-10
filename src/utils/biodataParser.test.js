@@ -1,5 +1,5 @@
 import {
-  parseBiodataText, parseDob, parseHeight, parseEducation, parseIncome, parseSiblings, parseTime,
+  parseBiodataText, BIODATA_CHATGPT_PROMPT, parseDob, parseHeight, parseEducation, parseIncome, parseSiblings, parseTime,
   parseRashi, parseNakshatra, extractLabeledValues,
 } from './biodataParser'
 
@@ -100,11 +100,82 @@ test('tolerates OCR misreading the colon', () => {
   expect(extractLabeledValues('Rashi + Vrishabh\nManglik No').manglik).toBe('No')
 })
 
-// Pasted text in the format the "Copy ChatGPT prompt" button asks for
-const CHATGPT_FORMAT = `Name: Rahul Kushwaha
-Gender: Male
-Date of Birth: 03/08/1995
-Height: 5'9"
+test('pasted ChatGPT-style text (bold, bullets, numbering, table) parses', () => {
+  const md = [
+    '## 🌸 Biodata',
+    '**Name:** Rahul Kushwaha',
+    '- **Date of Birth:** 15/08/1996',
+    '1. Height: 5\'8"',
+    '| Education | B.Tech |',
+    '|---|---|',
+    '| Annual Income | 8 LPA |',
+    '* City: Lucknow, UP',
+    'About Me: Simple, family-oriented person working in Bangalore.',
+  ].join('\n')
+  const { values } = parseBiodataText(md)
+  expect(values.first_name).toBe('Rahul')
+  expect(values.last_name).toBe('Kushwaha')
+  expect(values.date_of_birth).toBe('1996-08-15')
+  expect(values.height).toBeTruthy()
+  expect(values.degree).toBeTruthy()
+  expect(values.annual_income).toBeTruthy()
+  expect(values.city).toBe('Lucknow')
+  expect(values.about_me).toMatch(/^Simple/)
+})
+
+test('every label in the ChatGPT prompt is recognised', () => {
+  const sample = `Name: Priya Sharma
+Gender: Female
+Date of Birth: 02/03/1998
+Birth Time: 10:30 AM
+Birth Place: Kanpur
+Height: 5'3"
+Marital Status: Never Married
+Religion: Hindu
+Caste: Kushwaha
+Sub Caste: Maurya
+Gotra: Kashyap
+Manglik: No
+Rashi: Mesh
+Nakshatra: Ashwini
+Mother Tongue: Hindi
+Education: MBA
+Occupation: Software Engineer
+Company: Infosys
+Annual Income: 12 LPA
+Complexion: Fair
+Diet: Vegetarian
+Blood Group: B+
+Father's Occupation: Retired
+Mother's Occupation: Homemaker
+Brothers: 2, 1 married
+Sisters: 1
+City: Lucknow
+Native Place: Gorakhpur
+Nationality: Indian
+Mobile: +91 98765 43210
+Email: priya@example.com
+Weight: 55 kg
+Smoking: Never
+Drinking: Never
+College: Lucknow University
+State: Uttar Pradesh
+Family Type: Nuclear
+Family City: Lucknow
+Own House: Yes
+Vehicle: Car
+Hobbies: Reading
+About Me: Cheerful and grounded.
+Partner Expectations: Well educated, kind.`
+  const { found, unmatched } = parseBiodataText(sample, { includeContact: true })
+  const keys = found.map(f => f.key)
+  const promptLabels = BIODATA_CHATGPT_PROMPT.split('Biodata:')[0].split('\n').filter(l => /^[A-Z][^:]*:( \(.*\))?$/.test(l))
+  expect(keys.length + unmatched.length).toBe(promptLabels.length)
+  expect(unmatched).toEqual([])
+})
+
+test('reads the extra profile fields from the ChatGPT prompt format', () => {
+  const { values } = parseBiodataText(`Name: Rahul Kushwaha
 Weight: 72 kg
 Smoking: Never
 Drinking: Occasionally
@@ -115,19 +186,10 @@ Own House: Yes
 Vehicle: Car and bike
 College: IIT Kanpur
 Hobbies: Cricket, music
-About Me: Calm and family oriented.
-Works in Noida, visits home every month.
-Partner Expectations: Educated girl from a cultured family.
-Mobile: 9876543210`
-
-test('parses ChatGPT-formatted pasted text including extra fields', () => {
-  const { values } = parseBiodataText(CHATGPT_FORMAT, { includeContact: true })
+Partner Expectations: Educated girl from a cultured family.`)
   expect(values).toMatchObject({
-    first_name: 'Rahul', last_name: 'Kushwaha', gender: 'Male', date_of_birth: '1995-08-03',
     weight: '65–75kg', smoking: 'Never', drinking: 'Occasionally', state: 'Uttar Pradesh',
     family_type: 'Joint', family_city: 'Varanasi', own_house: 'Yes', vehicle_ownership: 'Both',
-    college_name: 'IIT Kanpur', hobbies: 'Cricket, music',
-    about_me: 'Calm and family oriented. Works in Noida, visits home every month.',
-    partner_notes: 'Educated girl from a cultured family.', client_phone: '9876543210',
+    college_name: 'IIT Kanpur', hobbies: 'Cricket, music', partner_notes: 'Educated girl from a cultured family.',
   })
 })

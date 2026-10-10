@@ -59,13 +59,9 @@ const LABELS = [
   ['vehicle', /(vehicle|car|two[\s-]*wheeler|वाहन|गाड़ी)/i],
   ['college', /(college|university|institute|कॉलेज|विश्वविद्यालय)/i],
   ['hobbies', /(hobbies|hobby|interests|शौक)/i],
-  ['about_me', /(about\s*(me|myself|him|her|the\s*(boy|girl|candidate))|self\s*description|introduction|परिचय)/i],
   ['partner_notes', /(partner\s*(expectations?|preferences?|requirements?)|expectations?(\s*from\s*partner)?|looking\s*for|जीवनसाथी\s*(से)?\s*अपेक्षा|अपेक्षा)/i],
+  ['about_me', /(about\s*(me|myself|him|her|the\s*(boy|girl|candidate))?|परिचय)/i],
 ]
-
-// In labels ki value aksar kai lines mein hoti hai (paragraph) — agli
-// lines bhi jodte hain jab tak koi naya "Label :" ya section heading na aaye.
-const MULTILINE_KEYS = ['about_me', 'partner_notes', 'hobbies']
 
 const HUMAN_LABELS = {
   name: 'Name', dob: 'Date of Birth', birth_time: 'Birth Time', birth_place: 'Birth Place',
@@ -76,25 +72,40 @@ const HUMAN_LABELS = {
   diet: 'Diet', blood_group: 'Blood Group', father_profession: "Father's Profession",
   mother_profession: "Mother's Profession", brothers: 'Brothers', sisters: 'Sisters',
   city: 'City', native_place: 'Native Place', nationality: 'Nationality', phone: 'Phone',
-  email: 'Email', gender: 'Gender', weight: 'Weight', father_name: "Father's Name", mother_name: "Mother's Name",
+  email: 'Email', about_me: 'About', gender: 'Gender', weight: 'Weight', father_name: "Father's Name", mother_name: "Mother's Name",
   family_city: 'Family City', state: 'State', family_type: 'Family Type', smoking: 'Smoking', drinking: 'Drinking',
-  own_house: 'Own House', vehicle: 'Vehicle', college: 'College', hobbies: 'Hobbies', about_me: 'About',
-  partner_notes: 'Partner Expectations',
+  own_house: 'Own House', vehicle: 'Vehicle', college: 'College', hobbies: 'Hobbies', partner_notes: 'Partner Expectations',
 }
 
 const DEVANAGARI_DIGITS = '०१२३४५६७८९'
 const normDigits = (s) => s.replace(/[०-९]/g, d => String(DEVANAGARI_DIGITS.indexOf(d)))
 const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
-// "FAMILY DETAILS", "PARTNER PREFERENCE" jaise chhote all-caps headings
-const isSectionHeading = (line) => line.length <= 40 && /[A-Z]/.test(line) && line === line.toUpperCase()
+// ChatGPT / WhatsApp se paste kiye text ki sajawat hatao: **bold**, # heading,
+// "1." numbering, emoji, aur markdown table "| Name | Rahul |" -> "Name : Rahul".
+// OCR text par iska koi asar nahi padta.
+function cleanLine(line) {
+  let l = line.replace(/[\t ]+/g, ' ').replace(/[：]/g, ':').trim()
+  if (/^\|?[\s:|-]+\|?$/.test(l) && l.includes('-')) return '' // table divider |---|---|
+  if (/^\|.*\|$/.test(l)) {
+    const cells = l.slice(1, -1).split('|').map(c => c.trim())
+    l = cells.length >= 2 ? cells[0] + ' : ' + cells.slice(1).join(' ') : cells[0]
+  }
+  return l
+    .replace(/\*\*|__|`/g, '')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/^#+\s*/, '')
+    .replace(/^\(?\d{1,2}[.)]\s+/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 // ---- Text -> { labelKey: rawValue } ----
 export function extractLabeledValues(text) {
   const lines = normDigits(String(text || ''))
     .replace(/\r/g, '')
     .split('\n')
-    .map(l => l.replace(/[\t ]+/g, ' ').replace(/[：]/g, ':').trim())
+    .map(cleanLine)
     .filter(Boolean)
 
   const out = {}
@@ -111,11 +122,6 @@ export function extractLabeledValues(text) {
       // "Name :" akela line pe ho to value agli line mein hoti hai
       if (!value && lines[i + 1] && !/:/.test(lines[i + 1])) value = lines[i + 1].trim()
       value = value.replace(/^[:\-–=|\s]+/, '').trim()
-      if (value && MULTILINE_KEYS.includes(key)) {
-        while (lines[i + 1] && !/[:=|]/.test(lines[i + 1]) && !isSectionHeading(lines[i + 1]) && value.length < 1000) {
-          value += ' ' + lines[++i]
-        }
-      }
       if (value) { out[key] = value; break }
     }
   }
@@ -429,6 +435,8 @@ export function parseName(raw) {
   }
 }
 
+// ---- Main: text -> fields for CreateProfile form ----
+// Returns { values: {formKey: value}, found: [{label, raw, shown}], unmatched: [{label, raw}] }
 // "62 kg", "62kg", "62" -> existing WEIGHT_RANGES slab
 export function parseWeight(raw) {
   const m = String(raw).match(/(\d{2,3}(?:\.\d+)?)/)
@@ -470,8 +478,6 @@ export function parseVehicle(raw) {
   return null
 }
 
-// ---- Main: text -> fields for CreateProfile form ----
-// Returns { values: {formKey: value}, found: [{label, raw, shown}], unmatched: [{label, raw}] }
 export function parseBiodataText(text, { includeContact = false } = {}) {
   const raw = extractLabeledValues(text)
   const values = {}
@@ -567,8 +573,8 @@ export function parseBiodataText(text, { includeContact = false } = {}) {
   tryField('vehicle', single('vehicle_ownership', parseVehicle))
   tryField('college', freeText('college_name', 100))
   tryField('hobbies', freeText('hobbies', 300))
-  tryField('about_me', freeText('about_me', 1000))
   tryField('partner_notes', freeText('partner_notes', 1000))
+  tryField('about_me', v => ({ fields: { about_me: v.slice(0, 1000) }, shown: v.length > 80 ? v.slice(0, 80) + '…' : v }))
   if (includeContact) {
     tryField('phone', v => {
       const d = v.replace(/[^\d+]/g, '').replace(/^\+?91(?=\d{10}$)/, '')
@@ -590,3 +596,55 @@ export const APPLY_ORDER = [
   'nationality', 'religion', 'gender', 'first_name', 'middle_name', 'last_name', 'date_of_birth',
   'education', 'degree', 'annual_income',
 ]
+
+// Admin yeh prompt ChatGPT mein messy biodata ke saath daalta hai; jawab
+// bilkul inhi labels mein aata hai jo upar LABELS pehchaanta hai, to paste
+// karte hi zyada se zyada fields bhar jaate hain.
+export const BIODATA_CHATGPT_PROMPT = `Rewrite the biodata below as plain text, one detail per line, in exactly this "Label: Value" format. Use only these labels, skip any line whose value is not in the biodata, do not guess, no bold, no bullets, no table.
+
+Name:
+Gender: (Male/Female)
+Date of Birth: (DD/MM/YYYY)
+Birth Time: (e.g. 10:30 AM)
+Birth Place:
+Height: (e.g. 5'6")
+Weight: (in kg)
+Marital Status:
+Religion:
+Caste:
+Sub Caste:
+Gotra:
+Manglik: (Yes/No)
+Rashi:
+Nakshatra:
+Mother Tongue:
+Education: (highest degree, e.g. B.Tech, MBA)
+College:
+Occupation:
+Company:
+Annual Income: (e.g. 8 LPA)
+Complexion:
+Diet:
+Smoking: (Never/Occasionally/Yes)
+Drinking: (Never/Occasionally/Yes)
+Blood Group:
+Father's Occupation:
+Mother's Occupation:
+Brothers: (e.g. 2, 1 married)
+Sisters: (e.g. 1, 0 married)
+City:
+State:
+Native Place:
+Family Type: (Nuclear/Joint)
+Family City:
+Own House: (Yes/No)
+Vehicle: (Car/Two-Wheeler/Both/No)
+Hobbies:
+Nationality:
+Mobile:
+Email:
+About Me: (one line)
+Partner Expectations: (one line)
+
+Biodata:
+`
