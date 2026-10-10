@@ -5,11 +5,13 @@ import { supabase } from '../supabase'
 import { BrandLockup } from '../components/BrandLogo'
 import { shareSafeAboutMe } from '../utils/shareProfile'
 import { markShareLinkInterest } from '../utils/shareLinks'
+import ZoomablePhoto from '../components/ZoomablePhoto'
 
 // Ek hi link mein kai matches (Admin "Find Matches" se chune hue) — bina
 // login ke khulta hai. SharedProfile jaisa hi: data "get_shared_bundle"
 // Postgres function se aata hai jo expiry/revoke khud check karta hai aur
-// sirf MASKED info deta hai (naam "A. Kushwaha" format, photo kabhi nahi).
+// naam masked hota hai ("A. Kushwaha" format), par dono saved photos
+// (zoom karke) ab dikhti hain (Aryan, 2026-10-10 — pehle kabhi nahi dikhti thi).
 
 export default function SharedMatches() {
   const { token } = useParams()
@@ -124,6 +126,17 @@ export default function SharedMatches() {
                   <div style={{fontSize:18,fontWeight:600}}>{p.full_name || p.masked_name}</div>
                   <div style={{fontSize:11,color:'#8e8e8e',fontFamily:'monospace'}}>{p.profile_code}</div>
                 </div>
+
+                {/* Dono saved (already-compressed) photos — tap karke zoom
+                    (Aryan, 2026-10-10). Reuses EditPhotos ki wahi photos
+                    table/storage. */}
+                {(p.photo_path || p.photo_path_2) && (
+                  <div style={{display:'flex',gap:10,marginBottom:12}}>
+                    {p.photo_path && <ZoomablePhoto path={p.photo_path} alt={p.masked_name} size={90} />}
+                    {p.photo_path_2 && <ZoomablePhoto path={p.photo_path_2} alt={p.masked_name} size={90} />}
+                  </div>
+                )}
+
                 {/* Poora naam (Aryan, 2026-10-09 — share link par full name, sirf
                     contact details nahi). About Me se client-import ka raw note aur
                     koi bhi phone/email hata ke dikhate hain. */}
@@ -161,7 +174,7 @@ export default function SharedMatches() {
         </div>
 
         <div style={{marginTop:20,fontSize:12,color:'#8e8e8e',textAlign:'center',lineHeight:1.6}}>
-          Contact details and photos are shared confidentially — please reach your Relationship Manager.<br/>
+          Contact details are shared confidentially — please reach your Relationship Manager.<br/>
           {(profiles[0]?.rm_name || profiles[0]?.rm_phone || profiles[0]?.rm_email) ? (
             <>
               {profiles[0].rm_name && <strong style={{color:'#111'}}>{profiles[0].rm_name}</strong>}
