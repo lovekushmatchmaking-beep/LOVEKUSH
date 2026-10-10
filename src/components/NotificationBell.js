@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { Bell, CheckCheck } from 'lucide-react'
+import {
+  Bell, CheckCheck, CircleCheck, Ban, Camera, Handshake, CalendarClock, Flag,
+  Tag, ThumbsUp, Heart, HeartHandshake, PenLine, Telescope, Gem,
+} from 'lucide-react'
 import { supabase } from '../supabase'
 
 // Generic in-app notification bell — used in both the member header
@@ -12,27 +15,29 @@ import { supabase } from '../supabase'
 const POLL_MS = 30000
 const PAGE_SIZE = 20
 
-// One emoji per event type — purely a visual hint in the dropdown list,
-// never the only way to tell events apart (the message text always says
-// what happened).
-const TYPE_EMOJI = {
-  profile_approved: '✅',
-  profile_blocked: '⛔',
-  selfie_requested: '🤳',
-  selfie_submitted: '🤳',
-  photo_request_received: '📷',
-  photo_request_approved: '📷',
-  coordination_request_received: '🤝',
-  meeting_scheduled: '📅',
-  report_filed: '🚩',
-  caste_suggestion_reviewed: '🏷️',
-  share_link_interest: '👍',
-  profile_liked: '❤️',
-  mutual_interest: '💞',
-  meeting_done: '🤝',
-  decision_recorded: '📝',
-  next_round_stage: '🔭',
-  match_outcome: '💍',
+// One lucide icon per event type — purely a visual hint in the dropdown
+// list, never the only way to tell events apart (the message text always
+// says what happened). Icons only, matching the app's icon-first brand
+// system (no emoji) — was raw emoji before, inconsistent with everywhere
+// else in the app.
+const TYPE_ICON = {
+  profile_approved: CircleCheck,
+  profile_blocked: Ban,
+  selfie_requested: Camera,
+  selfie_submitted: Camera,
+  photo_request_received: Camera,
+  photo_request_approved: Camera,
+  coordination_request_received: Handshake,
+  meeting_scheduled: CalendarClock,
+  report_filed: Flag,
+  caste_suggestion_reviewed: Tag,
+  share_link_interest: ThumbsUp,
+  profile_liked: Heart,
+  mutual_interest: HeartHandshake,
+  meeting_done: Handshake,
+  decision_recorded: PenLine,
+  next_round_stage: Telescope,
+  match_outcome: Gem,
 }
 
 export default function NotificationBell({ userId, onNavigate, align = 'right' }) {
@@ -101,14 +106,16 @@ export default function NotificationBell({ userId, onNavigate, align = 'right' }
           </div>
           {items.length === 0 ? (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--gray3)', fontSize: 13 }}>No notifications yet</div>
-          ) : items.map(n => (
+          ) : items.map(n => {
+            const TypeIcon = TYPE_ICON[n.type] || Bell
+            return (
             <button key={n.id} onClick={() => handleItemClick(n)}
               style={{
                 display: 'flex', gap: 10, width: '100%', textAlign: 'left', padding: '10px 14px',
                 border: 'none', borderBottom: '1px solid #f5f5f5', background: n.is_read ? 'transparent' : '#f0f7ff',
                 cursor: 'pointer', font: 'inherit',
               }}>
-              <span style={{ fontSize: 16, flexShrink: 0 }}>{TYPE_EMOJI[n.type] || '🔔'}</span>
+              <TypeIcon size={16} color="var(--gray3)" style={{ flexShrink: 0, marginTop: 1 }} />
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: 13, display: 'block', color: '#1a1a1a' }}>{n.message}</span>
                 <span style={{ fontSize: 11, color: 'var(--gray3)' }}>
@@ -117,7 +124,8 @@ export default function NotificationBell({ userId, onNavigate, align = 'right' }
               </span>
               {!n.is_read && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: 4 }} />}
             </button>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

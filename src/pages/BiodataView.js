@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { ChevronLeft, Share2, Download, Link2 } from 'lucide-react'
+import { ChevronLeft, Share2, Download, Link2, UserRound } from 'lucide-react'
 import SignedImage from '../components/SignedImage'
 import { generateBiodataPdf } from '../utils/generateBiodataPdf'
 import { generateShareLink, nativeShare } from '../utils/shareLinks'
@@ -151,7 +151,7 @@ export default function BiodataView({ profile: p, photo, onBack }) {
           <div style={{ width: 130, height: 160, borderRadius: 8, background: '#f0f0f0', overflow: 'hidden', border: '1px solid rgba(0,0,0,0.1)' }}>
             {photoDataUrl
               ? <img src={photoDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 42 }}>👤</div>
+              : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><UserRound size={42} color="#bbb" /></div>
             }
           </div>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontWeight: 500, fontSize: 26, marginTop: 12 }}>{p.full_name}</div>

@@ -254,26 +254,14 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
 
         <div ref={setSectionRef('About')} data-tab="About" style={{scrollMarginTop:TAB_BAR_OFFSET}}>
           {!viewerIsPremium && (
-            <div style={{background:'var(--gold-soft)',border:'1px solid #f0e2bd',borderRadius:'var(--radius)',padding:'12px 14px',marginBottom:14}}>
-              <div style={{fontSize:12,fontWeight:600,color:'var(--gold)',marginBottom:6,display:'flex',alignItems:'center',gap:6}}><Crown size={14} /> Premium unlocks</div>
-              {/* PEHLE: "Photo (unblurred)" bhi premium ke peeche thi — ab photos
-                  Request Photo + owner approval se dikhti hain (privacy-rules.md),
-                  premium se koi lena dena nahi, isliye ye row hata di. */}
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
-                <span style={{color:'var(--gray3)'}}>Company Name</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
-              </div>
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}}>
-                <span style={{color:'var(--gray3)'}}>College Name</span>
-                <span style={{fontWeight:500,filter:'blur(3px)',userSelect:'none'}}>••••••••</span>
-              </div>
-              {/* PEHLE: button kuch nahi karta tha. Ab LOVEKUSH support ko
-                  seedha contact karta hai (jaisa Help/Report flow). */}
-              <a className="btn btn-sm" style={{marginTop:8,width:'100%',background:'var(--gold)',color:'#fff',textDecoration:'none'}}
-                href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Interested in LOVEKUSH Premium')}`}>
-                <Crown size={14} /> Go Premium
-              </a>
-            </div>
+            // Compact inline banner instead of a full card with fake blurred
+            // rows — the real About/profile content below is what the user
+            // came here for, not a filler upsell card (audit, 2026-10-10).
+            <a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Interested in LOVEKUSH Premium')}`}
+              style={{display:'flex',alignItems:'center',gap:8,background:'var(--gold-soft)',border:'1px solid #f0e2bd',borderRadius:'var(--radius)',padding:'8px 12px',marginBottom:14,fontSize:12,color:'var(--gold)',textDecoration:'none',fontWeight:500}}>
+              <Crown size={14} style={{flexShrink:0}} />
+              <span style={{flex:1}}>Unlock company &amp; college info — Go Premium</span>
+            </a>
           )}
 
           {m.about_me && (
