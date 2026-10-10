@@ -253,7 +253,7 @@ export default function Admin({ staffUser }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
-  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0, overdueFollowUps: 0, pendingShareInterest: 0, todayMeetings: 0 })
+  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0, overdueFollowUps: 0, pendingShareInterest: 0, pendingShareNotInterested: 0, todayMeetings: 0 })
   const [statsUpdatedAt, setStatsUpdatedAt] = useState(null)
   const [listUpdatedAt, setListUpdatedAt] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
@@ -499,6 +499,8 @@ export default function Admin({ staffUser }) {
       // acknowledged yet (audit gap, 2026-10-05) — previously this signal
       // didn't exist at all.
       supabase.from('share_links').select('*', { count: 'exact', head: true }).not('interested_at', 'is', null).is('interest_acknowledged_at', null),
+      // Share-link clients who tapped "Not for me" (Aryan, 2026-10-10).
+      supabase.from('share_links').select('*', { count: 'exact', head: true }).not('not_interested_at', 'is', null),
       // Today's scheduled calls/meetings — the single most time-sensitive
       // item on a given day, so it leads the Dashboard's priority section
       // (Aryan's ask, 2026-10-10: priority items should show first).
@@ -519,7 +521,8 @@ export default function Admin({ staffUser }) {
       pendingCoordination: counts[10].count || 0,
       overdueFollowUps: counts[11].count || 0,
       pendingShareInterest: counts[12].count || 0,
-      todayMeetings: counts[13].count || 0,
+      pendingShareNotInterested: counts[13].count || 0,
+      todayMeetings: counts[14].count || 0,
     })
     setStatsUpdatedAt(new Date())
     setStatsLoading(false)
@@ -950,7 +953,7 @@ export default function Admin({ staffUser }) {
     { id: 'coordinationRequests', label: 'Coordination', Icon: Handshake, badge: stats.pendingCoordination, onClick: () => goToSectionView('tools', 'coordinationRequests') },
     { id: 'verificationQueue', label: 'Verification', Icon: ShieldAlert, badge: stats.needsVerification, onClick: () => goToSectionView('queues', 'verificationQueue') },
     { id: 'reportsQueue', label: 'Reports', Icon: Flag, badge: stats.openReports, onClick: () => goToSectionView('queues', 'reportsQueue') },
-    { id: 'shareLinks', label: 'Share Links', Icon: Link2, badge: stats.pendingShareInterest, onClick: () => goToSectionView('tools', 'shareLinks') },
+    { id: 'shareLinks', label: 'Share Links', Icon: Link2, badge: (stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0), onClick: () => goToSectionView('tools', 'shareLinks') },
     { section: 'Tools' },
     { id: 'duplicateLeads', label: 'Duplicate Leads', Icon: Copy, onClick: () => goToSectionView('queues', 'duplicateLeads') },
     { id: 'casteSuggestions', label: 'Caste Suggestions', Icon: ClipboardList, onClick: () => goToSectionView('tools', 'casteSuggestions') },
@@ -1001,6 +1004,7 @@ export default function Admin({ staffUser }) {
     if (n.type === 'selfie_submitted') { goToSectionView('queues', 'verificationQueue'); return }
     if (n.type === 'report_filed') { goToSectionView('queues', 'reportsQueue'); return }
     if (n.type === 'share_link_interest') { goToSectionView('tools', 'shareLinks'); return }
+    if (n.type === 'share_link_not_interested') { goToSectionView('tools', 'shareLinks'); return }
     // New (audit 2026-10-08): notification types with no dedicated queue
     // view — e.g. profile_liked — open the exact profile instead of
     // dropping the admin on a generic tab.
@@ -1613,7 +1617,7 @@ export default function Admin({ staffUser }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
           <AdminNavCard icon={ClipboardList} label="Caste Suggestions" subtitle="New castes/gotras members typed in" onClick={()=>setView('casteSuggestions')} />
           <AdminNavCard icon={Handshake} label="Coordination" subtitle="Talk/meeting requests between members" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
-          <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" badge={stats.pendingShareInterest} onClick={()=>setView('shareLinks')} />
+          <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" badge={(stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0)} onClick={()=>setView('shareLinks')} />
           <AdminNavCard icon={MessageCircle} label="Template Editor" subtitle="Saved messages — WhatsApp, SMS, email or anywhere" onClick={()=>setView('whatsappTemplates')} />
         </div>
       </div>
@@ -1682,6 +1686,7 @@ function PriorityActions({ stats, onOpen }) {
     { key: 'openReports', count: stats.openReports, label: 'Open reports', icon: Flag, bg: '#fdf4ff', fg: '#9333ea', view: 'reportsQueue' },
     { key: 'pendingCoordination', count: stats.pendingCoordination, label: 'Awaiting response', icon: Handshake, bg: '#f5f3ff', fg: '#7c3aed', view: 'coordinationRequests' },
     { key: 'pendingShareInterest', count: stats.pendingShareInterest, label: 'Clients interested', icon: ThumbsUp, bg: '#f0fdf4', fg: '#16a34a', view: 'shareLinks' },
+    { key: 'pendingShareNotInterested', count: stats.pendingShareNotInterested, label: 'Clients passed on a match', icon: ThumbsDown, bg: '#fef3c7', fg: '#d97706', view: 'shareLinks' },
   ].filter(i => i.count > 0)
 
   if (items.length === 0) {
