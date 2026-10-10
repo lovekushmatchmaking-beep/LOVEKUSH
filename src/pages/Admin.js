@@ -1686,7 +1686,7 @@ function PriorityActions({ stats, onOpen }) {
     { key: 'openReports', count: stats.openReports, label: 'Open reports', icon: Flag, bg: '#fdf4ff', fg: '#9333ea', view: 'reportsQueue' },
     { key: 'pendingCoordination', count: stats.pendingCoordination, label: 'Awaiting response', icon: Handshake, bg: '#f5f3ff', fg: '#7c3aed', view: 'coordinationRequests' },
     { key: 'pendingShareInterest', count: stats.pendingShareInterest, label: 'Clients interested', icon: ThumbsUp, bg: '#f0fdf4', fg: '#16a34a', view: 'shareLinks' },
-    { key: 'pendingShareNotInterested', count: stats.pendingShareNotInterested, label: 'Clients passed on a match', icon: ThumbsDown, bg: '#fef3c7', fg: '#d97706', view: 'shareLinks' },
+    { key: 'pendingShareNotInterested', count: stats.pendingShareNotInterested, label: 'Not interested in a match', icon: ThumbsDown, bg: '#fef3c7', fg: '#d97706', view: 'shareLinks' },
   ].filter(i => i.count > 0)
 
   if (items.length === 0) {
@@ -4154,7 +4154,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
               </div>
             )} />
           {shareNotInterested.length > 0 && (
-            <Section icon={ThumbsDown} title="Passed on shared profiles" items={inQueue(shareNotInterested, s => [...profileSearchBits(s.shownProfile), ...profileSearchBits(s.clientProfile), s.share_id])}
+            <Section icon={ThumbsDown} title="Not interested in shared profiles" items={inQueue(shareNotInterested, s => [...profileSearchBits(s.shownProfile), ...profileSearchBits(s.clientProfile), s.share_id])}
               empty=""
               renderItem={s => (
                 <div key={s.id} className="list-row" style={{borderColor:'#e5e5e5'}}>

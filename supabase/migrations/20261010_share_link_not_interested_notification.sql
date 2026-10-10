@@ -14,7 +14,7 @@ begin
      and new.created_by is not null
   then
     insert into public.notifications(recipient_user_id, type, message, link_entity_type, link_entity_id)
-    values (new.created_by, 'share_link_not_interested', 'A client passed on a shared match.', 'share_link', new.id);
+    values (new.created_by, 'share_link_not_interested', 'A client is not interested in a shared match.', 'share_link', new.id);
   end if;
   return new;
 end;
