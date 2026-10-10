@@ -50,6 +50,7 @@ const LABELS = [
   ['nationality', /(nationality|citizenship|राष्ट्रीयता)/i],
   ['phone', /(mobile|phone|contact\s*(no|number)?|whatsapp|मोबाइल|संपर्क)/i],
   ['email', /(e-?mail|ईमेल)/i],
+  ['about_me', /(about\s*(me|myself|him|her|the\s*(boy|girl|candidate))?|परिचय)/i],
 ]
 
 const HUMAN_LABELS = {
@@ -61,19 +62,38 @@ const HUMAN_LABELS = {
   diet: 'Diet', blood_group: 'Blood Group', father_profession: "Father's Profession",
   mother_profession: "Mother's Profession", brothers: 'Brothers', sisters: 'Sisters',
   city: 'City', native_place: 'Native Place', nationality: 'Nationality', phone: 'Phone',
-  email: 'Email', gender: 'Gender', weight: 'Weight', father_name: "Father's Name", mother_name: "Mother's Name",
+  email: 'Email', about_me: 'About', gender: 'Gender', weight: 'Weight', father_name: "Father's Name", mother_name: "Mother's Name",
 }
 
 const DEVANAGARI_DIGITS = '०१२३४५६७८९'
 const normDigits = (s) => s.replace(/[०-९]/g, d => String(DEVANAGARI_DIGITS.indexOf(d)))
 const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
+// ChatGPT / WhatsApp se paste kiye text ki sajawat hatao: **bold**, # heading,
+// "1." numbering, emoji, aur markdown table "| Name | Rahul |" -> "Name : Rahul".
+// OCR text par iska koi asar nahi padta.
+function cleanLine(line) {
+  let l = line.replace(/[\t ]+/g, ' ').replace(/[：]/g, ':').trim()
+  if (/^\|?[\s:|-]+\|?$/.test(l) && l.includes('-')) return '' // table divider |---|---|
+  if (/^\|.*\|$/.test(l)) {
+    const cells = l.slice(1, -1).split('|').map(c => c.trim())
+    l = cells.length >= 2 ? cells[0] + ' : ' + cells.slice(1).join(' ') : cells[0]
+  }
+  return l
+    .replace(/\*\*|__|`/g, '')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/^#+\s*/, '')
+    .replace(/^\(?\d{1,2}[.)]\s+/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // ---- Text -> { labelKey: rawValue } ----
 export function extractLabeledValues(text) {
   const lines = normDigits(String(text || ''))
     .replace(/\r/g, '')
     .split('\n')
-    .map(l => l.replace(/[\t ]+/g, ' ').replace(/[：]/g, ':').trim())
+    .map(cleanLine)
     .filter(Boolean)
 
   const out = {}
@@ -489,6 +509,7 @@ export function parseBiodataText(text, { includeContact = false } = {}) {
   })
   tryField('city', v => { const c = v.split(',')[0].trim().slice(0, 60); return c ? { fields: { city: c }, shown: c } : null })
   tryField('native_place', v => ({ fields: { native_place: v.slice(0, 80) }, shown: v.slice(0, 80) }))
+  tryField('about_me', v => ({ fields: { about_me: v.slice(0, 1000) }, shown: v.length > 80 ? v.slice(0, 80) + '…' : v }))
   if (includeContact) {
     tryField('phone', v => {
       const d = v.replace(/[^\d+]/g, '').replace(/^\+?91(?=\d{10}$)/, '')
@@ -510,3 +531,44 @@ export const APPLY_ORDER = [
   'nationality', 'religion', 'gender', 'first_name', 'middle_name', 'last_name', 'date_of_birth',
   'education', 'degree', 'annual_income',
 ]
+
+// Admin yeh prompt ChatGPT mein messy biodata ke saath daalta hai; jawab
+// bilkul inhi labels mein aata hai jo upar LABELS pehchaanta hai, to paste
+// karte hi zyada se zyada fields bhar jaate hain.
+export const BIODATA_CHATGPT_PROMPT = `Rewrite the biodata below as plain text, one detail per line, in exactly this "Label: Value" format. Use only these labels, skip any line whose value is not in the biodata, do not guess, no bold, no bullets, no table.
+
+Name:
+Gender: (Male/Female)
+Date of Birth: (DD/MM/YYYY)
+Birth Time: (e.g. 10:30 AM)
+Birth Place:
+Height: (e.g. 5'6")
+Marital Status:
+Religion:
+Caste:
+Sub Caste:
+Gotra:
+Manglik: (Yes/No)
+Rashi:
+Nakshatra:
+Mother Tongue:
+Education: (highest degree, e.g. B.Tech, MBA)
+Occupation:
+Company:
+Annual Income: (e.g. 8 LPA)
+Complexion:
+Diet:
+Blood Group:
+Father's Occupation:
+Mother's Occupation:
+Brothers: (e.g. 2, 1 married)
+Sisters: (e.g. 1, 0 married)
+City:
+Native Place:
+Nationality:
+Mobile:
+Email:
+About Me: (one line)
+
+Biodata:
+`
