@@ -55,7 +55,7 @@ export default function ActivityTab({ myActions, receivedActions, matches, profi
 
   return (
     <div>
-      <PageHeader title="Notifications" />
+      <PageHeader title="Activity" />
 
       <div className="stats-row" style={{gridTemplateColumns:'repeat(3,1fr)'}}>
         {[

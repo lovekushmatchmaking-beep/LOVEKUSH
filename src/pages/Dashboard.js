@@ -523,12 +523,9 @@ export default function Dashboard({ user }) {
 
                 {/* Profile Details */}
                 <div className="card" style={{marginBottom:14}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                    <SectionLabel style={{marginBottom:0}}>Profile Details</SectionLabel>
-                    <button className="icon-btn" aria-label="Edit profile" onClick={()=>setActiveTab('editprofile')}>
-                      <Pencil size={18} />
-                    </button>
-                  </div>
+                  {/* Edit button removed — redundant with the "Edit" quick-action
+                      tile just above (same destination), audit 2026-10-10 */}
+                  <SectionLabel style={{marginBottom:6}}>Profile Details</SectionLabel>
                   {[
                     { group: 'Personal', rows: [
                       ['Gender', profile.gender],
@@ -950,8 +947,7 @@ function VerificationNotice({ profile, userId, onUpdated, onToast }) {
         <div style={{display:'flex',gap:10,alignItems:'center'}}>
           <Camera size={18} style={{color:'var(--primary)',flexShrink:0}} />
           <span>
-            <strong>{status === 'rejected' ? 'Please send a new selfie' : 'Selfie needed for your Verified badge'}</strong>
-            {' · '}we'll match it with your uploaded photo, then your profile goes live
+            <strong>{status === 'rejected' ? 'Please send a new selfie' : 'Verify your identity to go live'}</strong>
           </span>
         </div>
         <label className="btn btn-primary btn-sm" style={{alignSelf:'flex-start',cursor:uploading?'default':'pointer',opacity:uploading?0.6:1}}>
@@ -1217,7 +1213,7 @@ const ROUND_STAGE_TEXT = {
   contact_disclosure: 'Final step — contact details coming soon',
 }
 function introStatusInfo(i) {
-  if (i.final_outcome === 'successful_match') return { text: 'Successful match 💍', color: 'var(--success)', Icon: CircleCheck }
+  if (i.final_outcome === 'successful_match') return { text: 'Successful match', color: 'var(--success)', Icon: CircleCheck }
   if (i.final_outcome === 'not_proceeding') return { text: 'Not proceeding further', color: 'var(--gray3)', Icon: X }
   if (i.next_round_stage) return { text: ROUND_STAGE_TEXT[i.next_round_stage] || 'Update on your match', color: 'var(--primary)', Icon: Sparkles }
   if (i.decision === 'interested') return { text: 'Positive outcome — moving to next round', color: 'var(--success)', Icon: CircleCheck }

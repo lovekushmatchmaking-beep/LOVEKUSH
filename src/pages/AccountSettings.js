@@ -272,7 +272,7 @@ function HideDeleteView({ profile, user, onProfileUpdate, onDeleted, showToast }
         </p>
         <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:13,marginBottom:14,cursor:'pointer'}}>
           <input type="checkbox" checked={deleteConfirmed} onChange={e=>setDeleteConfirmed(e.target.checked)} style={{marginTop:2}} />
-          <span>I understand this action is permanent and cannot be undone.</span>
+          <span>I understand this is permanent.</span>
         </label>
         <button
           className="btn btn-full"

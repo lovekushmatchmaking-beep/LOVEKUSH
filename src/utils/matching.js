@@ -174,10 +174,10 @@ export function computeMatchScore(me, other) {
   // (Aryan ne confirm kiya: exclude mat karo, flag karo). Maternal gotra
   // bhi kai parivar check karte hain, par yeh universal nahi.
   if (sameGotra(me.gotra, other.gotra)) {
-    needsDiscussion.push('⚠ Same Gotra (' + me.gotra + ') — verify with family before proceeding')
+    needsDiscussion.push('Same Gotra (' + me.gotra + ') — verify with family before proceeding')
   }
   if (sameGotra(me.mother_gotra, other.gotra) || sameGotra(other.mother_gotra, me.gotra)) {
-    needsDiscussion.push("⚠ One partner's gotra matches the other's mother's gotra — check family tradition")
+    needsDiscussion.push("One partner's gotra matches the other's mother's gotra — check family tradition")
   }
 
   // Guna Milan (Ashtakoot, 36 points) — dono ki Rashi/Nakshatra ho tabhi.
@@ -187,8 +187,8 @@ export function computeMatchScore(me, other) {
     earned += WEIGHTS.guna * (guna.total / guna.max)
     const line = 'Guna Milan ' + guna.total + '/36 (' + guna.verdict + ')'
     if (guna.total >= MIN_GUNA_WHEN_REQUIRED) strengths.push(line)
-    else needsDiscussion.push('⚠ ' + line + ' — consult family/astrologer')
-    guna.doshas.filter(d => !d.includes('cancelled')).forEach(d => needsDiscussion.push('⚠ ' + d + ' — consult family/astrologer'))
+    else needsDiscussion.push(line + ' — consult family/astrologer')
+    guna.doshas.filter(d => !d.includes('cancelled')).forEach(d => needsDiscussion.push(d + ' — consult family/astrologer'))
   } else if ((me.horoscope_match_required === 'Yes' || other.horoscope_match_required === 'Yes') && !(me.nakshatra && other.nakshatra)) {
     needsDiscussion.push('Horoscope match wanted — Rashi/Nakshatra missing, ask for kundli')
   }
@@ -213,7 +213,7 @@ export function computeMatchScore(me, other) {
       earned += WEIGHTS.manglik * 0.5
       needsDiscussion.push('Manglik status unclear for one profile — verify')
     } else {
-      needsDiscussion.push('⚠ Manglik mismatch (' + mv + ' / ' + ov + ') — consult family/astrologer')
+      needsDiscussion.push('Manglik mismatch (' + mv + ' / ' + ov + ') — consult family/astrologer')
     }
   }
 
