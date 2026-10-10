@@ -23,6 +23,7 @@ import { applyFiltersToQuery, applySearchToQuery, profileMatchesFilters, profile
   filterChips, fieldsForScope, ADMIN_SEARCH_COLUMNS, searchTokens, withDataOptions, OPTION_COLUMNS } from '../utils/profileFilters'
 import CreateProfile from './CreateProfile'
 import BiodataView from './BiodataView'
+import EditPhotos from './EditPhotos'
 import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
 import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, computeRmPerformance } from '../utils/adminStats'
@@ -187,6 +188,18 @@ async function applyProfileStatus(staffUser, ids, status, extraMeta, notify = co
   return true
 }
 
+// Follow-ups had no "done" — a passed follow_up_at stayed overdue forever,
+// so the overdue badge only ever grew and My Queue's 20-row list filled up
+// with old ones (audit 2026-10-10). Done = clear follow_up_at (no new
+// column) and stamp the note so the history still shows it was followed up.
+async function completeFollowUp(note, notify = console.error) {
+  const stamp = `✓ Follow-up done ${new Date().toLocaleDateString('en-IN')}`
+  const patch = { follow_up_at: null, note: note.note ? `${note.note} · ${stamp}` : stamp }
+  const { error } = await supabase.from('profile_notes').update(patch).eq('id', note.id)
+  if (error) { notify('Could not update: ' + error.message); return null }
+  return patch
+}
+
 // "Make Premium" button abhi hidden hai — koi real payment/subscription
 // system nahi hai, isliye Aryan ne kaha (2026-10-03) abhi ke liye chhupa do.
 // Code (togglePremium) delete nahi kiya; monetization aane par yeh true karo.
@@ -206,7 +219,11 @@ function ViewTopBar({ onBack, onRefresh, loading, label = '← Back to list' }) 
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 16 }}>
       <button className="btn btn-outline btn-sm" onClick={onBack}>{label}</button>
-      {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
+      {/* Called with no args — passing onRefresh straight through handed it
+          the click event, and load(fromIndex = 0) in the Verification/
+          Reports queues read that event as a page offset, so Refresh did
+          nothing there (audit 2026-10-10). */}
+      {onRefresh && <RefreshButton onClick={() => onRefresh()} loading={loading} />}
     </div>
   )
 }
@@ -340,6 +357,11 @@ export default function Admin({ staffUser }) {
   })
   const [editingProfile, setEditingProfile] = useState(null)
   const [sharedLogCode, setSharedLogCode] = useState(null) // profile_code pre-filled when Shared Matches is opened from a profile card
+  // Photos after creation (audit 2026-10-10): 137 of 141 profiles had no
+  // photo and the admin panel only took photos inside Create Client — no
+  // way to add or change one later. Reuses the member's own EditPhotos
+  // screen (staff RLS already covers photos + storage for any profile).
+  const [photosProfile, setPhotosProfile] = useState(null)
   const [viewingProfile, setViewingProfile] = useState(null) // read-only "Full Profile" view — separate from Edit, no accidental changes
   const [matchesFor, setMatchesFor] = useState(null) // profile jiske liye matches dhoondh rahe hain
   const [matchResults, setMatchResults] = useState([])
@@ -445,19 +467,23 @@ export default function Admin({ staffUser }) {
       .then(({ data }) => { if (data) setIdMetadata(prev => ({ ...prev, [selected.id]: data })) })
   }, [selected, idMetadata])
 
-  // Notes bhi sirf tab load karte hain jab profile expand ho
+  // Notes bhi sirf tab load karte hain jab profile expand ho. Re-fetched on
+  // every expand (not cached once per session) — notes logged from My Queue,
+  // Coordination or the call-log sheet otherwise never showed up here until
+  // a page reload (audit 2026-10-10).
   useEffect(() => {
-    if (!selected || notesByProfile[selected.id]) return
+    if (!selected) return
     loadNotesFor(selected.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected])
+  }, [selected?.id])
 
   // Coordination requests involving this profile, lazily on expand (gap #5)
+  // — re-fetched each expand for the same reason as notes above.
   useEffect(() => {
-    if (!selected || coordByProfile[selected.id]) return
+    if (!selected) return
     loadCoordFor(selected.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected])
+  }, [selected?.id])
 
   const loadCoordFor = async (profileId) => {
     const { data } = await supabase.from('introductions').select('*')
@@ -567,7 +593,10 @@ export default function Admin({ staffUser }) {
     const { data, error } = await buildQuery(fromIndex, fromIndex + PAGE_SIZE - 1)
 
     if (error) {
+      // Was console-only — the list silently kept showing the previous
+      // results as if they matched the new search/filter.
       console.error('Search query failed:', error.message)
+      showToast('Search failed: ' + error.message)
       setLoading(false); setLoadingMore(false)
       return
     }
@@ -760,6 +789,13 @@ export default function Admin({ staffUser }) {
     // Was missing — a new follow-up's effect on the My Queue badge/dashboard
     // overdueFollowUps count only showed up after the hourly auto-refresh,
     // not immediately (audit 2026-10-08, P1 #11).
+    loadStats()
+  }
+
+  const markFollowUpDone = async (profileId, n) => {
+    const patch = await completeFollowUp(n, showToast)
+    if (!patch) return
+    setNotesByProfile(prev => ({ ...prev, [profileId]: (prev[profileId] || []).map(x => x.id === n.id ? { ...x, ...patch } : x) }))
     loadStats()
   }
 
@@ -983,7 +1019,7 @@ export default function Admin({ staffUser }) {
   const isSidebarItemActive = (it) => (it.id === 'dashboard' || it.id === 'profiles' || it.id === 'account')
     ? effectiveSection === it.id && view === 'list'
     : view === it.id
-  const sectionForView = { verificationQueue:'queues', reportsQueue:'queues', myQueue:'queues', duplicateLeads:'queues', casteSuggestions:'tools', coordinationRequests:'tools', shareLinks:'tools', sharedMatchLog:'tools', createClient:'profiles', editProfile:'profiles', fullProfile:'profiles', findMatches:'profiles' }
+  const sectionForView = { verificationQueue:'queues', reportsQueue:'queues', myQueue:'queues', duplicateLeads:'queues', casteSuggestions:'tools', coordinationRequests:'tools', shareLinks:'tools', sharedMatchLog:'tools', createClient:'profiles', editProfile:'profiles', editPhotos:'profiles', fullProfile:'profiles', findMatches:'profiles' }
   const effectiveSection = view === 'list' ? section : (sectionForView[view] || section)
   const switchSection = (s) => { if (view !== 'list') navigate(-1); setSectionOnly(s) }
   // Jumping to a profile card from a sub-view other than Profiles (e.g.
@@ -1015,6 +1051,16 @@ export default function Admin({ staffUser }) {
     setSelected(p)
   }
 
+  // My Queue / Duplicate Leads rows only carry a few columns, and their old
+  // `setView('list'); setSelected(p)` popped back to whatever screen the
+  // queue was opened from (usually Dashboard), so nothing opened (audit
+  // 2026-10-10). Fetch the full row and use the same jump as Share Links.
+  const openProfileById = async (id) => {
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle()
+    if (error || !data) { showToast('Could not open profile' + (error ? ': ' + error.message : '')); return }
+    jumpToProfile(data)
+  }
+
   // Tapping a notification in the bell dropdown jumps straight to the
   // exact record it's about where we have one (link_entity_type='profile'),
   // instead of a generic queue (audit gap, 2026-10-08: "do not send the
@@ -1024,6 +1070,9 @@ export default function Admin({ staffUser }) {
     if (n.type === 'report_filed') { goToSectionView('queues', 'reportsQueue'); return }
     if (n.type === 'share_link_interest') { goToSectionView('tools', 'shareLinks'); return }
     if (n.type === 'share_link_not_interested') { goToSectionView('tools', 'shareLinks'); return }
+    // Coordination request / meeting notifications point at an introduction
+    // — tapping them used to do nothing at all (audit 2026-10-10).
+    if (n.link_entity_type === 'introduction' && n.link_entity_id) { goToCoordination(n.link_entity_id); return }
     // New (audit 2026-10-08): notification types with no dedicated queue
     // view — e.g. profile_liked — open the exact profile instead of
     // dropping the admin on a generic tab.
@@ -1105,6 +1154,16 @@ export default function Admin({ staffUser }) {
         </div>
       )}
 
+      {view === 'editPhotos' && photosProfile && (
+        <div style={{maxWidth:800,margin:'0 auto'}}>
+          <EditPhotos
+            user={{ id: staffUser.user_id }}
+            profileId={photosProfile.id}
+            onBack={()=>{ setView('list'); loadPhotosFor([photosProfile]); setPhotosProfile(null) }}
+          />
+        </div>
+      )}
+
       {/* Read-only full profile — reuses the member's own BiodataView (same
           component users see for themselves), so "View" can never
           accidentally change a field the way opening Edit-mode could. */}
@@ -1145,7 +1204,7 @@ export default function Admin({ staffUser }) {
 
       {view === 'myQueue' && (
         <MyQueueView staffUser={staffUser} onBack={()=>setView('list')}
-          onOpenProfile={(p)=>{ setView('list'); setSelected(p) }}
+          onOpenProfile={(p)=>openProfileById(p.id)}
           onManageCoordination={goToCoordination}
           onOpenShareLinks={()=>setView('shareLinks')} />
       )}
@@ -1170,7 +1229,7 @@ export default function Admin({ staffUser }) {
 
       {view === 'duplicateLeads' && (
         <DuplicateLeadsView onBack={()=>setView('list')}
-          onOpenProfile={(p)=>{ setView('list'); setSelected(p) }} />
+          onOpenProfile={(p)=>openProfileById(p.id)} />
       )}
 
       {view === 'findMatches' && matchesFor && (
@@ -1305,7 +1364,9 @@ export default function Admin({ staffUser }) {
 
         {isNarrowed && !loading && (
           <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 10 }}>
-            {profiles.length} result{profiles.length !== 1 ? 's' : ''} found
+            {/* Only the loaded page is counted — "+" when Load More has more,
+                so 50 never reads as the total (audit 2026-10-10). */}
+            {profiles.length}{hasMore ? '+' : ''} result{profiles.length !== 1 ? 's' : ''} found
             {search && ` for "${search}"`}
           </div>
         )}
@@ -1410,6 +1471,7 @@ export default function Admin({ staffUser }) {
                         { label: 'Share link', icon: Link2, onClick: () => shareProfileLink(p) },
                         { label: 'Shared matches log', icon: ListChecks, onClick: () => { setSharedLogCode(p.profile_code); setView('sharedMatchLog') } },
                         { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
+                        { label: 'Photos', icon: Camera, onClick: () => { setPhotosProfile(p); setView('editPhotos') } },
                         { label: 'Find matches', icon: Search, onClick: () => findMatchesForProfile(p) },
                         { label: 'Approve', icon: CheckCircle2, onClick: () => updateStatus(p.id, 'active'), hidden: p.profile_status === 'active' },
                         { label: 'Block', icon: ShieldX, color: '#dc2626', onClick: () => updateStatus(p.id, 'blocked'), hidden: p.profile_status === 'blocked' },
@@ -1508,7 +1570,9 @@ export default function Admin({ staffUser }) {
                           {n.note && n.note !== (CALL_OUTCOME_LABELS[n.call_outcome] || '') && <div style={{ display: 'inline' }}>{n.note}</div>}
                           <div style={{ fontSize: 12, color: '#bbb', marginTop: 4 }}>
                             {new Date(n.created_at).toLocaleString('en-IN')}
-                            {n.follow_up_at && <> · Follow up: {new Date(n.follow_up_at).toLocaleDateString('en-IN')}</>}
+                            {n.follow_up_at && <> · Follow up: {new Date(n.follow_up_at).toLocaleDateString('en-IN')}
+                              <button type="button" className="btn btn-outline btn-sm" style={{ padding: '2px 8px', fontSize: 11, marginLeft: 6, color: '#16a34a', borderColor: '#16a34a' }}
+                                onClick={() => markFollowUpDone(p.id, n)}>✓ Done</button></>}
                           </div>
                         </div>
                       ))}
@@ -3273,7 +3337,24 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   // time overwrite hone se pehle profile_notes mein log hota hai, taaki
   // "pehle kab rakha tha, kyun badla" ki history na gayab ho (audit gap #4).
   const handleSchedule = async (id, datetimeLocal, prevScheduledAt, fromProfileId, location) => {
-    if (!datetimeLocal) return
+    // Editing only the location of an already-scheduled meeting used to do
+    // nothing (no new date picked → silent return) — keep the existing
+    // time and save the location. With nothing scheduled yet, say so
+    // instead of ignoring the tap (audit 2026-10-10).
+    if (!datetimeLocal) {
+      if (!prevScheduledAt) { showToast('Pick a date and time first.'); return }
+      try {
+        const patch = { location: location || null }
+        const { error } = await supabase.from('introductions').update(patch).eq('id', id)
+        if (error) throw error
+        await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: prevScheduledAt, location: location || null, previous: prevScheduledAt })
+        setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+        showToast('Location saved.')
+      } catch (err) {
+        showToast(err.message)
+      }
+      return
+    }
     try {
       const newWhen = new Date(datetimeLocal).toISOString()
       // Audit 2026-10-08, P1 #14: past dates were selectable (the
@@ -3471,6 +3552,11 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                 <div style={{display:'flex',gap:6,marginTop:8,alignItems:'center'}}>
                   <OverflowMenu items={[
                     { label: 'Mark viewed', icon: Eye, onClick: () => handleMarkViewed(r.id), hidden: !!r.viewed_at },
+                    // With no members using the app yet, the receiving family
+                    // answers by phone — admin records their yes/no here instead
+                    // of the request sitting on "Awaiting response" (audit 2026-10-10).
+                    { label: 'Accepted (family said yes)', icon: CheckCircle2, color: '#16a34a', onClick: () => handleAction(r.id, 'accepted'), hidden: r.status !== 'pending' },
+                    { label: 'Declined (family said no)', icon: ThumbsDown, color: '#dc2626', onClick: () => handleAction(r.id, 'declined'), hidden: r.status !== 'pending' },
                     { label: 'Called', icon: Phone, color: '#b45309', onClick: () => handleAction(r.id, 'contacted'), hidden: ['contacted', 'meeting_done', 'closed'].includes(r.status) },
                     { label: 'Met', icon: Handshake, color: '#7c3aed', onClick: () => handleAction(r.id, 'meeting_done'), hidden: r.status === 'meeting_done' || r.status === 'closed' },
                     { label: 'Close', icon: X, onClick: () => handleAction(r.id, 'closed'), hidden: r.status === 'closed' },
@@ -3970,7 +4056,7 @@ function ReportsQueueView({ staffUser, onBack }) {
 // with just an inline "Overdue" flag (audit 2026-10-08, P1 #11 re-scope —
 // the flat list made it easy to miss that most of what was showing wasn't
 // actually due yet once "Upcoming" started being fetched at all).
-function FollowUpsSection({ items, onOpenProfile }) {
+function FollowUpsSection({ items, onOpenProfile, onDone }) {
   const now = new Date()
   const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
   const endOfToday = new Date(now); endOfToday.setHours(23, 59, 59, 999)
@@ -3990,7 +4076,13 @@ function FollowUpsSection({ items, onOpenProfile }) {
           {n.profiles?.full_name || 'Profile'}
           {isOverdue && <span className="badge" style={{ fontSize: 11, background: '#dc2626', color: '#fff' }}>Overdue</span>}
         </div>
-        <ContactButtons phone={n.profiles?.client_phone} logProfile={n.profiles} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ContactButtons phone={n.profiles?.client_phone} logProfile={n.profiles} />
+          {onDone && (
+            <button className="btn btn-outline btn-sm" style={{ padding: '6px 10px', fontSize: 12, color: '#16a34a', borderColor: '#16a34a' }}
+              title="Mark this follow-up as done" onClick={e => { e.stopPropagation(); onDone(n) }}>✓ Done</button>
+          )}
+        </div>
       </div>
       <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>{n.note}</div>
       <div style={{ fontSize: 12, color: isOverdue ? '#dc2626' : '#bbb', marginTop: 4, fontWeight: isOverdue ? 600 : 400 }}>
@@ -4023,6 +4115,7 @@ function FollowUpsSection({ items, onOpenProfile }) {
 // ===== MY QUEUE — "what needs me today" view (Shaadi/SmartMatchApp RM
 // dashboard pattern), existing tables se compute, koi naya data model nahi.
 function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, onOpenShareLinks }) {
+  const [showToast, ToastView] = useToast()
   const [loading, setLoading] = useState(true)
   const [overdueFollowUps, setOverdueFollowUps] = useState([])
   const [assignedPending, setAssignedPending] = useState([])
@@ -4111,6 +4204,10 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     setLoading(false)
   }
 
+  const handleFollowUpDone = async (n) => {
+    if (await completeFollowUp(n, showToast)) setOverdueFollowUps(prev => prev.filter(x => x.id !== n.id))
+  }
+
   const handleAcknowledgeShareInterest = async (linkId) => {
     try {
       await acknowledgeShareLinkInterest(linkId)
@@ -4148,6 +4245,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+      <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>My Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Coordination requests, today's follow-ups, your assigned profiles, and new submissions</div>
@@ -4263,7 +4361,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                 </div>
               </div>
             )} />
-          <FollowUpsSection items={inQueue(overdueFollowUps, n => [...profileSearchBits(n.profiles), n.note])} onOpenProfile={onOpenProfile} />
+          <FollowUpsSection items={inQueue(overdueFollowUps, n => [...profileSearchBits(n.profiles), n.note])} onOpenProfile={onOpenProfile} onDone={handleFollowUpDone} />
           <Section icon={ListChecks} title="Your pending profiles (to-do)" items={inQueue(assignedPending, profileSearchBits)} empty="No pending profiles assigned to you."
             hint="Only your assigned profiles still pending approval (up to 20). For everything assigned to you, use Profiles → Filters → Assigned to me."
             renderItem={p => (
@@ -4782,6 +4880,8 @@ function WhatsAppTemplatesView({ staffUser, onBack }) {
   }
 
   const deleteTemplate = async (id) => {
+    // One tap used to delete with no undo (audit 2026-10-10).
+    if (!window.confirm('Delete this template?')) return
     const { error } = await supabase.from('whatsapp_templates').delete().eq('id', id)
     if (error) { showToast(error.message); return }
     setTemplates(prev => prev.filter(t => t.id !== id))
