@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import { FormLabel, SectionLabel, PageHeader } from '../components/ui'
 import { supabase } from '../supabase'
 import { PRIVACY_LEVELS } from '../constants/profileOptions'
-import { Lock, KeyRound, EyeOff, ChevronRight, Trash2, Eye, Check } from 'lucide-react'
+import { Lock, KeyRound, EyeOff, ChevronRight, Trash2, Eye, Check, FileText } from 'lucide-react'
+import TermsAndConditions from '../components/TermsAndConditions'
 
 const HIDE_DURATIONS = [
   { label: '7 days', days: 7 },
@@ -11,7 +12,7 @@ const HIDE_DURATIONS = [
 ]
 
 export default function AccountSettings({ profile, user, onProfileUpdate, onBack, onDeleted, initialView }) {
-  const [view, setView] = useState(initialView || 'menu') // 'menu' | 'privacy' | 'password' | 'hidedelete'
+  const [view, setView] = useState(initialView || 'menu') // 'menu' | 'privacy' | 'password' | 'hidedelete' | 'terms'
   const [toast, setToast] = useState('')
 
   const showToast = (msg) => {
@@ -27,6 +28,7 @@ export default function AccountSettings({ profile, user, onProfileUpdate, onBack
       <PageHeader onBack={back} title={view === 'menu' ? 'Settings'
         : view === 'privacy' ? 'Privacy'
         : view === 'password' ? 'Password'
+        : view === 'terms' ? 'Terms & Conditions'
         : 'Hide / Delete'} />
 
       <div className={'toast ' + (toast?'show':'')}>{toast}</div>
@@ -36,6 +38,7 @@ export default function AccountSettings({ profile, user, onProfileUpdate, onBack
           {[
             { v:'privacy', icon:Lock, title:'Privacy', sub:'Who sees your community, income, contact' },
             { v:'password', icon:KeyRound, title:'Password', sub:'Change your login password' },
+            { v:'terms', icon:FileText, title:'Terms & Conditions', sub:'The consent you agreed to at signup' },
             { v:'hidedelete', icon:EyeOff, title:'Hide / Delete', sub:'Pause or remove your profile' },
           ].map(({v,icon:Icon,title,sub})=>(
             <button key={v} className="menu-row" onClick={()=>setView(v)}>
@@ -56,6 +59,18 @@ export default function AccountSettings({ profile, user, onProfileUpdate, onBack
 
       {view === 'password' && (
         <ChangePasswordView showToast={showToast} userEmail={user?.email} />
+      )}
+
+      {view === 'terms' && (
+        <div className="card" style={{marginBottom:16}}>
+          <SectionLabel style={{marginBottom:14}}>Terms & Conditions</SectionLabel>
+          <TermsAndConditions />
+          {profile.terms_accepted_at && (
+            <div className="form-hint" style={{marginTop:10}}>
+              You agreed to this on {new Date(profile.terms_accepted_at).toLocaleDateString('en-IN')}.
+            </div>
+          )}
+        </div>
       )}
 
       {view === 'hidedelete' && (

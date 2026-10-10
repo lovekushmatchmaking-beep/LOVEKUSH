@@ -2701,3 +2701,18 @@ export const WORKING_AS_OPTIONS = [
 // captured at signup/Create Client. Used for the admin Breakdown panel and
 // to gauge marketing spend ROI. Matches profiles.lead_source check constraint.
 export const LEAD_SOURCE_OPTIONS = ['Referral', 'Online Ads', 'Walk-in', 'Website', 'Other']
+
+// ===== Extracted from Aryan's original Google Form (registration + T&C) —
+// 2026-10-10. All optional, all in Edit Profile (not the signup wizard,
+// which Aryan asked to keep short) except Terms & Conditions, which is a
+// mandatory one-time checkbox at signup. =====
+export const MARRIAGE_TIMELINE_OPTIONS = ['Within 6 months', 'Within 1 year', '1-2 years', 'Just exploring']
+export const REGISTRATION_REASON_OPTIONS = ['Serious marriage within 1-2 years', 'Family pressure', 'Exploring options', 'Not sure yet']
+export const CONTACT_MODE_OPTIONS = ['WhatsApp', 'Call', 'Both']
+export const DECISION_MAKER_OPTIONS = ['Self', 'Parents', 'Joint decision']
+export const COMMUNICATE_WITH_OPTIONS = ['Self', 'Parent / Guardian', 'Both']
+export const RELOCATE_TO_INDIA_OPTIONS = ['Yes', 'No', 'Open to discussion']
+export const GOVERNMENT_ID_TYPES = ['Aadhaar Card (India)', 'Passport', 'Driving License', 'Voter ID', 'National ID (Non-Indian)', 'Other Government ID']
+export const PARTNER_MARITAL_STATUS_PREFERENCES = ['Never married', 'Divorced', 'Widowed', 'No preference']
+export const PARTNER_LIVING_ARRANGEMENT_OPTIONS = ['With parents', 'Separate', 'Flexible']
+export const PARTNER_LIFESTYLE_PREFERENCES = ['Vegetarian family', 'Non-smoking', 'Non-drinking', 'Open mindset', 'No strong preference']
