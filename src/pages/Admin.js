@@ -14,7 +14,8 @@ import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
 import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS, LEAD_SOURCE_OPTIONS, parseHeightToInches, formatHeightFromInches,
   PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS,
-  formatIncomeShort, parseIncomeRangeMidpoint } from '../constants/profileOptions'
+  formatIncomeShort, parseIncomeRangeMidpoint, COMPLEXIONS, EMPLOYMENT_TYPES, MOTHER_TONGUES,
+  LIVING_WITH_PARENTS_OPTIONS, PROFESSION_CATEGORIES } from '../constants/profileOptions'
 import DualRangeSlider from '../components/DualRangeSlider'
 import CheckboxDropdown from '../components/CheckboxDropdown'
 import CreateProfile from './CreateProfile'
@@ -1797,6 +1798,115 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
 }
 
 // ===== FIND MATCHES VIEW — reuses existing matching.js, adds masked sharing =====
+// All of a profile's filled fields, grouped and compact — Aryan asked
+// (voice note, 2026-10-10) that opening a profile's full view in Find
+// Matches should show every field that's filled in, however many there
+// are (he said "100 fields"), readable on a small screen, so he can
+// manually compare the main profile against an expanded match before
+// deciding which one to send. Reused for both the pinned main-profile
+// card and an expanded match row below, so both sides of the comparison
+// show the same depth of detail. Reuses the same field catalog as
+// EditProfileForm (Dashboard.js) / BiodataView.js — no new fields.
+const arrOrStr = (v) => Array.isArray(v) ? (v.join(', ') || null) : (v || null)
+
+function profileDetailSections(p) {
+  const siblings = []
+  if (p.brothers_count) siblings.push(`${p.brothers_count} Brother(s) (${p.brothers_married_count || 0} Married)`)
+  if (p.sisters_count) siblings.push(`${p.sisters_count} Sister(s) (${p.sisters_married_count || 0} Married)`)
+  const partnerAge = (p.partner_age_min || p.partner_age_max) ? `${p.partner_age_min || '18'} - ${p.partner_age_max || '70'} yrs` : null
+  const partnerHeight = (p.partner_height_min && p.partner_height_max) ? `${formatHeightFromInches(p.partner_height_min)} - ${formatHeightFromInches(p.partner_height_max)}` : null
+  const partnerIncome = (p.partner_income_min || p.partner_income_max) ? `${formatIncomeShort(p.partner_income_min, p.partner_income_currency)} - ${formatIncomeShort(p.partner_income_max, p.partner_income_currency)}` : null
+
+  return [
+    { title: 'Personal', rows: [
+      ['Date of birth', p.date_of_birth], ['Height', p.height], ['Weight', p.weight],
+      ['Complexion', p.complexion], ['Body type', p.body_type], ['Blood group', p.blood_group],
+      ['Marital status', p.marital_status], ['Have children', p.have_children],
+      ['Children living with', p.children_living_with], ['Physical disability', p.physical_disability],
+      ['Disability details', p.disability_details], ['Nationality', p.nationality],
+      ['Native place', p.native_place], ['Country of birth', p.country_of_birth],
+      ['Ethnic origin', p.ethnic_origin], ['Mother tongue', p.mother_tongue],
+      ['Languages spoken', arrOrStr(p.languages_spoken)],
+      ['Grew up in', p.grew_up_in], ['Profile for', p.profile_for],
+      ['Living with parents', p.living_with_parents],
+    ]},
+    { title: 'Religion & Horoscope', rows: [
+      ['Religion', p.religion], ['Denomination', p.religion_denomination], ['Denomination (2)', p.religion_denomination_2],
+      ['Community/Caste', p.community], ['Sub-caste', p.sub_caste], ['Caste no bar', p.caste_no_bar],
+      ['Gotra', p.gotra], ["Mother's gotra", p.mother_gotra], ['Manglik', p.manglik],
+      ['Rashi', p.rashi], ['Nakshatra', p.nakshatra ? p.nakshatra + (p.nakshatra_pada ? ` (Pada ${p.nakshatra_pada})` : '') : null],
+      ['Kundli available', p.kundli_available], ['Horoscope match required', p.horoscope_match_required],
+      ['Birth place', p.birth_place], ['Birth time', p.birth_time], ['Time of birth accuracy', p.time_of_birth_accuracy],
+      ['Islamic denomination', p.islamic_denomination], ['School of thought', p.islamic_school_of_thought],
+      ['Shia branch', p.islamic_shia_branch], ['Sub-caste division', p.islamic_sub_caste_division],
+      ['Christian denomination', p.christian_denomination],
+    ]},
+    { title: 'Education & Career', rows: [
+      ['Education', p.education], ['Degree', p.degree], ['College', p.college_name],
+      ['Employment type', p.employment_type], ['Profession', p.profession], ['Employer', p.employer],
+      ['Annual income', p.annual_income],
+    ]},
+    { title: 'Location', rows: [
+      ['City', p.city], ['State', p.state], ['Country', p.country], ['Zip code', p.zip_code],
+      ['Residency status', p.residency_status], ['Relocation preference', p.relocation_preference],
+    ]},
+    { title: 'Family', rows: [
+      ['Family type', p.family_type], ['Family values', p.family_values],
+      ['Family financial status', p.family_financial_status], ['Family income', p.family_income_range],
+      ['Family city', p.family_city], ["Father's profession", p.father_profession],
+      ["Mother's profession", p.mother_profession], ['Siblings', siblings.join(' · ') || null],
+      ['Own house', p.own_house], ['Vehicle ownership', p.vehicle_ownership],
+    ]},
+    { title: 'Lifestyle & Interests', rows: [
+      ['Diet', p.diet], ['Smoking', p.smoking], ['Drinking', p.drinking],
+      ['Hobbies', p.hobbies], ['Interests', arrOrStr(p.hobbies_interests)],
+      ['Favourite music', arrOrStr(p.favourite_music)], ['Favourite books', arrOrStr(p.favourite_books)],
+      ['Dress style', p.dress_style], ['Cuisines', arrOrStr(p.cuisines)],
+      ['Sports', arrOrStr(p.sports)], ['Health info', arrOrStr(p.health_info)],
+    ]},
+    { title: 'Looking For', rows: [
+      ['Age', partnerAge], ['Height', partnerHeight], ['Income', partnerIncome],
+      ['Education', arrOrStr(p.partner_education_level_preferences) || p.partner_education],
+      ['Religion', p.partner_religion && p.partner_religion !== 'Any' ? p.partner_religion : null],
+      ['Community', arrOrStr(p.partner_community_ids)],
+      ['Location', p.partner_location], ['City preference', p.partner_city_preference],
+      ['State preference', p.partner_state_preference], ['Country preference', p.partner_country_preference],
+      ['Notes', p.partner_notes],
+    ]},
+    { title: 'Contact', rows: [
+      ['Phone', p.client_phone], ['Email', p.client_email], ['Alternate email', p.alternate_email],
+    ]},
+  ]
+}
+
+function FullProfileDetails({ profile }) {
+  const sections = profileDetailSections(profile)
+    .map(s => ({ ...s, rows: s.rows.filter(([, v]) => v) }))
+    .filter(s => s.rows.length > 0)
+  return (
+    <div>
+      {profile.about_me && (
+        <div style={{fontSize:13,lineHeight:1.6,color:'#444',fontStyle:'italic',marginBottom:12,padding:'8px 10px',background:'#fafafa',borderRadius:8}}>
+          "{profile.about_me}"
+        </div>
+      )}
+      {sections.map(s => (
+        <div key={s.title} style={{marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:600,color:'#8e8e8e',textTransform:'uppercase',letterSpacing:'0.04em',marginBottom:6}}>{s.title}</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))',gap:'4px 10px'}}>
+            {s.rows.map(([label, value]) => (
+              <div key={label} style={{fontSize:12,padding:'3px 0',borderBottom:'1px solid rgba(0,0,0,0.05)'}}>
+                <span style={{color:'#8e8e8e'}}>{label}: </span>
+                <span style={{fontWeight:500}}>{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function FindMatchesView({ profile, results, loading, staffUserId, staffUser, onBack }) {
   const [expandedId, setExpandedId] = useState(null)
   // Main profile pinned on top, full detail collapsible — admin asked
@@ -1840,7 +1950,11 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
     incomeCurrency: 'INR', incomeMin: PARTNER_INCOME_BOUNDS.INR.min, incomeMax: PARTNER_INCOME_BOUNDS.INR.max,
     // Multi-select (Aryan's ask, 2026-10-09: checkbox/multi-choice filters —
     // e.g. Hindu aur Sikh dono ek saath select karna)
-    city: '', religion: [], community: [], maritalStatus: [], education: [] }
+    city: '', state: '', religion: [], community: [], maritalStatus: [], education: [],
+    // More filters (Aryan's ask, 2026-10-10): complexion, profession/
+    // employment status, mother tongue, living with parents — same
+    // multi-select pattern, same existing option lists, no new fields.
+    complexion: [], profession: [], employmentType: [], motherTongue: [], livingWithParents: [] }
   const [showFilters, setShowFilters] = useState(false)
   // Age/height/income ab slider-based range hain (DualRangeSlider, same
   // component jo member-facing Search screen par use hota hai) — pehle
@@ -1851,8 +1965,8 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
   const [filters, setFilters] = useState(showFiltersDefault)
   const setFilter = (key, val) => setFilters(prev => ({ ...prev, [key]: val }))
   const clearFilters = () => setFilters(showFiltersDefault)
-  const activeFilterCount = (filters.city !== '' ? 1 : 0)
-    + ['religion', 'community', 'maritalStatus', 'education'].filter(k => filters[k].length > 0).length
+  const activeFilterCount = (filters.city !== '' ? 1 : 0) + (filters.state !== '' ? 1 : 0)
+    + ['religion', 'community', 'maritalStatus', 'education', 'complexion', 'profession', 'employmentType', 'motherTongue', 'livingWithParents'].filter(k => filters[k].length > 0).length
     + (filters.ageMin !== showFiltersDefault.ageMin || filters.ageMax !== showFiltersDefault.ageMax ? 1 : 0)
     + (filters.heightMin !== showFiltersDefault.heightMin || filters.heightMax !== showFiltersDefault.heightMax ? 1 : 0)
     + (filters.incomeMin !== showFiltersDefault.incomeMin || filters.incomeMax !== showFiltersDefault.incomeMax || filters.incomeCurrency !== showFiltersDefault.incomeCurrency ? 1 : 0)
@@ -1861,10 +1975,16 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
     const o = r.profile
     if (o.age && (o.age < filters.ageMin || o.age > filters.ageMax)) return false
     if (filters.city && !(o.city || '').toLowerCase().includes(filters.city.trim().toLowerCase())) return false
+    if (filters.state && !(o.state || '').toLowerCase().includes(filters.state.trim().toLowerCase())) return false
     if (filters.religion.length > 0 && !filters.religion.includes(o.religion)) return false
     if (filters.community.length > 0 && !filters.community.includes(o.community)) return false
     if (filters.maritalStatus.length > 0 && !filters.maritalStatus.includes(o.marital_status)) return false
     if (filters.education.length > 0 && !filters.education.includes(o.education)) return false
+    if (filters.complexion.length > 0 && !filters.complexion.includes(o.complexion)) return false
+    if (filters.profession.length > 0 && !filters.profession.includes(o.profession)) return false
+    if (filters.employmentType.length > 0 && !filters.employmentType.includes(o.employment_type)) return false
+    if (filters.motherTongue.length > 0 && !filters.motherTongue.includes(o.mother_tongue)) return false
+    if (filters.livingWithParents.length > 0 && !filters.livingWithParents.includes(o.living_with_parents)) return false
     const inches = parseHeightToInches(o.height)
     if (inches && (inches < filters.heightMin || inches > filters.heightMax)) return false
     if (filters.incomeMin !== showFiltersDefault.incomeMin || filters.incomeMax !== showFiltersDefault.incomeMax) {
@@ -1955,30 +2075,8 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
         </div>
 
         {mainExpanded && (
-          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(0,0,0,0.06)',display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))',gap:8}}>
-            {[
-              ['Religion', profile.religion], ['Community/Caste', profile.community],
-              ['Marital status', profile.marital_status], ['Education', profile.education],
-              ['Diet', profile.diet], ['Mother tongue', profile.mother_tongue],
-              ['Family type', profile.family_type], ['Manglik', profile.manglik],
-              ['Annual income', profile.annual_income], ['State', profile.state],
-              ['Country', profile.country],
-            ].filter(([,v]) => v).map(([label, value]) => (
-              <div key={label}>
-                <div style={{fontSize:11,color:'#8e8e8e'}}>{label}</div>
-                <div style={{fontSize:13,fontWeight:500}}>{value}</div>
-              </div>
-            ))}
-            {(profile.partner_age_min || profile.partner_age_max || profile.partner_religion || profile.partner_country_preference) && (
-              <div style={{gridColumn:'1 / -1',marginTop:4}}>
-                <div style={{fontSize:11,color:'#8e8e8e',marginBottom:2}}>Looking for</div>
-                <div style={{fontSize:13}}>
-                  {profile.partner_age_min && profile.partner_age_max ? `${profile.partner_age_min}-${profile.partner_age_max}y` : ''}
-                  {profile.partner_religion && profile.partner_religion !== 'Any' ? ` • ${profile.partner_religion}` : ''}
-                  {profile.partner_country_preference && profile.partner_country_preference !== 'Open to All' ? ` • ${profile.partner_country_preference}` : ''}
-                </div>
-              </div>
-            )}
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(0,0,0,0.06)',maxHeight:'46vh',overflowY:'auto'}}>
+            <FullProfileDetails profile={profile} />
           </div>
         )}
       </div>
@@ -2080,6 +2178,8 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
               <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:10}}>
                 <input className="form-input" placeholder="City" value={filters.city}
                   onChange={e=>setFilter('city', e.target.value)} style={{maxWidth:140}} />
+                <input className="form-input" placeholder="State" value={filters.state}
+                  onChange={e=>setFilter('state', e.target.value)} style={{maxWidth:140}} />
               </div>
               <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
                 <div style={{maxWidth:180,flex:'1 1 160px'}}>
@@ -2097,6 +2197,30 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                 <div style={{maxWidth:190,flex:'1 1 170px'}}>
                   <CheckboxDropdown options={EDUCATIONS} selected={filters.education}
                     onChange={v=>setFilter('education', v)} placeholder="All education levels" />
+                </div>
+                {/* More filters (Aryan's ask, 2026-10-10): complexion,
+                    profession/employment status, mother tongue, living
+                    with parents — same CheckboxDropdown pattern, same
+                    existing option lists. */}
+                <div style={{maxWidth:180,flex:'1 1 160px'}}>
+                  <CheckboxDropdown options={COMPLEXIONS} selected={filters.complexion}
+                    onChange={v=>setFilter('complexion', v)} placeholder="All complexions" />
+                </div>
+                <div style={{maxWidth:190,flex:'1 1 170px'}}>
+                  <CheckboxDropdown options={PROFESSION_CATEGORIES} selected={filters.profession}
+                    onChange={v=>setFilter('profession', v)} placeholder="All professions" />
+                </div>
+                <div style={{maxWidth:190,flex:'1 1 170px'}}>
+                  <CheckboxDropdown options={EMPLOYMENT_TYPES} selected={filters.employmentType}
+                    onChange={v=>setFilter('employmentType', v)} placeholder="All employment types" />
+                </div>
+                <div style={{maxWidth:190,flex:'1 1 170px'}}>
+                  <CheckboxDropdown options={MOTHER_TONGUES} selected={filters.motherTongue}
+                    onChange={v=>setFilter('motherTongue', v)} placeholder="All mother tongues" />
+                </div>
+                <div style={{maxWidth:190,flex:'1 1 170px'}}>
+                  <CheckboxDropdown options={LIVING_WITH_PARENTS_OPTIONS} selected={filters.livingWithParents}
+                    onChange={v=>setFilter('livingWithParents', v)} placeholder="Living with parents: Any" />
                 </div>
                 {activeFilterCount > 0 && <button className="btn btn-outline btn-sm" onClick={clearFilters}>Clear filters</button>}
               </div>
@@ -2157,11 +2281,17 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                       </div>
                     )}
                     {r.needsDiscussion?.length > 0 && (
-                      <div>
+                      <div style={{marginBottom:10}}>
                         <div style={{fontSize:13,fontWeight:600,color:'#b45309',marginBottom:4}}>Needs Discussion</div>
                         {r.needsDiscussion.map((s,i)=><div key={i} style={{fontSize:12,marginBottom:2}}>△ {s}</div>)}
                       </div>
                     )}
+                    {/* Full profile, so the admin can manually compare this match
+                        against the pinned main profile above before deciding
+                        which one to send (Aryan's ask, 2026-10-10). */}
+                    <div style={{paddingTop:8,borderTop:'1px solid rgba(0,0,0,0.06)'}}>
+                      <FullProfileDetails profile={other} />
+                    </div>
                   </div>
                 )}
 
