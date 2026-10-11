@@ -1,6 +1,6 @@
 import React from 'react'
 import { CalendarClock, MapPin } from 'lucide-react'
-import { TrinityLogo } from './BrandLogo'
+import { TrinityLogo, Wordmark } from './BrandLogo'
 
 const BRAND_GRADIENT = 'linear-gradient(135deg, #6A1B9A 0%, #D81B60 42%, #E1306C 58%, #F56040 82%, #F6C177 100%)'
 
@@ -15,18 +15,26 @@ const BRAND_GRADIENT = 'linear-gradient(135deg, #6A1B9A 0%, #D81B60 42%, #E1306C
 // the wordmark text), the meeting-with profile's ID, and the same RM
 // contact box the share-link pages already show (ShareProfileCard.js) so
 // recipients know who to reach even once this image leaves the app.
+// Header redone again (2026-10-11, 2nd follow-up) — a solid gradient band
+// with plain white caps text wasn't "real branding" per Aryan; the actual
+// logo + gradient wordmark images (public/brand/*.png) only read correctly
+// on a light background, same as the share-link pages' BrandLockup, so the
+// header is now the same faint-gradient-wash-on-white treatment as
+// ShareShell (App.css .share-hero-band) instead of a solid color block.
 const MeetingCard = React.forwardRef(function MeetingCard(
   { name, otherName, otherAge, otherCity, otherCode, date, time, location, requestId, rmName, rmPhone, rmEmail }, ref
 ) {
   return (
     <div ref={ref} style={{ width: 360, fontFamily: "'Inter', system-ui, sans-serif", background: '#fff', borderRadius: 20, overflow: 'hidden', border: '1px solid #ededed' }}>
-      <div style={{ background: BRAND_GRADIENT, padding: '20px 24px', color: '#fff', display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ width: 54, height: 54, borderRadius: 16, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <TrinityLogo size={38} />
+      <div style={{ position: 'relative', padding: '26px 24px 20px', textAlign: 'center', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: '0 0 auto 0', height: 150, background: BRAND_GRADIENT, opacity: 0.14,
+          WebkitMaskImage: 'linear-gradient(#000 40%, transparent)', maskImage: 'linear-gradient(#000 40%, transparent)' }} />
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <TrinityLogo size={32} />
+          <Wordmark height={22} />
         </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', opacity: 0.9 }}>LOVEKUSH</div>
-          <div style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 20, fontWeight: 600, marginTop: 4 }}>Meeting Confirmed</div>
+        <div style={{ position: 'relative', fontFamily: "'Montserrat', sans-serif", fontSize: 20, fontWeight: 600, marginTop: 14, color: '#1F1720' }}>
+          Meeting Confirmed
         </div>
       </div>
       <div style={{ padding: '22px 24px' }}>
