@@ -229,14 +229,20 @@ function ViewTopBar({ onBack, onRefresh, loading, label = '← Back to list' }) 
 }
 
 // Simple client-side search box for the smaller queue lists. Gave it the
-// same magnifying-glass icon as the other search bars in the app, so every
-// search box in the admin panel looks consistent (Aryan, 2026-10-11).
+// same magnifying-glass icon as the other search bars in the app. Uses the
+// same compact sizing as the Profiles-list search box (10px padding) instead
+// of the taller default .form-input (13px) — with the icon added, the
+// default padding made this look oversized next to the rest of the admin
+// panel's search bars (Aryan, 2026-10-11).
 function ListSearch({ value, onChange, placeholder }) {
   return (
     <div style={{ position: 'relative', marginBottom: 14 }}>
       <Search size={14} color="#8e8e8e" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-      <input type="text" className="form-input" value={value} onChange={e => onChange(e.target.value)}
-        placeholder={placeholder} style={{ width: '100%', fontSize: 13, paddingLeft: 34, boxSizing: 'border-box' }} />
+      <input type="text" value={value} onChange={e => onChange(e.target.value)}
+        placeholder={placeholder} style={{
+          width: '100%', boxSizing: 'border-box', padding: '10px 14px 10px 34px', borderRadius: 'var(--radius)',
+          border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, outline: 'none', background: '#fafafa',
+        }} />
     </div>
   )
 }

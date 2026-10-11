@@ -701,8 +701,11 @@ export default function Dashboard({ user }) {
                   <div style={{display:'flex',gap:8}}>
                     <div style={{position:'relative',flex:1,minWidth:0}}>
                       <Search size={14} color="#8e8e8e" style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}} />
-                      <input className="form-input" value={matchQuery} onChange={e=>setMatchQuery(e.target.value)}
-                        placeholder="Search matches: ID, city, caste, education..." style={{width:'100%',minWidth:0,fontSize:13,paddingLeft:34,boxSizing:'border-box'}} />
+                      <input value={matchQuery} onChange={e=>setMatchQuery(e.target.value)}
+                        placeholder="Search matches: ID, city, caste, education..." style={{
+                          width:'100%', minWidth:0, boxSizing:'border-box', padding:'10px 14px 10px 34px', borderRadius:'var(--radius)',
+                          border:'1px solid rgba(0,0,0,0.12)', fontSize:13, outline:'none', background:'#fafafa',
+                        }} />
                     </div>
                     <button className={'btn btn-sm ' + (showMatchFilters ? 'btn-primary' : 'btn-outline')} style={{flex:'0 0 auto'}}
                       onClick={()=>setShowMatchFilters(v=>!v)}>
