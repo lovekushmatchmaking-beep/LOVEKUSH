@@ -7,9 +7,10 @@
 // bharte.
 
 import {
-  RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES, EDUCATIONS, DEGREE_OPTIONS, HEIGHT_RANGES,
+  RELIGIONS, CASTES, GOTRAS, MOTHER_TONGUES, LANGUAGES_SPOKEN, EDUCATIONS, DEGREE_OPTIONS, HEIGHT_RANGES,
   INCOME_RANGES, MARITAL_STATUSES, MANGLIK_OPTIONS, COMPLEXIONS, DIETS, BLOOD_GROUPS,
-  PROFESSION_CATEGORIES, COUNTRIES, FAMILY_TYPES,
+  PROFESSION_CATEGORIES, COUNTRIES, FAMILY_TYPES, EMPLOYMENT_TYPES, BODY_TYPES,
+  CHILDREN_LIVING_WITH_OPTIONS, RELOCATION_PREFERENCES, RESIDENCY_STATUSES,
 } from '../constants/profileOptions'
 import { RASHIS, NAKSHATRAS } from './astrology'
 
@@ -25,19 +26,25 @@ const LABELS = [
   ['birth_place', /(place\s*of\s*birth|birth\s*place|pob|जन्म\s*(का)?\s*स्थान)/i],
   ['dob', /(date\s*of\s*birth|d\.?\s*o\.?\s*b\.?|birth\s*date|born\s*on|जन्म\s*(तिथि|दिनांक|तारीख)|जन्मतिथि)/i],
   ['sub_caste', /(sub[\s-]*caste|उप\s*जाति|उपजाति)/i],
+  ['children_living_with', /(children\s*living\s*with|बच्चे\s*(किसके)?\s*साथ\s*रहते)/i],
+  ['have_children', /(have\s*(any\s*)?children|do\s*you\s*have\s*children|children\b|बच्चे)/i],
   ['marital_status', /(marital\s*status|वैवाहिक\s*स्थिति)/i],
   ['name', /(full\s*name|name\s*of\s*(the\s*)?(boy|girl|candidate)|candidate'?s?\s*name|name|नाम)/i],
   ['gender', /(gender|sex|लिंग)/i],
   ['height', /(height|कद|लंबाई|लम्बाई|ऊंचाई|ऊँचाई)/i],
   ['weight', /(weight|वजन|वज़न)/i],
+  ['body_type', /(body\s*type|शरीर\s*(की)?\s*बनावट)/i],
   ['education', /(educational\s*qualification|qualification|education|शिक्षा|योग्यता)/i],
   ['employer', /(company|employer|organisation|organization|working\s*(at|with)|कंपनी)/i],
+  ['employment_type', /(employment\s*type|नौकरी\s*(का)?\s*प्रकार)/i],
   ['occupation', /(occupation|profession|job|designation|working\s*as|व्यवसाय|पेशा|नौकरी)/i],
   ['income', /(annual\s*income|income|salary|package|ctc|आय|वेतन)/i],
   ['religion', /(religion|धर्म)/i],
+  ['caste_no_bar', /(caste\s*no\s*bar|जाति\s*(का)?\s*बंधन\s*नहीं)/i],
   ['caste', /(caste|community|जाति|समाज)/i],
   ['gotra', /(gotra|gothra|गोत्र)/i],
   ['manglik', /(manglik|mangalik|manglic|mangal\s*dosh|मांगलिक|मंगली)/i],
+  ['kundli_available', /(kundli\s*(available)?|horoscope\s*available|कुंडली\s*(उपलब्ध)?)/i],
   ['rashi', /(rashi|raasi|rasi|moon\s*sign|राशि)/i],
   ['nakshatra', /(nakshatra|nakshatram|natchathiram|birth\s*star|star|नक्षत्र)/i],
   ['complexion', /(complexion|colou?r|skin\s*tone|रंग|वर्ण)/i],
@@ -49,6 +56,8 @@ const LABELS = [
   ['city', /(current\s*city|city|residing\s*(at|in)|location|शहर|निवास)/i],
   ['state', /(state|राज्य|प्रदेश)/i],
   ['native_place', /(native\s*place|native|hometown|मूल\s*निवास|पैतृक\s*गांव)/i],
+  ['residency_status', /(residency\s*status|visa\s*status)/i],
+  ['relocation_preference', /(relocation\s*preference|willing\s*to\s*relocate|स्थानांतरण\s*(की)?\s*इच्छा)/i],
   ['nationality', /(nationality|citizenship|राष्ट्रीयता)/i],
   ['phone', /(mobile|phone|contact\s*(no|number)?|whatsapp|मोबाइल|संपर्क)/i],
   ['email', /(e-?mail|ईमेल)/i],
@@ -58,6 +67,7 @@ const LABELS = [
   ['own_house', /(own\s*house|house|home|मकान|घर)/i],
   ['vehicle', /(vehicle|car|two[\s-]*wheeler|वाहन|गाड़ी)/i],
   ['college', /(college|university|institute|कॉलेज|विश्वविद्यालय)/i],
+  ['languages_spoken', /(languages?\s*(known|spoken)?|भाषा(एं)?)/i],
   ['hobbies', /(hobbies|hobby|interests|शौक)/i],
   ['partner_notes', /(partner\s*(expectations?|preferences?|requirements?)|expectations?(\s*from\s*partner)?|looking\s*for|जीवनसाथी\s*(से)?\s*अपेक्षा|अपेक्षा)/i],
   ['about_me', /(about\s*(me|myself|him|her|the\s*(boy|girl|candidate))?|परिचय)/i],
@@ -75,6 +85,9 @@ const HUMAN_LABELS = {
   email: 'Email', about_me: 'About', gender: 'Gender', weight: 'Weight', father_name: "Father's Name", mother_name: "Mother's Name",
   family_city: 'Family City', state: 'State', family_type: 'Family Type', smoking: 'Smoking', drinking: 'Drinking',
   own_house: 'Own House', vehicle: 'Vehicle', college: 'College', hobbies: 'Hobbies', partner_notes: 'Partner Expectations',
+  languages_spoken: 'Languages Known', employment_type: 'Employment Type', body_type: 'Body Type',
+  have_children: 'Have Children', children_living_with: 'Children Living With', kundli_available: 'Kundli Available',
+  caste_no_bar: 'Caste No Bar', relocation_preference: 'Relocation Preference', residency_status: 'Residency Status',
 }
 
 const DEVANAGARI_DIGITS = '०१२३४५६७८९'
@@ -478,6 +491,80 @@ export function parseVehicle(raw) {
   return null
 }
 
+export function parseHaveChildren(raw) {
+  const s = String(raw || '').toLowerCase().trim()
+  if (/prefer\s*not/.test(s)) return 'Prefer not to say'
+  if (/^(no|none|nil|nahi|नहीं|0)\b/.test(s)) return 'No'
+  if (/^(yes|haan|हाँ|हां)\b/.test(s) || /\d/.test(s)) return 'Yes'
+  return null
+}
+
+export function parseChildrenLivingWith(raw) {
+  const s = String(raw || '').toLowerCase()
+  if (/joint(ly)?/.test(s)) return 'Jointly'
+  if (/ex[\s-]*spouse/.test(s)) return 'Ex-Spouse'
+  if (/^(me|myself|with\s*me)\b/.test(s.trim())) return 'Me'
+  return matchOption(raw, CHILDREN_LIVING_WITH_OPTIONS)
+}
+
+export function parseEmploymentType(raw) {
+  const s = String(raw || '').toLowerCase()
+  if (/govt|government|सरकारी/.test(s)) return 'Government'
+  if (/business|self[\s-]*employ|own\s*business|entrepreneur|व्यवसाय/.test(s)) return 'Business / Self-Employed'
+  if (/not\s*working|unemployed/.test(s)) return 'Not Working'
+  if (/student|विद्यार्थी/.test(s)) return 'Student'
+  if (/retire|सेवानिवृत्त/.test(s)) return 'Retired'
+  if (/private|प्राइवेट/.test(s)) return 'Private Sector'
+  return matchOption(raw, EMPLOYMENT_TYPES)
+}
+
+export function parseBodyType(raw) {
+  const s = String(raw || '').toLowerCase()
+  if (/slim|पतला/.test(s)) return 'Slim'
+  if (/athlet|fit\b/.test(s)) return 'Athletic'
+  if (/average|सामान्य/.test(s)) return 'Average'
+  if (/heavy|मोटा/.test(s)) return 'Heavy'
+  if (/curvy/.test(s)) return 'Curvy'
+  return matchOption(raw, BODY_TYPES)
+}
+
+export function parseKundliAvailable(raw) {
+  const s = String(raw || '').toLowerCase().trim()
+  if (/arrange/.test(s)) return 'Will arrange if needed'
+  if (/^(yes|haan|हाँ|हां)/.test(s)) return 'Yes'
+  if (/^(no|nahi|नहीं)/.test(s)) return 'No'
+  return null
+}
+
+export function parseRelocationPreference(raw) {
+  const s = String(raw || '').toLowerCase()
+  if (/not\s*willing/.test(s)) return 'Not willing to relocate'
+  if (/abroad|international|overseas/.test(s)) return 'Open to relocation abroad'
+  if (/flexible/.test(s)) return 'Flexible'
+  if (/relocat/.test(s)) return 'Open to relocation within my country'
+  return matchOption(raw, RELOCATION_PREFERENCES)
+}
+
+export function parseResidencyStatus(raw) {
+  const s = String(raw || '').toLowerCase()
+  if (/applied\s*for\s*pr/.test(s)) return 'Applied for PR'
+  if (/green\s*card|permanent\s*resident|\bpr\b/.test(s)) return 'Permanent Resident / Green Card'
+  if (/work\s*permit|work\s*visa|h-?1b/.test(s)) return 'Work Permit / Work Visa'
+  if (/student\s*visa/.test(s)) return 'Student Visa'
+  if (/dependent\s*visa/.test(s)) return 'Dependent Visa'
+  if (/visitor\s*visa|temporary\s*visa|tourist/.test(s)) return 'Temporary / Visitor Visa'
+  if (/citizen/.test(s)) return 'Citizen'
+  return matchOption(raw, RESIDENCY_STATUSES)
+}
+
+// "Hindi, English, Bhojpuri" / "Hindi and English" -> matched against the
+// existing Mother Tongue list (same options, LANGUAGES_SPOKEN is an alias).
+export function parseLanguages(raw) {
+  const parts = String(raw || '').split(/[,/&]|\band\b|और/i).map(p => p.trim()).filter(Boolean)
+  const matched = [...new Set(parts.map(p => matchOption(p, LANGUAGES_SPOKEN)).filter(Boolean))]
+  return matched.length ? matched : null
+}
+
 export function parseBiodataText(text, { includeContact = false } = {}) {
   const raw = extractLabeledValues(text)
   const values = {}
@@ -507,7 +594,12 @@ export function parseBiodataText(text, { includeContact = false } = {}) {
   tryField('birth_time', single('birth_time', parseTime))
   tryField('birth_place', v => ({ fields: { birth_place: v.slice(0, 80) }, shown: v.slice(0, 80) }))
   tryField('height', single('height', parseHeight))
+  tryField('body_type', single('body_type', parseBodyType))
   tryField('marital_status', single('marital_status', parseMaritalStatus))
+  tryField('have_children', single('have_children', parseHaveChildren))
+  if (values.have_children === 'Yes') tryField('children_living_with', single('children_living_with', parseChildrenLivingWith))
+  else if (raw.children_living_with) miss('children_living_with')
+  tryField('languages_spoken', v => { const l = parseLanguages(v); return l ? { fields: { languages_spoken: l }, shown: l.join(', ') } : null })
   tryField('nationality', v => {
     const c = /indian|india|भारतीय/i.test(v) ? 'India' : matchOption(v, COUNTRIES.filter(x => x !== 'Open to All'))
     return c ? { fields: { nationality: c }, shown: c } : null
@@ -529,6 +621,8 @@ export function parseBiodataText(text, { includeContact = false } = {}) {
     tryField('gotra', v => { const g = parseGotra(v); return g ? { fields: g, shown: g.gotra_other || g.gotra } : null })
   } else if (raw.gotra) miss('gotra')
   tryField('manglik', v => { const r = parseManglik(v); return r && MANGLIK_OPTIONS.includes(r) ? { fields: { manglik: r }, shown: r } : null })
+  tryField('kundli_available', single('kundli_available', parseKundliAvailable))
+  tryField('caste_no_bar', single('caste_no_bar', parseYesNo))
   tryField('rashi', single('rashi', parseRashi))
   tryField('nakshatra', single('nakshatra', parseNakshatra))
   tryField('mother_tongue', single('mother_tongue', v => matchOption(v, MOTHER_TONGUES)))
@@ -538,6 +632,7 @@ export function parseBiodataText(text, { includeContact = false } = {}) {
   })
   tryField('occupation', single('profession', parseProfessionCategory))
   tryField('employer', v => ({ fields: { employer: v.slice(0, 80) }, shown: v.slice(0, 80) }))
+  tryField('employment_type', single('employment_type', parseEmploymentType))
   // Income slabs INR mein hain — non-India nationality par user khud chunega
   if (!values.nationality || values.nationality === 'India') tryField('income', single('annual_income', parseIncome))
   else if (raw.income) miss('income')
@@ -562,6 +657,8 @@ export function parseBiodataText(text, { includeContact = false } = {}) {
   })
   tryField('city', v => { const c = v.split(',')[0].trim().slice(0, 60); return c ? { fields: { city: c }, shown: c } : null })
   tryField('native_place', v => ({ fields: { native_place: v.slice(0, 80) }, shown: v.slice(0, 80) }))
+  tryField('residency_status', single('residency_status', parseResidencyStatus))
+  tryField('relocation_preference', single('relocation_preference', parseRelocationPreference))
   const freeText = (key, max) => (v) => { const t = v.slice(0, max).trim(); return t ? { fields: { [key]: t }, shown: t.length > 60 ? t.slice(0, 60) + '…' : t } : null }
   tryField('family_city', freeText('family_city', 60))
   tryField('state', freeText('state', 60))
@@ -610,20 +707,26 @@ Birth Place:
 Height: (e.g. 5'6")
 Weight: (in kg)
 Marital Status:
+Have Children: (Yes/No, only if married)
 Religion:
 Caste:
 Sub Caste:
+Caste No Bar: (Yes/No)
 Gotra:
 Manglik: (Yes/No)
+Kundli Available: (Yes/No/Will arrange if needed)
 Rashi:
 Nakshatra:
 Mother Tongue:
+Languages Known: (comma separated)
 Education: (highest degree, e.g. B.Tech, MBA)
 College:
 Occupation:
 Company:
+Employment Type: (Government/Private Sector/Business / Self-Employed/Not Working/Student/Retired)
 Annual Income: (e.g. 8 LPA)
 Complexion:
+Body Type: (Slim/Athletic/Average/Heavy/Curvy)
 Diet:
 Smoking: (Never/Occasionally/Yes)
 Drinking: (Never/Occasionally/Yes)
@@ -635,6 +738,8 @@ Sisters: (e.g. 1, 0 married)
 City:
 State:
 Native Place:
+Residency Status: (Citizen/Permanent Resident/Work Visa/Student Visa, for NRIs)
+Relocation Preference:
 Family Type: (Nuclear/Joint)
 Family City:
 Own House: (Yes/No)
