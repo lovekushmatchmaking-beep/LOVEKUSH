@@ -454,6 +454,14 @@ export default function Admin({ staffUser }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view])
 
+  // Saved age birthday ke baad purani ho jaati hai — admin khulte hi ek
+  // baar sab ages DOB se refresh (refresh_profile_ages, migration
+  // 20261011_workflow_audit_fixes.sql). Fire-and-forget; migration na chali
+  // ho to bas chup-chaap skip.
+  useEffect(() => {
+    supabase.rpc('refresh_profile_ages').then(({ error }) => { if (error) console.warn('refresh_profile_ages:', error.message) })
+  }, [])
+
   useEffect(() => {
     runQuery(0)
   }, [activeTab, search, filters])
@@ -2315,6 +2323,13 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
     })
   }, [profile.id])
   const [bundle, setBundle] = useState(null) // { url, generating, error, copied }
+  // Abhi banaya link bhi turant "✓ Sent" dikhaye (pehle sirf screen dobara
+  // kholne par aata tha).
+  const markSent = (ids) => setAllSentCodes(prev => {
+    const next = new Set(prev)
+    results.forEach(r => { if (ids.includes(r.profile.id) && r.profile.profile_code) next.add(r.profile.profile_code.toUpperCase()) })
+    return next
+  })
 
   // Admin-initiated coordination request between this client and a match
   // (audit gap, 2026-10-10: no way to start a Talk/Meeting from admin
@@ -2324,6 +2339,16 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
   const [introFor, setIntroFor] = useState({}) // otherId -> { loading, done, error }
   const handleCreateIntro = async (other) => {
     setIntroFor(prev => ({ ...prev, [other.id]: { loading: true } }))
+    // Is jodi ki pehle se khuli request ho (kisi bhi taraf se) to nayi nahi
+    // banate — pehle reverse-direction duplicate ban jaata tha, aur same
+    // direction par raw "duplicate key" error aata tha.
+    const { data: existing } = await supabase.from('introductions').select('id, request_id')
+      .or(`and(from_profile.eq.${profile.id},to_profile.eq.${other.id}),and(from_profile.eq.${other.id},to_profile.eq.${profile.id})`)
+      .not('status', 'in', '(closed,declined)').limit(1)
+    if (existing && existing.length > 0) {
+      setIntroFor(prev => ({ ...prev, [other.id]: { done: true, existing: existing[0].request_id || true } }))
+      return
+    }
     const { error } = await supabase.from('introductions').insert({
       from_profile: profile.id,
       to_profile: other.id,
@@ -2349,6 +2374,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
     try {
       const b = await generateShareBundle(picked, staffUserId, profile.id)
       setBundle({ url: b.url })
+      markSent(picked)
     } catch (err) {
       setBundle({ error: err.message })
     }
@@ -2364,6 +2390,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
     try {
       const link = await generateShareLink(otherProfileId, staffUserId, profile.id)
       setLinkFor(prev => ({ ...prev, [otherProfileId]: { url: link.url } }))
+      markSent([otherProfileId])
     } catch (err) {
       setLinkFor(prev => ({ ...prev, [otherProfileId]: { error: err.message } }))
     }
@@ -2664,7 +2691,9 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                 <div style={{marginTop:8}}>
                   {introFor[other.id]?.done ? (
                     <span style={{fontSize:12,color:'#16a34a',display:'flex',alignItems:'center',gap:5}}>
-                      <Handshake size={13} /> Coordination request created — visible in Coordination Requests
+                      <Handshake size={13} /> {introFor[other.id].existing
+                        ? `Already in Coordination Requests${typeof introFor[other.id].existing === 'string' ? ` (${introFor[other.id].existing})` : ''}`
+                        : 'Coordination request created — visible in Coordination Requests'}
                     </span>
                   ) : (
                     <button className="btn btn-outline btn-sm" disabled={introFor[other.id]?.loading}
@@ -3332,7 +3361,10 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
     if (rows.length === 0) return
     const ids = [...new Set(rows.flatMap(r => [r.from_profile, r.to_profile]))]
     if (ids.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone, gender').in('id', ids)
+      // rashi/nakshatra/pada: Next round "Horoscope review" Guna Milan inhi
+      // se nikalta hai — pehle yahan load hi nahi hote the, to har request
+      // par "Horoscope data not available" dikhta tha.
+      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone, gender, rashi, nakshatra, nakshatra_pada').in('id', ids)
       const map = {}
       ;(profs || []).forEach(p => { map[p.id] = p })
       setProfilesById(prev => ({ ...prev, ...map }))
@@ -3447,12 +3479,19 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   // positive decision also starts the next-round pipeline (audit #11).
   const handleDecision = async (id, decision) => {
     try {
-      const patch = { decision, decision_at: new Date().toISOString() }
+      const now = new Date().toISOString()
+      const patch = { decision, decision_at: now }
       if (decision === 'interested') patch.next_round_stage = 'horoscope_review'
+      // Negative = yeh match yahin khatam. Pehle request "Met" par hi
+      // Open tab mein padi rehti thi jab tak koi haath se Close na kare —
+      // ab "Not Proceeding" jaisa hi seedha close hota hai (pair phir se
+      // naya request ban sakta hai, 20261010_allow_rerequests_after_close).
+      if (decision === 'not_interested') Object.assign(patch, { final_outcome: 'not_proceeding', final_outcome_at: now, status: 'closed' })
       const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
       await writeAuditLog(staffUser, 'coordination_decision_recorded', id, patch)
       setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+      if (patch.status === 'closed') refreshPendingCount()
     } catch (err) {
       showToast(err.message)
     }
@@ -4336,6 +4375,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   const [upcomingMeetings, setUpcomingMeetings] = useState([])
   const [meetingsTotal, setMeetingsTotal] = useState(0) // true count in the 7-day window — the list itself is capped at 20 (scale audit #7)
   const [pendingCoordination, setPendingCoordination] = useState([])
+  const [decisionsDue, setDecisionsDue] = useState([])
   // Share-link clients (no login) who tapped "👍 Interested" and admin
   // hasn't acted on yet — audit gap, 2026-10-05: this signal didn't exist
   // before, and there was no way to tell which client a link was even for.
@@ -4359,7 +4399,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     const nowIso = new Date().toISOString()
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
     const weekFromNow = new Date(Date.now() + 7*24*60*60*1000).toISOString()
-    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes, shareNotInterestedRes] = await Promise.all([
+    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes, shareNotInterestedRes, decisionsRes] = await Promise.all([
       // Was lte(nowIso) only — upcoming follow-ups (due later this week)
       // never got fetched at all, so there was nothing to group into an
       // "Upcoming" section (audit 2026-10-08, P1 #11 re-scope).
@@ -4369,9 +4409,13 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       // Scheduled calls/meetings (introductions.scheduled_at) due in the next 7 days, soonest first.
       // Filter out closed deals — a closed deal with a past meeting date was showing indefinitely as
       // "upcoming call" in My Queue, confusing staff into thinking it was still active (audit 2026-10-10).
-      supabase.from('introductions').select('*').gte('scheduled_at', nowIso).lte('scheduled_at', weekFromNow).neq('status', 'closed').order('scheduled_at', { ascending: true }).limit(20),
-      // Same window + same closed filter — so a burst of >20 meetings shows "+N more" instead of silently hiding them (scale audit #7)
-      supabase.from('introductions').select('*', { count: 'exact', head: true }).gte('scheduled_at', nowIso).lte('scheduled_at', weekFromNow).neq('status', 'closed'),
+      // Pehle sirf `scheduled_at >= abhi` aata tha — aaj subah ki meeting
+      // dopahar tak list se gayab, aur jo meeting ho chuki par "Met" mark
+      // nahi hui wo kahin nahi dikhti thi. Ab past meetings bhi aati hain
+      // jab tak Met/Closed/Declined na ho (upar "Overdue" ke saath).
+      supabase.from('introductions').select('*').lte('scheduled_at', weekFromNow).not('status', 'in', '(closed,meeting_done,declined)').order('scheduled_at', { ascending: true }).limit(20),
+      // Same window + same filter — so a burst of >20 meetings shows "+N more" instead of silently hiding them (scale audit #7)
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).lte('scheduled_at', weekFromNow).not('status', 'in', '(closed,meeting_done,declined)'),
       // Coordination requests awaiting the receiver's accept/decline — previously
       // invisible to admin anywhere. Folded in here per Aryan's ask (2026-10-03).
       supabase.from('introductions').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
@@ -4379,6 +4423,9 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       supabase.from('share_links').select('*').not('interested_at', 'is', null).is('interest_acknowledged_at', null).order('interested_at', { ascending: false }).limit(20),
       // Share-link clients who tapped "Not for me" — only unacknowledged (audit gap, 2026-10-10).
       supabase.from('share_links').select('*').not('not_interested_at', 'is', null).is('not_interest_acknowledged_at', null).order('not_interested_at', { ascending: false }).limit(20),
+      // Meeting ho gayi ("Met"), 48 ghante mein Positive/Negative decision
+      // chahiye — yeh list pehle sirf Coordination card par dikhti thi.
+      supabase.from('introductions').select('*').eq('status', 'meeting_done').is('decision', null).order('decision_deadline', { ascending: true, nullsFirst: false }).limit(20),
     ])
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
@@ -4389,7 +4436,8 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     const pendingReqs = pendingCoordRes.data || []
     const shareInterestRows = shareInterestRes.data || []
     const shareNotInterestedRows = shareNotInterestedRes.data || []
-    const ids = [...new Set([...meetings, ...pendingReqs].flatMap(m => [m.from_profile, m.to_profile]).concat([...shareInterestRows, ...shareNotInterestedRows].flatMap(s => [s.profile_id, s.client_profile_id])).filter(Boolean))]
+    const decisions = decisionsRes.data || []
+    const ids = [...new Set([...meetings, ...pendingReqs, ...decisions].flatMap(m => [m.from_profile, m.to_profile]).concat([...shareInterestRows, ...shareNotInterestedRows].flatMap(s => [s.profile_id, s.client_profile_id])).filter(Boolean))]
     let profilesById = {}
     if (ids.length > 0) {
       const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
@@ -4397,6 +4445,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     }
     setUpcomingMeetings(meetings.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setPendingCoordination(pendingReqs.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
+    setDecisionsDue(decisions.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setShareInterest(shareInterestRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id], clientProfile: s.client_profile_id ? profilesById[s.client_profile_id] : null })))
     setShareNotInterested(shareNotInterestedRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id], clientProfile: s.client_profile_id ? profilesById[s.client_profile_id] : null })))
 
@@ -4441,6 +4490,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   }
 
   const isToday = (iso) => new Date(iso).toDateString() === new Date().toDateString()
+  const isPastDay = (iso) => { const d = new Date(); d.setHours(0, 0, 0, 0); return new Date(iso) < d }
 
   const Section = ({ icon: Icon, title, hint, items, renderItem, empty }) => (
     <div style={{ marginBottom: 24 }}>
@@ -4551,9 +4601,11 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                       {m.fromProfile?.full_name || 'Unknown'} → {m.toProfile?.full_name || 'Unknown'}
                       <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {m.request_type === 'meeting' ? 'Meeting' : 'Talk'}</span>
                     </div>
-                    <div style={{fontSize:13,color: isToday(m.scheduled_at) ? '#2563eb' : '#8e8e8e',marginTop:2,fontWeight: isToday(m.scheduled_at) ? 600 : 400}}>
+                    <div style={{fontSize:13,color: isPastDay(m.scheduled_at) ? '#dc2626' : isToday(m.scheduled_at) ? '#2563eb' : '#8e8e8e',marginTop:2,fontWeight: isToday(m.scheduled_at) || isPastDay(m.scheduled_at) ? 600 : 400}}>
+                      {isPastDay(m.scheduled_at) ? 'Overdue · ' : ''}
                       {isToday(m.scheduled_at) ? 'Today' : new Date(m.scheduled_at).toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' })}
                       {' · '}{new Date(m.scheduled_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}
+                      {isPastDay(m.scheduled_at) && <span style={{fontWeight:400,color:'#8e8e8e'}}> — mark Met or reschedule</span>}
                     </div>
                     {m.location && (
                       <div style={{fontSize:12,color:'#8e8e8e',marginTop:2,display:'flex',alignItems:'center',gap:4}}>
@@ -4576,6 +4628,29 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                 </div>
               </div>
             )} />
+          <Section icon={CheckCircle2} title="Decisions due after meeting" items={inQueue(decisionsDue, m => [...profileSearchBits(m.fromProfile), ...profileSearchBits(m.toProfile), m.request_id])}
+            empty="No meeting is waiting on a Positive/Negative decision."
+            renderItem={m => {
+              const overdue = m.decision_deadline && new Date(m.decision_deadline) < new Date()
+              return (
+                <div key={m.id} className="list-row" style={overdue ? { borderColor: '#dc2626' } : {}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600}}>{m.fromProfile?.full_name || 'Unknown'} → {m.toProfile?.full_name || 'Unknown'}</div>
+                      <div style={{fontSize:12,color: overdue ? '#dc2626' : '#b45309',marginTop:2}}>
+                        {m.decision_deadline
+                          ? `${overdue ? 'Decision overdue since' : 'Decide by'} ${new Date(m.decision_deadline).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}`
+                          : 'Met — decision pending'}
+                      </div>
+                    </div>
+                    {onManageCoordination && (
+                      <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
+                        onClick={()=>onManageCoordination(m.id)}>Manage</button>
+                    )}
+                  </div>
+                </div>
+              )
+            }} />
           <FollowUpsSection items={inQueue(overdueFollowUps, n => [...profileSearchBits(n.profiles), n.note])} onOpenProfile={onOpenProfile} onDone={handleFollowUpDone} />
           <Section icon={ListChecks} title="Your pending profiles (to-do)" items={inQueue(assignedPending, profileSearchBits)} empty="No pending profiles assigned to you."
             hint="Only your assigned profiles still pending approval (up to 20). For everything assigned to you, use Profiles → Filters → Assigned to me."

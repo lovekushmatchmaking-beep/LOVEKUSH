@@ -1,4 +1,4 @@
-import { passesHardFilters, computeMatchScore, sameCasteOrCommunity } from './matching'
+import { ageOf, passesHardFilters, computeMatchScore, sameCasteOrCommunity } from './matching'
 import { NAKSHATRAS } from './astrology'
 
 const base = { marital_status: 'Never Married', religion: 'Hindu', age: 28 }
@@ -76,4 +76,18 @@ test('profession and complexion (existing fields) now feed the score', () => {
   expect(r1.strengths.some(s => s.includes('Same profession'))).toBe(true)
   const r2 = computeMatchScore(boy({ complexion: 'Fair' }), girl({ complexion: 'Fair' }))
   expect(r2.strengths.some(s => s.includes('Same complexion'))).toBe(true)
+})
+
+describe('age handling', () => {
+  const base = { religion: 'Hindu', marital_status: 'Never Married', partner_age_min: 21, partner_age_max: 30 }
+  test('profile with no age/DOB is not silently excluded', () => {
+    const me = { ...base, gender: 'Male', age: 27 }
+    const other = { ...base, gender: 'Female', age: null }
+    expect(passesHardFilters(me, other)).toBe(true)
+  })
+  test('ageOf prefers date_of_birth over a stale saved age', () => {
+    const dob = new Date(); dob.setFullYear(dob.getFullYear() - 30); dob.setDate(dob.getDate() - 1)
+    expect(ageOf({ age: 29, date_of_birth: dob.toISOString().slice(0, 10) })).toBe(30)
+    expect(ageOf({ age: 29 })).toBe(29)
+  })
 })
