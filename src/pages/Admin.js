@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
+import { BrandLockup } from '../components/BrandLogo'
 import { RELIGIONS, CASTES, MARITAL_STATUSES, EDUCATIONS, LEAD_SOURCE_OPTIONS, parseHeightToInches, formatHeightFromInches,
   PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS,
   formatIncomeShort, parseIncomeRangeMidpoint, COMPLEXIONS, EMPLOYMENT_TYPES, MOTHER_TONGUES,
@@ -398,7 +399,7 @@ export default function Admin({ staffUser }) {
   // dekhna chahta hai, Sikh bhi") — pehle sirf ek value chun sakte the.
   const DEFAULT_FILTERS = {
     religion: [], community: [], city: '', gender: '',
-    ageMin: '', ageMax: '', maritalStatus: [], education: [], assignedToMe: false,
+    ageMin: '', ageMax: '', maritalStatus: [], education: [],
     // Universal filters (Aryan's ask, 2026-10-10: "saari fields se filter
     // kar sakoon") — every other profile field, keyed by column name, from
     // the shared catalog in utils/profileFilters.js.
@@ -602,7 +603,6 @@ export default function Admin({ staffUser }) {
     if (filters.education.length > 0) q = q.in('education', filters.education)
     if (filters.ageMin) q = q.gte('age', parseInt(filters.ageMin))
     if (filters.ageMax) q = q.lte('age', parseInt(filters.ageMax))
-    if (filters.assignedToMe) q = q.eq('managed_by_staff_id', staffUser.user_id)
     q = applyFiltersToQuery(q, filters.extra)
 
     return q
@@ -707,7 +707,6 @@ export default function Admin({ staffUser }) {
   const FILTER_CHIP_LABELS = {
     city: v => `City: ${v}`, gender: v => v,
     ageMin: v => `Age ≥ ${v}`, ageMax: v => `Age ≤ ${v}`,
-    assignedToMe: () => 'Assigned to me',
   }
   const activeFilterChips = [
     ...(search ? [{ key: 'search', label: `"${search}"`, clear: () => { setSearchInput(''); setSearch('') } }] : []),
@@ -1110,7 +1109,7 @@ export default function Admin({ staffUser }) {
       {/* ===== DESKTOP SIDEBAR ===== */}
       <aside className="admin-sidebar">
         <div className="admin-sidebar-brand">
-          <span className="gradient-text" style={{ fontFamily:'var(--font-display)', fontSize: 13, fontWeight:600, letterSpacing:'0.3em' }}>ADMIN</span>
+          <BrandLockup size={26} />
           {/* Bell sits next to the brand (was a lone icon under Account). */}
           <NotificationBell userId={staffUser.user_id} onNavigate={handleNotifNavigate} align="left" />
         </div>
@@ -1139,7 +1138,7 @@ export default function Admin({ staffUser }) {
       <div className="admin-main">
         {/* Mobile top bar */}
         <nav className="navbar admin-topbar">
-          <span className="gradient-text" style={{ fontFamily:'var(--font-display)', fontSize: 15, fontWeight:500, letterSpacing:'0.35em' }}>ADMIN</span>
+          <BrandLockup size={28} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <NotificationBell userId={staffUser.user_id} onNavigate={handleNotifNavigate} />
             <span className="chip chip-muted" style={{ textTransform: 'none' }}>{staffUser.role === 'admin' ? 'Admin' : 'RM'}</span>
@@ -1364,11 +1363,6 @@ export default function Admin({ staffUser }) {
               <CheckboxDropdown options={withDataOptions(EDUCATIONS, filterOptionRows, 'education')} selected={filters.education}
                 onChange={v=>setFilters(f=>({...f,education:v}))} placeholder="Any Education" />
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 14, cursor: 'pointer' }}>
-              <input type="checkbox" checked={filters.assignedToMe} onChange={e=>setFilters(f=>({...f,assignedToMe:e.target.checked}))} />
-              Assigned to me only <span style={{ color: '#8e8e8e', fontSize: 13 }}>(all statuses — today's pending to-dos are in Queues → My Queue)</span>
-            </label>
-
             {/* Every other profile field — universal filters (2026-10-10) */}
             <div style={{ fontSize: 12, color: '#8e8e8e', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '16px 0 6px' }}>All profile fields</div>
             <ProfileFilterGroups scope="admin" values={filters.extra} optionRows={filterOptionRows}
@@ -4720,7 +4714,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
             }} />
           <FollowUpsSection items={inQueue(overdueFollowUps, n => [...profileSearchBits(n.profiles), n.note])} onOpenProfile={onOpenProfile} onDone={handleFollowUpDone} />
           <Section icon={ListChecks} title="Your pending profiles (to-do)" items={inQueue(assignedPending, profileSearchBits)} empty="No pending profiles assigned to you."
-            hint="Only your assigned profiles still pending approval (up to 20). For everything assigned to you, use Profiles → Filters → Assigned to me."
+            hint="Only your assigned profiles still pending approval (up to 20)."
             renderItem={p => (
               <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
