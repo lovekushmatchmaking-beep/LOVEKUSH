@@ -1624,19 +1624,20 @@ export default function Admin({ staffUser }) {
                         { label: 'Shared matches log', icon: ListChecks, onClick: () => { setSharedLogCode(p.profile_code); setView('sharedMatchLog') } },
                       ]} />
                       <OverflowMenu items={[
+                        // Frequent first; rarely-used (once per profile) at the bottom
                         { label: 'View profile', icon: Eye, onClick: () => { setViewingProfile(p); setView('fullProfile') } },
                         { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
                         { label: 'Photos', icon: Camera, onClick: () => { setPhotosProfile(p); setView('editPhotos') } },
-                        { label: p.external_bureau_name ? `Bureau: ${p.external_bureau_name}` : 'Mark as external bureau', icon: Building2, onClick: () => markExternalBureau(p) },
-                        { label: 'Save contact', icon: UserPlus, onClick: () => saveProfileContact(p) },
+                        { label: 'Notify on WhatsApp', icon: MessageCircle, onClick: () => setNotifyFor({ profile: p, eventType: 'profile_approved' }), hidden: p.verification_status !== 'verified' },
+                        { label: 'Remind on WhatsApp', icon: MessageCircle, onClick: () => setNotifyFor({ profile: p, eventType: 'selfie_requested' }), hidden: p.verification_status !== 'selfie_requested' },
+                        { label: 'Approve', icon: CheckCircle2, onClick: () => updateStatus(p.id, 'active'), hidden: p.profile_status === 'active' },
                         { label: 'Verify', icon: ShieldCheck, color: '#16a34a', onClick: () => setVerificationStatus(p.id, 'verified'), hidden: p.verification_status === 'verified' },
                         { label: 'Request selfie', icon: Camera, onClick: () => setVerificationStatus(p.id, 'selfie_requested'),
                           hidden: p.verification_status === 'verified' || ['selfie_requested', 'selfie_submitted'].includes(p.verification_status) || p.is_admin_managed },
                         { label: 'Reject verification', icon: X, color: '#dc2626', onClick: () => setVerificationStatus(p.id, 'rejected'),
                           hidden: !(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) },
-                        { label: 'Remind on WhatsApp', icon: MessageCircle, onClick: () => setNotifyFor({ profile: p, eventType: 'selfie_requested' }), hidden: p.verification_status !== 'selfie_requested' },
-                        { label: 'Notify on WhatsApp', icon: MessageCircle, onClick: () => setNotifyFor({ profile: p, eventType: 'profile_approved' }), hidden: p.verification_status !== 'verified' },
-                        { label: 'Approve', icon: CheckCircle2, onClick: () => updateStatus(p.id, 'active'), hidden: p.profile_status === 'active' },
+                        { label: 'Save contact', icon: UserPlus, onClick: () => saveProfileContact(p) },
+                        { label: p.external_bureau_name ? `Bureau: ${p.external_bureau_name}` : 'Mark as external bureau', icon: Building2, onClick: () => markExternalBureau(p) },
                         { label: 'Block', icon: ShieldX, color: '#dc2626', onClick: () => updateStatus(p.id, 'blocked'), hidden: p.profile_status === 'blocked' },
                       ]} />
                     </div>
