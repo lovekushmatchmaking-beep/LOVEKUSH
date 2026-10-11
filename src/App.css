@@ -1051,19 +1051,23 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 .status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; align-self: center; }
 .status-dot-active { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
 .admin-profile-row { padding: 10px 14px; }
-/* Profile card action bar — counts on the left, Find Match / Share / ⋮
-   on the right, always visible without expanding (Aryan, 2026-10-11). */
+/* Profile card action bar — counts (incl. matches sent/received) on the
+   left, 👁 full-view + call/WhatsApp + Find Match/Share/⋮ on the right,
+   always visible without expanding (Aryan, 2026-10-11 and follow-up). */
 .admin-card-actions {
-  display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 8px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 6px; margin-top: 10px; padding-top: 8px;
   border-top: 1px solid rgba(0,0,0,0.05); cursor: default;
 }
 .admin-card-stats { display: flex; align-items: center; gap: 12px; margin-right: auto; font-size: 12px; color: #8e8e8e; }
 .admin-card-stats span { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.admin-card-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.admin-card-spacer { flex: 1 1 0; min-width: 0; }
 .admin-card-btn, .admin-card-actions .btn { padding: 5px 10px; font-size: 12px; border-radius: 999px; }
 .admin-card-btn, .admin-card-btn-inner { display: inline-flex; align-items: center; gap: 5px; }
 .admin-card-actions .btn:has(> .lucide-more-vertical), .admin-card-actions .btn:has(> .lucide-ellipsis-vertical) { padding: 5px 7px; }
 @media (max-width: 380px) {
   .admin-card-btn span, .admin-card-btn-inner span { display: none; }
+  .admin-card-spacer { display: none; }
 }
 .admin-priority { display: grid; grid-template-columns: 1fr; gap: 6px; margin-bottom: 16px; }
 .fm-match-avatar {

@@ -10,7 +10,7 @@ import {
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
   ThumbsUp, ThumbsDown, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2, Video,
-  Share2, UserPlus, Send,
+  Share2, UserPlus, Send, ArrowUp, ArrowDown,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -34,7 +34,7 @@ import { DonutChart, StackedColumns, FunnelChart, HBarChart, topSlices, GENDER_C
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { fieldSuggestionLabel, loadApprovedFieldOptions } from '../utils/fieldSuggestions'
 import { shareRegion } from '../utils/shareRegion'
-import { buildMailtoLink, buildWaChooserLink, buildMaskedShareText } from '../utils/shareProfile'
+import { buildMailtoLink, buildWaChooserLink, buildMaskedShareText, normalizePhone } from '../utils/shareProfile'
 import { MEETING_MODES, isVirtualMeeting, locationPlaceholder, meetingLinkHref, looksLikeContactDetail } from '../utils/meetingMode'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, generateBureauShareLink, acknowledgeBureauReply, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, acknowledgeShareLinkNotInterested, forwardShareLinkInterest, markInterestSent } from '../utils/shareLinks'
@@ -764,13 +764,42 @@ export default function Admin({ staffUser }) {
   const loadCardCountsFor = async (rows) => {
     if (rows.length === 0) return
     const ids = rows.map(r => r.id)
-    const [{ data: links }, { data: visits }] = await Promise.all([
-      supabase.from('share_links').select('profile_id, view_count').in('profile_id', ids),
+    const codes = rows.map(r => (r.profile_code || '').toUpperCase()).filter(c => /^[A-Z0-9]+$/.test(c))
+    const [{ data: links }, { data: visits }, { data: toClient }, { data: notesFor }, { data: notesMention }] = await Promise.all([
+      supabase.from('share_links').select('profile_id, client_profile_id, view_count').in('profile_id', ids),
       supabase.from('profile_views').select('profile_id').in('profile_id', ids),
+      // Matches sent TO these clients via share links
+      supabase.from('share_links').select('client_profile_id, profile_id').in('client_profile_id', ids),
+      // Manual "📤 Matches shared:" log entries on these clients
+      supabase.from('profile_notes').select('profile_id, note').in('profile_id', ids).like('note', SHARED_MATCH_NOTE_PREFIX + '%'),
+      // Manual log entries on OTHER clients that list these profiles' IDs
+      codes.length
+        ? supabase.from('profile_notes').select('profile_id, note').like('note', SHARED_MATCH_NOTE_PREFIX + '%')
+            .or(codes.map(c => `note.ilike.%${c}%`).join(','))
+        : Promise.resolve({ data: [] }),
     ])
+    // Profile codes for the link-sent profiles, so a match sent both by link
+    // and in the manual log only counts once.
+    const linkProfileIds = [...new Set((toClient || []).map(l => l.profile_id))]
+    const { data: linkProfs } = linkProfileIds.length
+      ? await supabase.from('profiles').select('id, profile_code').in('id', linkProfileIds)
+      : { data: [] }
+    const codeById = Object.fromEntries((linkProfs || []).map(x => [x.id, (x.profile_code || '').toUpperCase()]))
+    const idByCode = Object.fromEntries(rows.map(r => [(r.profile_code || '').toUpperCase(), r.id]))
+
+    const sentTo = Object.fromEntries(ids.map(id => [id, new Set()])) // this profile → which clients
+    const received = Object.fromEntries(ids.map(id => [id, new Set()])) // which profiles → this client
+    ;(links || []).forEach(l => { if (l.client_profile_id) sentTo[l.profile_id].add(l.client_profile_id) })
+    ;(notesMention || []).forEach(n => parseSharedMatchNote(n.note).ids.forEach(code => {
+      const pid = idByCode[code.toUpperCase()]
+      if (pid && pid !== n.profile_id) sentTo[pid].add(n.profile_id)
+    }))
+    ;(toClient || []).forEach(l => received[l.client_profile_id].add(codeById[l.profile_id] || l.profile_id))
+    ;(notesFor || []).forEach(n => parseSharedMatchNote(n.note).ids.forEach(code => received[n.profile_id].add(code.toUpperCase())))
+
     setCardCounts(prev => {
       const next = { ...prev }
-      ids.forEach(id => { next[id] = { shares: 0, linkViews: 0, memberViews: 0 } })
+      ids.forEach(id => { next[id] = { shares: 0, linkViews: 0, memberViews: 0, sent: sentTo[id].size, received: received[id].size } })
       ;(links || []).forEach(l => { next[l.profile_id].shares++; next[l.profile_id].linkViews += l.view_count || 0 })
       ;(visits || []).forEach(v => { next[v.profile_id].memberViews++ })
       return next
@@ -1032,6 +1061,17 @@ export default function Admin({ staffUser }) {
     updateExternalBureau(p.id, value)
     showToast(value ? `Marked as ${value} profile` : 'External tag removed')
   }
+  const editBureauContact = async (p) => {
+    const raw = window.prompt(`${p.external_bureau_name}'s WhatsApp/mobile number (leave empty to remove):`, p.external_bureau_contact || '')
+    if (raw === null) return
+    const value = raw.trim() || null
+    if (value && !normalizePhone(value)) { showToast('Enter a valid number (10 digits, or with country code)'); return }
+    const { error } = await supabase.from('profiles').update({ external_bureau_contact: value }).eq('id', p.id)
+    if (error) { showToast('Could not save: ' + error.message); return }
+    updateExternalBureauContact(p.id, value)
+    showToast(value ? 'Bureau number saved' : 'Bureau number removed')
+  }
+
   // Downloads a .vcf so the number can be saved straight into the phone's
   // contacts (named with the profile ID, easy to find on WhatsApp later).
   const saveProfileContact = (p) => {
@@ -1691,7 +1731,15 @@ export default function Admin({ staffUser }) {
                       <div className="admin-card-stats">
                         <span title={c ? `Shared ${c.shares} time${c.shares !== 1 ? 's' : ''} (links + bureau shares)` : 'Loading…'}><Share2 size={13} />{c ? c.shares : '–'}</span>
                         <span title={c ? `${c.memberViews} member visit${c.memberViews !== 1 ? 's' : ''} · ${c.linkViews} share-link open${c.linkViews !== 1 ? 's' : ''}` : 'Loading…'}><Eye size={13} />{views ?? '–'}</span>
+                        <span title={c ? `This profile was sent to ${c.sent} client${c.sent !== 1 ? 's' : ''} as a match` : 'Loading…'}><ArrowUp size={13} />{c ? c.sent : '–'}</span>
+                        <span title={c ? `${c.received} match${c.received !== 1 ? 'es' : ''} sent to this client` : 'Loading…'}><ArrowDown size={13} />{c ? c.received : '–'}</span>
                       </div>
+                      <div className="admin-card-buttons">
+                      <button type="button" className="btn btn-outline btn-sm admin-card-btn" title="View full profile"
+                        onClick={() => { setViewingProfile(p); setView('fullProfile') }}><Eye size={13} /></button>
+                      <ContactButtons phone={p.client_phone || p.external_bureau_contact} showNumber
+                        onAction={kind => startContactLog(p, kind)} externalBureauName={p.external_bureau_name} />
+                      <span className="admin-card-spacer" />
                       <button type="button" className="btn btn-outline btn-sm admin-card-btn" onClick={() => findMatchesForProfile(p)} title="Find matches for this profile">
                         <Search size={13} /><span>Find Match</span>
                       </button>
@@ -1705,7 +1753,6 @@ export default function Admin({ staffUser }) {
                       ]} />
                       <OverflowMenu items={[
                         // Frequent first; rarely-used (once per profile) at the bottom
-                        { label: 'View profile', icon: Eye, onClick: () => { setViewingProfile(p); setView('fullProfile') } },
                         { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
                         { label: 'Photos', icon: Camera, onClick: () => { setPhotosProfile(p); setView('editPhotos') } },
                         { label: 'Notify on WhatsApp', icon: MessageCircle, onClick: () => setNotifyFor({ profile: p, eventType: 'profile_approved' }), hidden: p.verification_status !== 'verified' },
@@ -1718,75 +1765,20 @@ export default function Admin({ staffUser }) {
                           hidden: !(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) },
                         { label: 'Save contact', icon: UserPlus, onClick: () => saveProfileContact(p) },
                         { label: p.external_bureau_name ? `Bureau: ${p.external_bureau_name}` : 'Mark as external bureau', icon: Building2, onClick: () => markExternalBureau(p) },
+                        { label: p.external_bureau_contact ? 'Bureau contact number' : 'Add bureau contact number', icon: Phone, onClick: () => editBureauContact(p), hidden: !p.external_bureau_name },
                         { label: 'Block', icon: ShieldX, color: '#dc2626', onClick: () => updateStatus(p.id, 'blocked'), hidden: p.profile_status === 'blocked' },
                       ]} />
+                      </div>
                     </div>
                   )
                 })()}
 
                 {selected?.id === p.id && (
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                    {/* Quick actions repeated near the top too — the full
-                        action row is still at the bottom, but a 50-profile
-                        review day shouldn't need a full scroll just to tap
-                        Approve/Block (Aryan's audit, gap #10). */}
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }} onClick={e => e.stopPropagation()}>
-                      <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} externalBureauName={p.external_bureau_name} />
-                      {/* View/Edit/Share/Verify etc. now live on the card's own action bar */}
-                    </div>
-
-{/* Status legend removed — badge colors are self-explanatory */}
-
-                    <div className="admin-section-header"><UserRound size={13} />Profile Details</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14, fontSize: 13 }}>
-                      {[
-                        ['Community', p.community],
-                        ['Sub-Caste / Gotra', [p.sub_caste, p.gotra].filter(Boolean).join(' / ') || null],
-                        ['Manglik', p.manglik],
-                        ['Rashi / Nakshatra', [p.rashi, p.nakshatra].filter(Boolean).join(' / ') || null],
-                        ['Education', p.education],
-                        ['Income', p.annual_income],
-                        ['Family Type', p.family_type],
-                        ['Diet', p.diet],
-                        ['Completeness', p.profile_completeness + '%'],
-                        ['Registered', new Date(p.created_at).toLocaleDateString('en-IN')],
-                        ['Gender', p.gender],
-                        ['Marital Status', p.marital_status],
-                      ].filter(([,v])=>v).map(([k, v]) => (
-                        <div key={k}>
-                          <span style={{ color: '#8e8e8e' }}>{k}: </span>
-                          <span style={{ fontWeight: 500 }}>{v}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {p.about_me && (() => {
-                      const raw = p.about_me;
-                      const isPipeData = (raw.match(/\|/g) || []).length > 3;
-                      const display = isPipeData ? raw.split('|').filter(Boolean).slice(0, 4).join(' · ') + (raw.split('|').filter(Boolean).length > 4 ? ' …' : '') : raw;
-                      return <div style={{ fontSize: 13, color: '#555', background: '#f9f9f9', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>{display}</div>;
-                    })()}
-
-                    {/* Quick contact — number + edit. Call/WhatsApp buttons
-                        already shown in the quick-actions row above, so
-                        this doesn't repeat them (audit 2026-10-08: duplicate
-                        Call/WhatsApp buttons). */}
-                    <div className="admin-section-header"><Phone size={13} />Contact</div>
-                    <ProfileContact key={p.id + (p.client_phone || '')} profile={p} staffUser={staffUser}
-                      onSaved={phone => updateClientPhone(p.id, phone)}
-                      onBureauSaved={name => updateExternalBureau(p.id, name)}
-                      onBureauContactSaved={contact => updateExternalBureauContact(p.id, contact)}
-                      onAction={kind => startContactLog(p, kind)} showContactButtons={false} showMarkBureau={false} />
-
-                    {/* Verification — status only; Verify / Request selfie / Reject /
-                        Notify moved into the card's ⋮ menu (Aryan, 2026-10-11). */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14, fontSize: 12 }}>
-                      {p.verification_status === 'verified'
-                        ? <ShieldCheck size={14} color="#16a34a" title="Verified" />
-                        : <ShieldAlert size={14} color="#2563eb" title={VERIFICATION_LABELS[p.verification_status] || 'Not verified'} />}
-                      <span style={{ color: '#8e8e8e' }}>
-                        {p.verification_status === 'verified' ? 'Verified' : (VERIFICATION_LABELS[p.verification_status] || 'Not verified')}
-                      </span>
-                    </div>
+                    {/* Profile Details / About / Contact / Verified rows removed
+                        (Aryan, 2026-10-11): full info is one tap away on the
+                        card's 👁 button, call/WhatsApp + number sit on the
+                        card row, and edit/bureau/verify live in ⋮. */}
                     {p.selfie_path && p.verification_status !== 'verified' && (
                       <SelfieCompare selfiePath={p.selfie_path} photoPath={photos[p.id]} />
                     )}
