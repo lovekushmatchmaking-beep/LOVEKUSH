@@ -3752,21 +3752,29 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                         link hoti hai (introductionId), + ek plain "Add note" bhi
                         (jab baat call/WhatsApp tap ke bina hui ho, jaise in-person
                         meeting) — audit gap #4. */}
-                    {[from, to].filter(Boolean).map(x => {
+                    {[from, to].filter(Boolean).map((x, idx) => {
                       const other = x.id === from?.id ? to : from
                       return (
-                      <div key={x.id} style={{marginTop:6}}>
-                        <div style={{fontSize:13,color:'#8e8e8e',marginBottom:2,display:'flex',alignItems:'center',gap:6}}>
-                          {x.full_name} <AddNoteButton profile={x} introductionId={r.id} />
+                      <div key={x.id} style={idx > 0 ? {marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)'} : {marginTop:6}}>
+                        {/* Both profiles' IDs always visible here — pehle sirf
+                            History ke kisi note mein ek profile ka code dikhta
+                            tha, dusre ka kahin nahi (Aryan: "profile ki 1 hi id
+                            show ho rhi hai niche", 2026-10-11). */}
+                        <div style={{fontSize:13,marginBottom:2,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                          <span style={{fontWeight:600}}>{x.full_name}</span>
+                          {x.profile_code && <span style={{fontFamily:'monospace',fontSize:11,color:'#8e8e8e'}}>{x.profile_code}</span>}
+                          <AddNoteButton profile={x} introductionId={r.id} />
                         </div>
-                        <ProfileContact profile={x} logCalls introductionId={r.id} staffUser={staffUser}
+                        <ProfileContact profile={x} compact logCalls introductionId={r.id} staffUser={staffUser}
                           onSaved={(phone)=>setProfilesById(prev=>({ ...prev, [x.id]: { ...prev[x.id], client_phone: phone } }))} />
                         {/* No automated reminder yet (no WhatsApp vendor
                             chosen — see docs/product/future-whatsapp-plan.md);
-                            one-tap confirm until that's decided. */}
+                            one-tap confirm until that's decided. Label now
+                            visible (size="md") — icon-only left admin unsure
+                            what this button even did (Aryan, 2026-10-11). */}
                         {r.scheduled_at && (
                           <div style={{marginTop:4}}>
-                            <WhatsAppReminderButton profile={x} eventType="meeting_scheduled" label="Confirm on WhatsApp"
+                            <WhatsAppReminderButton profile={x} eventType="meeting_scheduled" label="Send meeting details" size="md"
                               vars={{ otherName: other?.full_name || 'the other member',
                                 when: new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
                                   + (r.location ? ` at ${r.location}` : '') }} />
@@ -3819,7 +3827,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                   )}
                 </div>
                 )}
-                <div style={{display:'flex',gap:6,marginTop:8,alignItems:'center'}}>
+                <div style={{display:'flex',gap:6,marginTop:8,alignItems:'center',justifyContent:'flex-end'}}>
                   <OverflowMenu items={[
                     { label: 'Mark viewed', icon: Eye, onClick: () => handleMarkViewed(r.id), hidden: !!r.viewed_at },
                     // With no members using the app yet, the receiving family
