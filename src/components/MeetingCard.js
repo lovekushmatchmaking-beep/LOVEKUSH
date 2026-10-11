@@ -20,12 +20,14 @@ const MeetingCard = React.forwardRef(function MeetingCard(
 ) {
   return (
     <div ref={ref} style={{ width: 360, fontFamily: "'Inter', system-ui, sans-serif", background: '#fff', borderRadius: 20, overflow: 'hidden', border: '1px solid #ededed' }}>
-      <div style={{ background: BRAND_GRADIENT, padding: '22px 24px', color: '#fff', position: 'relative' }}>
-        <div style={{ position: 'absolute', top: 16, right: 16, width: 38, height: 38, borderRadius: 11, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <TrinityLogo size={24} />
+      <div style={{ background: BRAND_GRADIENT, padding: '20px 24px', color: '#fff', display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ width: 54, height: 54, borderRadius: 16, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <TrinityLogo size={38} />
         </div>
-        <div style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', opacity: 0.9, maxWidth: 260 }}>LOVEKUSH Matchmaking</div>
-        <div style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 22, fontWeight: 600, marginTop: 6, maxWidth: 260 }}>Meeting Confirmed</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', opacity: 0.9 }}>LOVEKUSH</div>
+          <div style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 20, fontWeight: 600, marginTop: 4 }}>Meeting Confirmed</div>
+        </div>
       </div>
       <div style={{ padding: '22px 24px' }}>
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8e8e8e', marginBottom: 4 }}>For</div>
