@@ -13,7 +13,7 @@ import { supabase } from '../supabase'
 import {
   Pencil, Download, Camera, Images, Eye, EyeOff, CircleCheck, Clock, Sparkles, Heart, Star, X,
   SlidersHorizontal, Search, Settings, ScanSearch, Ban, LogOut, ChevronRight, UserRound,
-  Undo2, Send, Inbox, ArrowRight, Check as CheckIcon, Lock as LockIcon, MapPin as MapPinIcon, Phone as PhoneIcon, CalendarDays as CalendarIcon, CircleHelp, ShieldCheck, Mail, Copy, Plus,
+  Undo2, Send, Inbox, ArrowRight, Check as CheckIcon, Lock as LockIcon, MapPin as MapPinIcon, Phone as PhoneIcon, CalendarDays as CalendarIcon, CircleHelp, ShieldCheck, Mail, Copy, Plus, Video as VideoIcon,
 } from 'lucide-react'
 import { TopBar, BottomNav, SideDrawer } from '../components/AppChrome'
 import { FormLabel, SectionLabel, PageHeader, EmptyState, ProfileActionsMenu, SUPPORT_EMAIL } from '../components/ui'
@@ -37,6 +37,7 @@ import { rankMatches } from '../utils/matching'
 import { isAstrologyApiEnabled, calculateMoonChartFromBirthDetails } from '../utils/astrologyProvider'
 import { RASHIS, NAKSHATRAS, NAKSHATRA_PADAS, nakshatrasForRashi, rashisForNakshatra } from '../utils/astrology'
 import { maskName } from '../utils/maskName'
+import { isVirtualMeeting, meetingLinkHref } from '../utils/meetingMode'
 import SignedImage from '../components/SignedImage'
 import MultiSelectChips from '../components/MultiSelectChips'
 import DualRangeSlider from '../components/DualRangeSlider'
@@ -1271,6 +1272,33 @@ function introStatusInfo(i) {
   return { text: 'Our manager will call you', color: 'var(--gray3)', Icon: PhoneIcon }
 }
 
+// The actual date/time + venue (introductions.scheduled_at/location) never
+// showed up in the member app at all — once accepted, a member only found
+// out when/where via a manual WhatsApp message from admin (coordination
+// audit, 2026-10-11: the data has been sitting on the row since Admin.js
+// schedules it, but nothing here read it). Shown under the status line
+// whenever a time is set, whatever stage the request is at since — the
+// meeting already happened or is still upcoming either way.
+function ScheduledMeetingLine({ i }) {
+  if (!i.scheduled_at) return null
+  const virtual = isVirtualMeeting(i)
+  const href = virtual ? meetingLinkHref(i.location) : null
+  return (
+    <div style={{fontSize:12,color:'var(--gray3)',display:'flex',gap:6,alignItems:'center',marginTop:4,flexWrap:'wrap'}}>
+      <CalendarIcon size={12} />
+      {new Date(i.scheduled_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+      {i.location && (
+        <>
+          · {virtual ? <VideoIcon size={12} /> : <MapPinIcon size={12} />}
+          {href
+            ? <a href={href} target="_blank" rel="noreferrer" style={{color:'var(--primary)'}}>{virtual ? 'Join link' : i.location}</a>
+            : <span>{i.location}</span>}
+        </>
+      )}
+    </div>
+  )
+}
+
 function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], onRespondPhoto, focusId, onConsumeFocus }) {
   const [subTab, setSubTab] = useState('received') // 'received' | 'sent'
   const [profilesById, setProfilesById] = useState({})
@@ -1394,9 +1422,12 @@ function RequestsTab({ myProfile, introductions, onRespond, photoRequests = [], 
                     <button className="btn btn-outline btn-sm" style={{flex:1}} onClick={()=>onRespond(i.id,'declined')}><X size={15} /> Decline</button>
                   </div>
                 ) : (() => { const { text, color, Icon } = introStatusInfo(i); return (
-                  <div style={{fontSize:12,color,display:'flex',gap:6,alignItems:'center'}}>
-                    <Icon size={14} /> {text}
-                  </div>
+                  <>
+                    <div style={{fontSize:12,color,display:'flex',gap:6,alignItems:'center'}}>
+                      <Icon size={14} /> {text}
+                    </div>
+                    <ScheduledMeetingLine i={i} />
+                  </>
                 )})()}
               </div>
             ))}
