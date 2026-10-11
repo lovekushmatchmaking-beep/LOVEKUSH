@@ -5,6 +5,7 @@ import { EVENT_LABELS, DEFAULT_MESSAGES, fillTemplate, fetchTemplates, logNotifi
 import { buildTelLink, buildWaMeLink } from '../utils/shareProfile'
 import MeetingCard from './MeetingCard'
 import { generateMeetingCardImage } from '../utils/generateMeetingCardImage'
+import { meetingLinkHref } from '../utils/meetingMode'
 
 const WA_GREEN = '#16a34a'
 
@@ -113,7 +114,14 @@ export function ReminderSheet({ profile, eventType, vars, appendText, staffUserI
       const file = new File([blob], `Meeting_${card.requestId || profile.id}.png`, { type: 'image/png' })
       await logNotification({ profileId: profile.id, eventType, staffUserId, messagePreview: 'Meeting details card shared' })
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Meeting Confirmed — LOVEKUSH' })
+        // Virtual: the join link rides along as text so it's tappable in
+        // the chat — a link printed inside a PNG can't be clicked.
+        const href = card.virtual ? meetingLinkHref(card.location) : null
+        await navigator.share({
+          files: [file],
+          title: card.virtual ? 'Virtual Meeting Confirmed — LOVEKUSH' : 'Meeting Confirmed — LOVEKUSH',
+          ...(href ? { text: `Join the virtual meeting: ${href}` } : {}),
+        })
       } else {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -164,6 +172,14 @@ export function ReminderSheet({ profile, eventType, vars, appendText, staffUserI
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: WA_GREEN, borderColor: WA_GREEN }}>
                   <MessageCircle size={13} /> Ask on WhatsApp
                 </a>
+              </div>
+            )}
+            {card.virtual && meetingLinkHref(card.location) && (
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <a className="btn btn-outline btn-sm" href={meetingLinkHref(card.location)} target="_blank" rel="noreferrer"
+                  style={{ fontSize: 12 }}>Open meeting link</a>
+                <button type="button" className="btn btn-outline btn-sm" style={{ fontSize: 12 }}
+                  onClick={() => navigator.clipboard?.writeText(meetingLinkHref(card.location))}>Copy link</button>
               </div>
             )}
             {cardError && <div style={{ fontSize: 12, color: '#dc2626' }}>{cardError}</div>}

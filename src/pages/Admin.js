@@ -9,7 +9,7 @@ import {
   ListChecks, BarChart3, RefreshCw, GitBranch, Copy, CalendarClock, X, LogOut,
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
-  ThumbsUp, ThumbsDown, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2,
+  ThumbsUp, ThumbsDown, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2, Video,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -31,6 +31,7 @@ import { rankMatches } from '../utils/matching'
 import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, computeRmPerformance } from '../utils/adminStats'
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildMailtoLink } from '../utils/shareProfile'
+import { MEETING_MODES, isVirtualMeeting, locationPlaceholder, meetingLinkHref, looksLikeContactDetail } from '../utils/meetingMode'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, generateBureauShareLink, acknowledgeBureauReply, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, acknowledgeShareLinkNotInterested, forwardShareLinkInterest, markInterestSent } from '../utils/shareLinks'
 import { WhatsAppReminderButton, ReminderSheet } from '../components/WhatsAppReminder'
@@ -3369,11 +3370,56 @@ const COORD_OPEN_STATUSES = ['pending', 'declined', 'accepted', 'contacted', 'me
 // date/time/place). Each pair becomes a normal introductions row via the
 // admin_schedule_meeting RPC (migration 20261010_admin_direct_meeting.sql),
 // so Met -> 48-hour decision -> next round all work exactly as before.
+// Venue (in-person) or join link (virtual) for a scheduled request — the
+// link opens in a new tab when it looks like a URL.
+function MeetingPlace({ r, style }) {
+  if (!r.location) return null
+  const virtual = isVirtualMeeting(r)
+  const href = virtual ? meetingLinkHref(r.location) : null
+  return (
+    <div style={{fontSize:12,color:'#8e8e8e',display:'flex',alignItems:'center',gap:4,...style}}>
+      {virtual ? <Video size={11} /> : <MapPin size={11} />}
+      {href
+        ? <a href={href} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{color:'#2563eb',wordBreak:'break-all'}}>{r.location}</a>
+        : <span style={{wordBreak:'break-all'}}>{virtual ? `Virtual · ${r.location}` : r.location}</span>}
+    </div>
+  )
+}
+
+// In-Person / Virtual pill toggle (Aryan, 2026-10-11 — far-away families
+// meet on Zoom / Google Meet). See utils/meetingMode.js.
+function MeetingModeToggle({ value, onChange, size = 13 }) {
+  return (
+    <div style={{display:'inline-flex',border:'1px solid var(--border)',borderRadius:999,overflow:'hidden',flexShrink:0}}>
+      {MEETING_MODES.map(m => {
+        const on = (value || 'in_person') === m.value
+        return (
+          <button key={m.value} type="button" onClick={()=>onChange(m.value)}
+            style={{display:'inline-flex',alignItems:'center',gap:4,padding:'6px 12px',fontSize:size-1,border:'none',cursor:'pointer',
+              background: on ? '#1F1720' : 'transparent', color: on ? '#fff' : '#555'}}>
+            {m.value === 'virtual' ? <Video size={size-1} /> : <MapPin size={size-1} />} {m.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function ContactDetailWarning({ text }) {
+  if (!looksLikeContactDetail(text)) return null
+  return (
+    <div style={{fontSize:12,color:'#b45309',marginTop:4}}>
+      ⚠ This looks like a phone number or email. Only put the meeting link here, never a client's contact details.
+    </div>
+  )
+}
+
 function ScheduleMeetingPanel({ staffUser, onDone, onCancel, showToast }) {
   const [clientCode, setClientCode] = useState('')
   const [otherCodes, setOtherCodes] = useState('')
   const [when, setWhen] = useState('')
   const [location, setLocation] = useState('')
+  const [mode, setMode] = useState('in_person')
   const [byCode, setByCode] = useState({}) // PROFILE_CODE -> profile row (or null if not found)
   const [saving, setSaving] = useState(false)
 
@@ -3417,16 +3463,19 @@ function ScheduleMeetingPanel({ staffUser, onDone, onCancel, showToast }) {
       p_others: otherRows.map(o => o.id),
       p_scheduled_at: scheduledAt,
       p_location: location.trim() || null,
+      // Only sent for virtual, so in-person keeps working on a DB that
+      // hasn't run 20261011_virtual_meetings.sql yet.
+      ...(mode === 'virtual' ? { p_meeting_mode: 'virtual' } : {}),
     })
     setSaving(false)
     if (error) {
-      showToast(/admin_schedule_meeting/.test(error.message)
-        ? 'Run the 20261010_admin_direct_meeting.sql migration in Supabase first.'
+      showToast(/admin_schedule_meeting|meeting_mode/.test(error.message)
+        ? 'Run the 20261011_virtual_meetings.sql migration in Supabase first.'
         : error.message)
       return
     }
     await writeAuditLog(staffUser, 'admin_meeting_scheduled', clientRow.id, {
-      other_profile_ids: otherRows.map(o => o.id), scheduled_at: scheduledAt, location: location.trim() || null,
+      other_profile_ids: otherRows.map(o => o.id), scheduled_at: scheduledAt, location: location.trim() || null, meeting_mode: mode,
       introduction_ids: (data || []).map(r => r.introduction_id),
     })
     showToast(`Meeting fixed with ${others.length} profile${others.length === 1 ? '' : 's'}.`)
@@ -3448,14 +3497,19 @@ function ScheduleMeetingPanel({ staffUser, onDone, onCancel, showToast }) {
         {others.map(c => <div key={c} style={{fontSize:12,marginTop:4}}>{who(c)}</div>)}
         {sameGender && <div style={{fontSize:12,color:'#b45309',marginTop:4}}>⚠ Same gender as the client — check the Profile IDs.</div>}
       </div>
+      <div className="form-group">
+        <label className="form-label">Meeting type</label>
+        <MeetingModeToggle value={mode} onChange={setMode} />
+      </div>
       <div className="form-row">
         <div className="form-group">
           <label className="form-label">Date & time</label>
           <input type="datetime-local" className="form-input" min={nowForDatetimeLocalMin()} value={when} onChange={e=>setWhen(e.target.value)} />
         </div>
         <div className="form-group">
-          <label className="form-label">Location</label>
-          <input className="form-input" placeholder="e.g. Cafe Coffee Day, Hazratganj" value={location} onChange={e=>setLocation(e.target.value)} />
+          <label className="form-label">{mode === 'virtual' ? 'Meeting link' : 'Location'}</label>
+          <input className="form-input" placeholder={mode === 'virtual' ? 'e.g. https://zoom.us/j/...' : 'e.g. Cafe Coffee Day, Hazratganj'} value={location} onChange={e=>setLocation(e.target.value)} />
+          {mode === 'virtual' && <ContactDetailWarning text={location} />}
         </div>
       </div>
       <div style={{display:'flex',gap:8}}>
@@ -3484,6 +3538,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   const [pendingCount, setPendingCount] = useState(0) // badge ke liye — loaded rows se independent, poore table ka sahi count
   const [scheduleDraft, setScheduleDraft] = useState({}) // request id -> datetime-local string being edited
   const [locationDraft, setLocationDraft] = useState({}) // request id -> location string being edited
+  const [modeDraft, setModeDraft] = useState({}) // request id -> 'in_person' | 'virtual' being edited
   // Pending (not yet accepted/declined by the receiver) requests were never
   // shown here before — admin had no visibility until both members acted.
   // Now included by default so admin can see/coordinate proactively.
@@ -3727,7 +3782,12 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   // meetings" (My Queue) ko yahin se data milta hai. Reschedule ka purana
   // time overwrite hone se pehle profile_notes mein log hota hai, taaki
   // "pehle kab rakha tha, kyun badla" ki history na gayab ho (audit gap #4).
-  const handleSchedule = async (id, datetimeLocal, prevScheduledAt, fromProfileId, location) => {
+  // Older rows (or a DB without 20261011_virtual_meetings.sql) have no
+  // meeting_mode — only send it when it's virtual or changing, so in-person
+  // scheduling keeps working before the migration is run.
+  const migrationHint = (err) => /meeting_mode/.test(err.message) ? 'Run the 20261011_virtual_meetings.sql migration in Supabase first.' : err.message
+  const handleSchedule = async (id, datetimeLocal, prevScheduledAt, fromProfileId, location, mode, prevMode) => {
+    const modePatch = (mode || 'in_person') !== (prevMode || 'in_person') ? { meeting_mode: mode || 'in_person' } : {}
     // Editing only the location of an already-scheduled meeting used to do
     // nothing (no new date picked → silent return) — keep the existing
     // time and save the location. With nothing scheduled yet, say so
@@ -3735,14 +3795,15 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
     if (!datetimeLocal) {
       if (!prevScheduledAt) { showToast('Pick a date and time first.'); return }
       try {
-        const patch = { location: location || null }
+        const patch = { location: location || null, ...modePatch }
         const { error } = await supabase.from('introductions').update(patch).eq('id', id)
         if (error) throw error
-        await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: prevScheduledAt, location: location || null, previous: prevScheduledAt })
+        await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: prevScheduledAt, location: location || null, meeting_mode: mode || 'in_person', previous: prevScheduledAt })
         setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
-        showToast('Location saved.')
+        setModeDraft(prev => ({ ...prev, [id]: undefined }))
+        showToast(mode === 'virtual' ? 'Meeting link saved.' : 'Location saved.')
       } catch (err) {
-        showToast(err.message)
+        showToast(migrationHint(err))
       }
       return
     }
@@ -3765,14 +3826,15 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
         }).select('*').single()
         if (noteRow) setNotesByIntroduction(prev => ({ ...prev, [id]: [noteRow, ...(prev[id] || [])] }))
       }
-      const patch = { scheduled_at: newWhen, location: location || null }
+      const patch = { scheduled_at: newWhen, location: location || null, ...modePatch }
       const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
-      await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: newWhen, location: location || null, previous: prevScheduledAt || null })
+      await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: newWhen, location: location || null, meeting_mode: mode || 'in_person', previous: prevScheduledAt || null })
       setScheduleDraft(prev => ({ ...prev, [id]: undefined }))
+      setModeDraft(prev => ({ ...prev, [id]: undefined }))
       setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
     } catch (err) {
-      showToast(err.message)
+      showToast(migrationHint(err))
     }
   }
 
@@ -3874,7 +3936,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                       {from ? from.full_name : (r.source === 'share_link' ? 'Share-link client' : 'Unknown')} → {to ? to.full_name : 'Unknown'}
                     </div>
                     <div style={{fontSize:12,color:'#8e8e8e',marginTop:2,textTransform:'capitalize'}}>
-                      {r.request_type === 'meeting' ? 'Meeting request' : 'Talk request'}
+                      {r.request_type === 'meeting' ? (isVirtualMeeting(r) && r.scheduled_at ? 'Virtual meeting request' : 'Meeting request') : 'Talk request'}
                       {r.source === 'share_link' && <span style={{marginLeft:6,color:'#16a34a'}}>· forwarded from a shared link</span>}
                     </div>
                     <div style={{fontSize:12,color:'#bbb',marginTop:2,display:'flex',alignItems:'center',gap:8}}>
@@ -3918,7 +3980,9 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                               otherName: (other?.full_name || 'the other member')
                                 + (other?.age || other?.city ? ` (${[other?.age && `${other.age} yrs`, other?.city].filter(Boolean).join(', ')})` : ''),
                               when: new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
-                                + (r.location ? ` at ${r.location}` : '') },
+                                + (isVirtualMeeting(r)
+                                  ? ` (virtual meeting${r.location ? `, join here: ${meetingLinkHref(r.location) || r.location}` : ''})`
+                                  : (r.location ? ` at ${r.location}` : '')) },
                               card: {
                                 name: x.full_name,
                                 otherName: other?.full_name || 'the other member',
@@ -3926,6 +3990,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                                 date: new Date(r.scheduled_at).toLocaleDateString('en-IN', { dateStyle: 'medium' }),
                                 time: new Date(r.scheduled_at).toLocaleTimeString('en-IN', { timeStyle: 'short' }),
                                 location: r.location || '',
+                                virtual: isVirtualMeeting(r),
                                 requestId: r.request_id,
                                 // Same editable RM contact the share-link pages show
                                 // (ShareProfileCard.js's RM box, staff_users.rm_*) —
@@ -3948,11 +4013,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                         <CalendarClock size={11} /> {new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                       </div>
                     )}
-                    {r.location && (
-                      <div style={{fontSize:12,color:'#8e8e8e',display:'flex',alignItems:'center',gap:4}}>
-                        <MapPin size={11} /> {r.location}
-                      </div>
-                    )}
+                    <MeetingPlace r={r} style={{maxWidth:180,justifyContent:'flex-end'}} />
                   </div>
                 </div>
                 {/* Schedule a call/meeting time — My Queue ke "Today" section mein
@@ -3967,13 +4028,14 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                     min={nowForDatetimeLocalMin()}
                     value={scheduleDraft[r.id] ?? ''}
                     onChange={e=>setScheduleDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
-                  <MapPin size={13} color="#8e8e8e" />
-                  <input type="text" className="form-input" placeholder="Location (optional)"
-                    style={{fontSize:12,padding:'7px 12px',width:160}}
+                  <MeetingModeToggle value={modeDraft[r.id] ?? r.meeting_mode} onChange={v=>setModeDraft(prev=>({ ...prev, [r.id]: v }))} size={12} />
+                  <input type="text" className="form-input" placeholder={locationPlaceholder(modeDraft[r.id] ?? r.meeting_mode)}
+                    style={{fontSize:12,padding:'7px 12px',width:200}}
                     value={locationDraft[r.id] ?? r.location ?? ''}
                     onChange={e=>setLocationDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
+                  {(modeDraft[r.id] ?? r.meeting_mode) === 'virtual' && <ContactDetailWarning text={locationDraft[r.id] ?? r.location} />}
                   <button className="btn btn-outline btn-sm" style={{padding:'7px 14px',fontSize:13}}
-                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id], r.scheduled_at, r.from_profile, locationDraft[r.id] ?? r.location)}>
+                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id], r.scheduled_at, r.from_profile, locationDraft[r.id] ?? r.location, modeDraft[r.id] ?? r.meeting_mode, r.meeting_mode)}>
                     {r.scheduled_at ? 'Reschedule' : 'Schedule'}
                   </button>
                   {r.scheduled_at && (
@@ -4788,7 +4850,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                   <div>
                     <div style={{fontSize:13,fontWeight:600}}>
                       {m.fromProfile?.full_name || 'Unknown'} → {m.toProfile?.full_name || 'Unknown'}
-                      <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {m.request_type === 'meeting' ? 'Meeting' : 'Talk'}</span>
+                      <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {m.request_type === 'meeting' ? (isVirtualMeeting(m) ? 'Virtual meeting' : 'Meeting') : 'Talk'}</span>
                     </div>
                     <div style={{fontSize:13,color: isPastDay(m.scheduled_at) ? '#dc2626' : isToday(m.scheduled_at) ? '#2563eb' : '#8e8e8e',marginTop:2,fontWeight: isToday(m.scheduled_at) || isPastDay(m.scheduled_at) ? 600 : 400}}>
                       {isPastDay(m.scheduled_at) ? 'Overdue · ' : ''}
@@ -4796,11 +4858,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                       {' · '}{new Date(m.scheduled_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}
                       {isPastDay(m.scheduled_at) && <span style={{fontWeight:400,color:'#8e8e8e'}}> — mark Met or reschedule</span>}
                     </div>
-                    {m.location && (
-                      <div style={{fontSize:12,color:'#8e8e8e',marginTop:2,display:'flex',alignItems:'center',gap:4}}>
-                        <MapPin size={11} /> {m.location}
-                      </div>
-                    )}
+                    <MeetingPlace r={m} style={{marginTop:2}} />
                   </div>
                   {onManageCoordination && (
                     <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
