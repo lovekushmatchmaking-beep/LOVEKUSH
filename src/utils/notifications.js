@@ -29,7 +29,10 @@ export const DEFAULT_MESSAGES = {
   selfie_requested: 'Hi {{name}}, this is LOVEKUSH Matchmaking Services. To verify your profile and make it live, please upload a quick selfie from your dashboard. Thank you!',
   profile_approved: 'Hi {{name}}, good news — your LOVEKUSH profile has been verified and is now live. You can start viewing matches on your dashboard.',
   match_shared: 'Hi {{name}}, we just shared a match with you on LOVEKUSH. Please have a look and let us know if you\'d like us to set up a talk.',
-  meeting_scheduled: 'Hi {{name}}, confirming your meeting/call with {{otherName}} on {{when}}. Please let us know if you need to reschedule.',
+  // Card-style layout (WhatsApp's own *bold* markdown + line breaks) instead
+  // of one plain sentence — Aryan asked for a proper "template/link/card"
+  // message for organizing meetings, not an ad-hoc line (2026-10-11).
+  meeting_scheduled: '*LOVEKUSH Matchmaking — Meeting Confirmed* 💐\n\nHi {{name}},\n👤 With: {{otherName}}\n🗓️ When: {{when}}\n\nPlease be on time. Reply here if you need to reschedule.',
   // Share link par ek party ne "Interested" dabaya — doosri party ko
   // interested profile ka link bhejna (Aryan, 2026-10-09).
   interest_received: 'Hi {{name}}, good news from LOVEKUSH! {{otherName}} has shown interest in your profile. Please have a look at their profile below. Would you like to meet them or take this forward? Just reply here and we will arrange it.',
