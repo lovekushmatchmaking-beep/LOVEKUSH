@@ -30,6 +30,7 @@ import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
 import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, computeRmPerformance } from '../utils/adminStats'
 import { findDuplicateLeads } from '../utils/duplicateLeads'
+import { fieldSuggestionLabel, loadApprovedFieldOptions } from '../utils/fieldSuggestions'
 import { buildMailtoLink } from '../utils/shareProfile'
 import { MEETING_MODES, isVirtualMeeting, locationPlaceholder, meetingLinkHref, looksLikeContactDetail } from '../utils/meetingMode'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
@@ -1058,7 +1059,7 @@ export default function Admin({ staffUser }) {
     { id: 'sharedMatchLog', label: 'Shared Matches', Icon: ListChecks, onClick: () => goToSectionView('tools', 'sharedMatchLog') },
     { section: 'Tools' },
     { id: 'duplicateLeads', label: 'Duplicate Leads', Icon: Copy, onClick: () => goToSectionView('queues', 'duplicateLeads') },
-    { id: 'casteSuggestions', label: 'Caste Suggestions', Icon: ClipboardList, onClick: () => goToSectionView('tools', 'casteSuggestions') },
+    { id: 'casteSuggestions', label: 'Field Suggestions', Icon: ClipboardList, onClick: () => goToSectionView('tools', 'casteSuggestions') },
     { id: 'whatsappTemplates', label: 'Templates', Icon: MessageCircle, onClick: () => goToSectionView('tools', 'whatsappTemplates') },
     { section: null },
     { id: 'account', label: 'Account', Icon: UserRound, onClick: () => switchSection('account') },
@@ -1761,7 +1762,7 @@ export default function Admin({ staffUser }) {
       <div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500, marginBottom: 20 }}>Tools</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
-          <AdminNavCard icon={ClipboardList} label="Caste Suggestions" onClick={()=>setView('casteSuggestions')} />
+          <AdminNavCard icon={ClipboardList} label="Field Suggestions" onClick={()=>setView('casteSuggestions')} />
           <AdminNavCard icon={Handshake} label="Coordination" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
           <AdminNavCard icon={Link2} label="Share Links" badge={(stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0) + (stats.pendingBureauReply || 0)} onClick={()=>setView('shareLinks')} />
           <AdminNavCard icon={ListChecks} label="Shared Matches" onClick={()=>setView('sharedMatchLog')} />
@@ -2043,6 +2044,7 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
   const [loading, setLoading] = useState(true)
   const [groups, setGroups] = useState([])
   const [query, setQuery] = useState('')
+  const [loadError, setLoadError] = useState('')
   const visibleGroups = groups.filter(g => matchesSearch(query, g.value, ...g.profiles.flatMap(profileSearchBits)))
 
   useEffect(() => { load() }, [])
@@ -2052,8 +2054,11 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
     // Server-side duplicate detection (find_duplicate_leads RPC, migration
     // 20261004) — only profiles that actually share a phone/email come
     // back, instead of the whole profiles table (scale audit, 2026-10-04).
+    // An RPC error used to fall through to "No duplicates found 🎉" — that's
+    // how the RPC never having been applied live went unnoticed.
     const { data, error } = await supabase.rpc('find_duplicate_leads')
     if (error) console.error(error.message)
+    setLoadError(error ? error.message : '')
     setGroups(findDuplicateLeads(data || []))
     setLoading(false)
   }
@@ -2067,6 +2072,8 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Checking...</div>
+      ) : loadError ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#dc2626',fontSize:13}}>Couldn't check for duplicates: {loadError}</div>
       ) : groups.length === 0 ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No duplicate phone numbers or emails found. 🎉</div>
       ) : visibleGroups.length === 0 ? (
@@ -3319,31 +3326,46 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
   )
 }
 
+// Field Suggestions (was "Caste Suggestions" — Aryan, 2026-10-11: it's for
+// every dropdown, not just caste). When someone picks "Others / Not in list"
+// and types their own caste, gotra, degree, mother tongue or parent's
+// profession, it lands here. Approve -> it becomes a real option in that
+// same dropdown for everyone (forms read get_approved_field_options(), see
+// utils/fieldSuggestions.js). "Added" tab lists them so one can be taken
+// back out of the dropdown. Table is still caste_suggestions.
 function CasteSuggestionsView({ onBack, staffUser }) {
   const [suggestions, setSuggestions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [query, setQuery] = useState('')
+  const [tab, setTab] = useState('pending')
+  const [fieldFilter, setFieldFilter] = useState('')
   const [showToast, ToastView] = useToast()
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [tab])
 
   const load = async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const { data, error } = await supabase
         .from('caste_suggestions')
         .select('*')
-        .eq('status', 'pending')
-        .order('times_suggested', { ascending: false })
+        .eq('status', tab)
+        .order(tab === 'pending' ? 'times_suggested' : 'updated_at', { ascending: false })
       if (error) throw error
       setSuggestions(data || [])
     } catch (err) {
       console.error(err.message)
+      setLoadError(err.message)
     }
     setLoading(false)
   }
 
-  const visibleSuggestions = suggestions.filter(s => matchesSearch(query, s.suggested_name, s.religion, s.denomination, s.field_type))
+  const fieldsPresent = [...new Set(suggestions.map(s => s.field_type))]
+  const visibleSuggestions = suggestions
+    .filter(s => !fieldFilter || s.field_type === fieldFilter)
+    .filter(s => matchesSearch(query, s.suggested_name, s.religion, s.denomination, s.field_type, fieldSuggestionLabel(s.field_type)))
 
   const handleAction = async (id, status, suggestion) => {
     try {
@@ -3353,6 +3375,11 @@ function CasteSuggestionsView({ onBack, staffUser }) {
       await writeAuditLog(staffUser, 'caste_suggestion_' + status, id, {
         suggested_name: suggestion?.suggested_name, field_type: suggestion?.field_type,
       })
+      loadApprovedFieldOptions(true)
+      const label = fieldSuggestionLabel(suggestion?.field_type)
+      showToast(status === 'approved' ? `"${suggestion?.suggested_name}" added to ${label} dropdown`
+        : tab === 'approved' ? `"${suggestion?.suggested_name}" removed from ${label} dropdown`
+        : 'Suggestion rejected')
       load()
     } catch (err) {
       showToast(err.message)
@@ -3363,26 +3390,49 @@ function CasteSuggestionsView({ onBack, staffUser }) {
     <div className="admin-view" style={{ maxWidth: 800 }}>
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
-      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>Caste Suggestions</h2>
+      <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Field Suggestions</h2>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:16}}>
+        Values people typed under "Others / Not in list" in any dropdown. Approve to add it as a new option in that dropdown.
+      </div>
+      <div className="pill-tabs" style={{marginBottom:16}}>
+        {[['pending', 'Pending'], ['approved', 'Added to dropdowns']].map(([t, label]) => (
+          <button key={t} className={'pill-tab ' + (tab === t ? 'active' : '')} onClick={()=>{ setTab(t); setFieldFilter('') }}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {fieldsPresent.length > 1 && (
+        <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:12}}>
+          {['', ...fieldsPresent].map(f => (
+            <button key={f || 'all'} className={'chip ' + (fieldFilter === f ? 'chip-primary' : 'chip-muted')}
+              style={{textTransform:'none',cursor:'pointer',border:'none'}} onClick={()=>setFieldFilter(f)}>
+              {f ? fieldSuggestionLabel(f) : 'All fields'}
+            </button>
+          ))}
+        </div>
+      )}
       {suggestions.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search" />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
+      ) : loadError ? (
+        <div style={{textAlign:'center',padding:'40px 0',color:'#dc2626',fontSize:13}}>Couldn't load suggestions: {loadError}</div>
       ) : suggestions.length === 0 ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>
-          No pending suggestions right now.
+          {tab === 'pending' ? 'No pending suggestions right now.' : 'Nothing added from suggestions yet.'}
         </div>
       ) : visibleSuggestions.length === 0 ? (
-        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No suggestions match "{query}".</div>
+        <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>No suggestions match{query ? ` "${query}"` : ''}.</div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
           {visibleSuggestions.map(s => (
             <div key={s.id} className="list-row">
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
                 <div>
                   <div style={{fontSize:14,fontWeight:600}}>{s.suggested_name}</div>
                   <div style={{fontSize:12,color:'#8e8e8e',marginTop:2}}>
-                    {s.religion}{s.denomination ? ' · ' + s.denomination : ''} · <span style={{textTransform:'capitalize'}}>{s.field_type}</span>
+                    <span className="chip chip-muted" style={{textTransform:'none',marginRight:6}}>{fieldSuggestionLabel(s.field_type)}</span>
+                    {s.religion ? s.religion : ''}{s.denomination ? ' · ' + s.denomination : ''}
                   </div>
                   <div style={{fontSize:12,color:'#bbb',marginTop:2}}>
                     {new Date(s.created_at).toLocaleDateString('en-IN')}
@@ -3393,10 +3443,17 @@ function CasteSuggestionsView({ onBack, staffUser }) {
                 </div>
               </div>
               <div style={{display:'flex',gap:8,marginTop:10}}>
-                <button className="btn btn-outline btn-sm" style={{color:'#16a34a',borderColor:'#16a34a'}}
-                  onClick={()=>handleAction(s.id, 'approved', s)}>✅ Approve</button>
-                <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
-                  onClick={()=>handleAction(s.id, 'rejected', s)}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
+                {tab === 'pending' ? (
+                  <>
+                    <button className="btn btn-outline btn-sm" style={{color:'#16a34a',borderColor:'#16a34a'}}
+                      onClick={()=>handleAction(s.id, 'approved', s)}>✅ Add to {fieldSuggestionLabel(s.field_type)}</button>
+                    <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
+                      onClick={()=>handleAction(s.id, 'rejected', s)}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reject</button>
+                  </>
+                ) : (
+                  <button className="btn btn-outline btn-sm" style={{color:'#dc2626',borderColor:'#dc2626'}}
+                    onClick={()=>handleAction(s.id, 'rejected', s)}><X size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Remove from dropdown</button>
+                )}
               </div>
             </div>
           ))}

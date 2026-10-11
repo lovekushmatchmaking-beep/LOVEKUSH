@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, generateProfileCode } from '../supabase'
+import { useApprovedFieldOptions, withApprovedOptions, withApprovedDegreeOptions, suggestFieldValue } from '../utils/fieldSuggestions'
 import { RASHIS, NAKSHATRAS, nakshatrasForRashi, rashisForNakshatra } from '../utils/astrology'
 import { normalizePhone } from '../utils/shareProfile'
 
@@ -163,6 +164,9 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
 
   const PERSONAL_QUESTIONS = useMemo(() => buildPersonalQuestions(adminMode), [adminMode])
 
+  // Admin-approved "Others / Not in list" values (Field Suggestions) show
+  // up as real options in these dropdowns.
+  const approvedOptions = useApprovedFieldOptions()
   const [form, setForm] = useState({
     client_phone:'', client_email:'', alternate_email:'', external_bureau_name:'', external_bureau_contact:'',
     blood_group:'', health_info:'',
@@ -348,7 +352,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             <FormLabel>Mother Tongue</FormLabel>
             <select className="form-select" value={form.mother_tongue} onChange={e=>set('mother_tongue',e.target.value)}>
               <option value="">Select</option>
-              {MOTHER_TONGUES.map(m=><option key={m}>{m}</option>)}
+              {withApprovedOptions(MOTHER_TONGUES, approvedOptions, 'mother_tongue').map(m=><option key={m}>{m}</option>)}
             </select>
             {form.mother_tongue === 'Other' && (
               <input className="form-input" style={{marginTop:8}} placeholder="Apni Mother Tongue likhein"
@@ -446,10 +450,10 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             </FormLabel>
             <select className="form-select" value={form.community} onChange={e=>setCommunity(e.target.value)}>
               <option value="">Select</option>
-              {(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES
+              {withApprovedOptions(form.religion === 'Muslim' ? ISLAMIC_COMMUNITIES
                 : form.religion === 'Christian' ? CHRISTIAN_COMMUNITIES
                 : RELIGION_HIERARCHY[form.religion]?.community.options
-                || CASTES).map(c=><option key={c}>{c}</option>)}
+                || CASTES, approvedOptions, 'caste', form.religion).map(c=><option key={c}>{c}</option>)}
             </select>
             {form.community === 'Other' && (
               <input className="form-input" style={{marginTop:8}} placeholder="Apni Caste/Community likhein"
@@ -493,7 +497,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
               <FormLabel>Gotra</FormLabel>
               <select className="form-select" value={form.gotra} onChange={e=>set('gotra',e.target.value)}>
                 <option value="">Select</option>
-                {(form.religion === 'Hindu' ? GOTRAS : JAIN_GOTRAS).map(g=><option key={g}>{g}</option>)}
+                {withApprovedOptions(form.religion === 'Hindu' ? GOTRAS : JAIN_GOTRAS, approvedOptions, 'gotra', form.religion).map(g=><option key={g}>{g}</option>)}
               </select>
               {form.gotra === 'Other' && (
                 <input className="form-input" style={{marginTop:8}} placeholder="Apna Gotra likhein"
@@ -559,7 +563,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         <div className="form-group">
           <select className="form-select" value={form.degree} onChange={e=>set('degree',e.target.value)}>
             <option value="">Select</option>
-            {Object.entries(DEGREE_OPTIONS).map(([cat, options]) => (
+            {Object.entries(withApprovedDegreeOptions(DEGREE_OPTIONS, approvedOptions)).map(([cat, options]) => (
               <optgroup key={cat} label={cat}>
                 {options.map(d=><option key={d}>{d}</option>)}
               </optgroup>
@@ -624,7 +628,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             <FormLabel>Father's Profession</FormLabel>
             <select className="form-select" value={form.father_profession} onChange={e=>set('father_profession',e.target.value)}>
               <option value="">Select</option>
-              {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
+              {withApprovedOptions(PROFESSION_CATEGORIES, approvedOptions, 'father_profession').map(p=><option key={p}>{p}</option>)}
               <option value="Retired">Retired</option>
               <option value="Other">Other</option>
               <option value="Passed Away">Passed Away</option>
@@ -639,7 +643,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             <select className="form-select" value={form.mother_profession} onChange={e=>set('mother_profession',e.target.value)}>
               <option value="">Select</option>
               <option value="Homemaker">Homemaker</option>
-              {PROFESSION_CATEGORIES.map(p=><option key={p}>{p}</option>)}
+              {withApprovedOptions(PROFESSION_CATEGORIES, approvedOptions, 'mother_profession', null, ['Homemaker']).map(p=><option key={p}>{p}</option>)}
               <option value="Retired">Retired</option>
               <option value="Other">Other</option>
               <option value="Passed Away">Passed Away</option>
@@ -764,18 +768,6 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     setTimeout(()=>setToast(''),3000)
   }
 
-  // "Others / Not in list" (community/gotra) — fire-and-forget, doesn't
-  // block save. Increments times_suggested if the same name was already
-  // suggested for this religion.
-  const suggestCaste = ({ religion, denomination, suggested_name, field_type }) => {
-    if (!suggested_name) return
-    supabase.rpc('upsert_caste_suggestion', {
-      p_religion: religion, p_denomination: denomination || null,
-      p_suggested_name: suggested_name, p_field_type: field_type,
-      p_submitted_by: null,
-    }).then(({ error }) => { if (error) console.error(error.message) })
-  }
-
   const [photoErrors, setPhotoErrors] = useState(Array(2).fill(null))
   const [compressingIdx, setCompressingIdx] = useState(null)
 
@@ -865,24 +857,16 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
 
       const denominationValue = form.islamic_denomination || form.christian_denomination || form.religion_denomination || null
 
-      if (communityIsOther && (form.community_other || form.custom_caste_text)) {
-        suggestCaste({
-          religion: form.religion, denomination: denominationValue,
-          suggested_name: form.community_other || form.custom_caste_text, field_type: 'caste',
-        })
-      }
-      if (gotraIsOther && (form.gotra_other || form.custom_caste_text_gotra)) {
-        suggestCaste({
-          religion: form.religion, denomination: denominationValue,
-          suggested_name: form.gotra_other || form.custom_caste_text_gotra, field_type: 'gotra',
-        })
-      }
-      if (degreeIsOther && form.degree_other) {
-        suggestCaste({
-          religion: form.religion, denomination: denominationValue,
-          suggested_name: form.degree_other, field_type: 'degree',
-        })
-      }
+      // "Others / Not in list" values -> Admin → Field Suggestions
+      // (fire-and-forget, never blocks the save).
+      const suggest = (fieldType, value) =>
+        suggestFieldValue({ fieldType, value, religion: form.religion, denomination: denominationValue })
+      if (communityIsOther) suggest('caste', finalCommunity)
+      if (gotraIsOther) suggest('gotra', finalGotra)
+      if (degreeIsOther) suggest('degree', finalDegree)
+      if (form.mother_tongue === 'Other') suggest('mother_tongue', finalMotherTongue)
+      if (form.father_profession === 'Other') suggest('father_profession', finalFatherProfession)
+      if (form.mother_profession === 'Other') suggest('mother_profession', finalMotherProfession)
 
       // community_other/mother_tongue_other/gotra_other/custom_caste_text_gotra
       // sirf UI helper fields hain — "profiles" table mein aisa koi column
