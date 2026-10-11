@@ -131,19 +131,25 @@ Birth Time: 10:30 AM
 Birth Place: Kanpur
 Height: 5'3"
 Marital Status: Never Married
+Have Children: No
 Religion: Hindu
 Caste: Kushwaha
 Sub Caste: Maurya
+Caste No Bar: Yes
 Gotra: Kashyap
 Manglik: No
+Kundli Available: Yes
 Rashi: Mesh
 Nakshatra: Ashwini
 Mother Tongue: Hindi
+Languages Known: Hindi, English
 Education: MBA
 Occupation: Software Engineer
 Company: Infosys
+Employment Type: Private Sector
 Annual Income: 12 LPA
 Complexion: Fair
+Body Type: Average
 Diet: Vegetarian
 Blood Group: B+
 Father's Occupation: Retired
@@ -152,6 +158,8 @@ Brothers: 2, 1 married
 Sisters: 1
 City: Lucknow
 Native Place: Gorakhpur
+Residency Status: Citizen
+Relocation Preference: Flexible
 Nationality: Indian
 Mobile: +91 98765 43210
 Email: priya@example.com
@@ -172,6 +180,34 @@ Partner Expectations: Well educated, kind.`
   const promptLabels = BIODATA_CHATGPT_PROMPT.split('Biodata:')[0].split('\n').filter(l => /^[A-Z][^:]*:( \(.*\))?$/.test(l))
   expect(keys.length + unmatched.length).toBe(promptLabels.length)
   expect(unmatched).toEqual([])
+})
+
+test('reads the new NRI / family / lifestyle fields', () => {
+  const { values } = parseBiodataText(`Name: Rahul Kushwaha
+Marital Status: Never Married
+Languages Known: Hindi, English and Bhojpuri
+Employment Type: Government
+Body Type: Athletic
+Caste No Bar: Yes
+Kundli Available: Will arrange if needed
+Residency Status: Work Visa
+Relocation Preference: Open to relocation abroad`)
+  expect(values).toMatchObject({
+    languages_spoken: expect.arrayContaining(['Hindi', 'English', 'Bhojpuri']),
+    employment_type: 'Government', body_type: 'Athletic', caste_no_bar: 'Yes',
+    kundli_available: 'Will arrange if needed', residency_status: 'Work Permit / Work Visa',
+    relocation_preference: 'Open to relocation abroad',
+  })
+})
+
+test('children question is only asked when married', () => {
+  const married = parseBiodataText('Marital Status: Divorced\nHave Children: Yes\nChildren Living With: Me')
+  expect(married.values.have_children).toBe('Yes')
+  expect(married.values.children_living_with).toBe('Me')
+
+  const single = parseBiodataText('Marital Status: Never Married\nHave Children: No')
+  expect(single.values.have_children).toBe('No')
+  expect(single.values.children_living_with).toBeUndefined()
 })
 
 test('reads the extra profile fields from the ChatGPT prompt format', () => {
