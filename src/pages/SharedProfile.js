@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { markShareLinkInterest, markShareLinkNotInterested } from '../utils/shareLinks'
-import { ShareShell, ShareProfileCard, ShareLoading, ShareError } from '../components/ShareProfileCard'
+import { markShareLinkInterest, markShareLinkNotInterested, submitBureauReply } from '../utils/shareLinks'
+import { ShareShell, ShareProfileCard, ShareLoading, ShareError, BureauReplyBox } from '../components/ShareProfileCard'
 
 // Yeh page KISI KO BHI (bina login ke) khulti hai jab woh secure share
 // link kholega. Data seedha "get_shared_profile" Postgres function se
@@ -17,6 +17,21 @@ export default function SharedProfile() {
   const [loading, setLoading] = useState(true)
   // null | 'int-sending' | 'int-done' | 'int-error' | 'ni-sending' | 'ni-done'
   const [actionState, setActionState] = useState(null)
+  // Bureau share (Aryan, 2026-10-11): free-text reply instead of the
+  // Interested/Not Interested buttons above. null | 'sending' | 'sent' | 'error'.
+  const [bureauDraft, setBureauDraft] = useState('')
+  const [bureauState, setBureauState] = useState(null)
+
+  const sendBureauReply = async () => {
+    if (bureauState === 'sending' || !bureauDraft.trim()) return
+    setBureauState('sending')
+    try {
+      await submitBureauReply(token, bureauDraft)
+      setBureauState('sent')
+    } catch (err) {
+      setBureauState('error')
+    }
+  }
 
   const markInterested = async () => {
     if (actionState) return
@@ -65,11 +80,19 @@ export default function SharedProfile() {
 
   // Puri biodata — contact (phone/email) ke siwa — Aryan, 2026-10-09.
   // Layout ShareProfileCard mein hai (SharedMatches ke saath shared).
+  // Bureau share: headline/footer badalte hain (reply box, no
+  // Interested/Not Interested — yeh client ke liye nahi hai).
   return (
-    <ShareShell headline="A match handpicked for you" client={profile} rm={profile} expiresAt={profile.expires_at}>
+    <ShareShell headline={profile.is_bureau_share ? 'A profile for your review' : 'A match handpicked for you'}
+      client={profile} rm={profile} expiresAt={profile.expires_at}>
       <ShareProfileCard p={profile} state={actionState}
         onInterested={markInterested} onNotInterested={markNotInterested}
-        errorHint="Could not send. Please try again, or contact LOVEKUSH directly." />
+        errorHint="Could not send. Please try again, or contact LOVEKUSH directly."
+        footer={profile.is_bureau_share ? (
+          <BureauReplyBox state={bureauState} draft={bureauDraft} onDraftChange={setBureauDraft}
+            onSubmit={sendBureauReply}
+            errorHint="Could not send. Please try again, or contact LOVEKUSH directly." />
+        ) : undefined} />
     </ShareShell>
   )
 }

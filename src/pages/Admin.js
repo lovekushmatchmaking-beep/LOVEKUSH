@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 // A few of these were imported but never actually used anywhere in this
 // file (UserCheck, UserPlus, Menu, RotateCcw, Tag) — dead icon imports
@@ -31,7 +32,7 @@ import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, co
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { buildMailtoLink } from '../utils/shareProfile'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
-import { generateShareLink, generateShareBundle, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, acknowledgeShareLinkNotInterested, forwardShareLinkInterest, markInterestSent } from '../utils/shareLinks'
+import { generateShareLink, generateShareBundle, generateBureauShareLink, acknowledgeBureauReply, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, acknowledgeShareLinkNotInterested, forwardShareLinkInterest, markInterestSent } from '../utils/shareLinks'
 import { WhatsAppReminderButton, ReminderSheet } from '../components/WhatsAppReminder'
 import NotificationBell from '../components/NotificationBell'
 import { EVENT_LABELS } from '../utils/notifications'
@@ -283,7 +284,7 @@ export default function Admin({ staffUser }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
-  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0, overdueFollowUps: 0, pendingShareInterest: 0, pendingShareNotInterested: 0, todayMeetings: 0 })
+  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, newWeek: 0, newToday: 0, pending: 0, active: 0, blocked: 0, needsVerification: 0, openReports: 0, pendingCoordination: 0, overdueFollowUps: 0, pendingShareInterest: 0, pendingShareNotInterested: 0, todayMeetings: 0, pendingBureauReply: 0 })
   const [statsUpdatedAt, setStatsUpdatedAt] = useState(null)
   const [listUpdatedAt, setListUpdatedAt] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
@@ -557,6 +558,9 @@ export default function Admin({ staffUser }) {
       // was inflated by meetings whose coordination is already closed.
       supabase.from('introductions').select('*', { count: 'exact', head: true })
         .gte('scheduled_at', startOfToday.toISOString()).lt('scheduled_at', new Date(startOfToday.getTime() + 86400000).toISOString()).neq('status', 'closed'),
+      // Bureau share replies — a bureau found a match in their own database
+      // and hasn't been acknowledged yet (Aryan, 2026-10-11).
+      supabase.from('share_links').select('*', { count: 'exact', head: true }).not('bureau_reply', 'is', null).is('bureau_reply_acknowledged_at', null),
     ])
     setStats({
       total: counts[0].count || 0,
@@ -574,6 +578,7 @@ export default function Admin({ staffUser }) {
       pendingShareInterest: counts[12].count || 0,
       pendingShareNotInterested: counts[13].count || 0,
       todayMeetings: counts[14].count || 0,
+      pendingBureauReply: counts[15].count || 0,
     })
     setStatsUpdatedAt(new Date())
     setStatsLoading(false)
@@ -864,6 +869,12 @@ export default function Admin({ staffUser }) {
     }
   }
 
+  // Share a client's profile with an EXTERNAL bureau, with a manual note,
+  // so they can search their own database for a match (Aryan, 2026-10-11).
+  // Opens BureauShareSheet below; same generateShareLink pipeline, just
+  // is_bureau_share=true + bureau_note (no contact details either way).
+  const [bureauShareFor, setBureauShareFor] = useState(null)
+
   // Lead source — business-owner audit (2026-10-04). Signup/Create Client
   // already asks this; this is just so admin can set/correct it for a
   // walk-in that was entered without going through the full question.
@@ -1028,7 +1039,7 @@ export default function Admin({ staffUser }) {
     { id: 'coordinationRequests', label: 'Coordination', Icon: Handshake, badge: stats.pendingCoordination, onClick: () => goToSectionView('tools', 'coordinationRequests') },
     { id: 'verificationQueue', label: 'Verification', Icon: ShieldAlert, badge: stats.needsVerification, onClick: () => goToSectionView('queues', 'verificationQueue') },
     { id: 'reportsQueue', label: 'Reports', Icon: Flag, badge: stats.openReports, onClick: () => goToSectionView('queues', 'reportsQueue') },
-    { id: 'shareLinks', label: 'Share Links', Icon: Link2, badge: (stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0), onClick: () => goToSectionView('tools', 'shareLinks') },
+    { id: 'shareLinks', label: 'Share Links', Icon: Link2, badge: (stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0) + (stats.pendingBureauReply || 0), onClick: () => goToSectionView('tools', 'shareLinks') },
     { id: 'sharedMatchLog', label: 'Shared Matches', Icon: ListChecks, onClick: () => goToSectionView('tools', 'sharedMatchLog') },
     { section: 'Tools' },
     { id: 'duplicateLeads', label: 'Duplicate Leads', Icon: Copy, onClick: () => goToSectionView('queues', 'duplicateLeads') },
@@ -1091,6 +1102,7 @@ export default function Admin({ staffUser }) {
     if (n.type === 'report_filed') { goToSectionView('queues', 'reportsQueue'); return }
     if (n.type === 'share_link_interest') { goToSectionView('tools', 'shareLinks'); return }
     if (n.type === 'share_link_not_interested') { goToSectionView('tools', 'shareLinks'); return }
+    if (n.type === 'bureau_share_reply') { goToSectionView('tools', 'shareLinks'); return }
     // Coordination request / meeting notifications point at an introduction
     // — tapping them used to do nothing at all (audit 2026-10-10).
     if (n.link_entity_type === 'introduction' && n.link_entity_id) { goToCoordination(n.link_entity_id); return }
@@ -1265,6 +1277,10 @@ export default function Admin({ staffUser }) {
 
       {view === 'list' && section === 'profiles' && (
       <div>
+        {bureauShareFor && (
+          <BureauShareSheet profile={bureauShareFor} staffUserId={staffUser.user_id}
+            onClose={() => setBureauShareFor(null)} />
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Profiles</div>
           <button className="btn btn-black btn-sm" style={{ padding: '7px 10px' }} onClick={()=>setView('createClient')} title="Create Client">
@@ -1489,6 +1505,7 @@ export default function Admin({ staffUser }) {
                       <OverflowMenu items={[
                         { label: 'View profile', icon: Eye, onClick: () => { setViewingProfile(p); setView('fullProfile') } },
                         { label: 'Share link', icon: Link2, onClick: () => shareProfileLink(p) },
+                        { label: 'Share with bureau', icon: Building2, onClick: () => setBureauShareFor(p) },
                         { label: 'Shared matches log', icon: ListChecks, onClick: () => { setSharedLogCode(p.profile_code); setView('sharedMatchLog') } },
                         { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
                         { label: 'Photos', icon: Camera, onClick: () => { setPhotosProfile(p); setView('editPhotos') } },
@@ -1729,7 +1746,7 @@ export default function Admin({ staffUser }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
           <AdminNavCard icon={ClipboardList} label="Caste Suggestions" subtitle="New castes/gotras members typed in" onClick={()=>setView('casteSuggestions')} />
           <AdminNavCard icon={Handshake} label="Coordination" subtitle="Talk/meeting requests between members" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
-          <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" badge={(stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0)} onClick={()=>setView('shareLinks')} />
+          <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" badge={(stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0) + (stats.pendingBureauReply || 0)} onClick={()=>setView('shareLinks')} />
           <AdminNavCard icon={ListChecks} label="Shared Matches" subtitle="How many matches each client has been sent" onClick={()=>setView('sharedMatchLog')} />
           <AdminNavCard icon={MessageCircle} label="Template Editor" subtitle="Saved messages — WhatsApp, SMS, email or anywhere" onClick={()=>setView('whatsappTemplates')} />
         </div>
@@ -1800,6 +1817,7 @@ function PriorityActions({ stats, onOpen }) {
     { key: 'pendingCoordination', count: stats.pendingCoordination, label: 'Awaiting response', icon: Handshake, bg: '#f5f3ff', fg: '#7c3aed', view: 'coordinationRequests' },
     { key: 'pendingShareInterest', count: stats.pendingShareInterest, label: 'Clients interested', icon: ThumbsUp, bg: '#f0fdf4', fg: '#16a34a', view: 'shareLinks' },
     { key: 'pendingShareNotInterested', count: stats.pendingShareNotInterested, label: 'Not interested in a match', icon: ThumbsDown, bg: '#fef3c7', fg: '#d97706', view: 'shareLinks' },
+    { key: 'pendingBureauReply', count: stats.pendingBureauReply, label: 'Bureau found a match', icon: Building2, bg: '#f0fdf4', fg: '#16a34a', view: 'shareLinks' },
   ].filter(i => i.count > 0)
 
   if (items.length === 0) {
@@ -2736,6 +2754,75 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
   )
 }
 
+// Share a client's profile with an external bureau — manual note (budget,
+// specific requirement), contact details never go out (generateBureauShareLink
+// reuses the same get_shared_profile pipeline as a normal match share).
+// Bottom sheet, same createPortal pattern as WhatsAppReminder's ReminderSheet.
+function BureauShareSheet({ profile, staffUserId, onClose }) {
+  const [note, setNote] = useState('')
+  const [result, setResult] = useState(null) // { url, copied } | { error }
+  const [generating, setGenerating] = useState(false)
+
+  const generate = async () => {
+    setGenerating(true)
+    try {
+      const link = await generateBureauShareLink(profile.id, staffUserId, note)
+      setResult({ url: link.url })
+    } catch (err) {
+      setResult({ error: err.message })
+    }
+    setGenerating(false)
+  }
+
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(result.url); setResult(r => ({ ...r, copied: true })) } catch {}
+  }
+
+  return createPortal(
+    <div onClick={e => { e.stopPropagation(); onClose() }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: '#fff', width: '100%', maxWidth: 520, maxHeight: '88vh', overflowY: 'auto', borderRadius: '14px 14px 0 0', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Building2 size={15} /> Share with a bureau — {profile.full_name || 'profile'}
+        </div>
+        <div style={{ fontSize: 12, color: '#8e8e8e' }}>
+          Sends the full profile (no phone/email) with a link they can open without logging in.
+          Add any manual note — budget, a specific requirement — just for this share.
+        </div>
+        {!result?.url ? (
+          <>
+            <textarea className="form-input" rows={3} placeholder="e.g. Ladke ka budget 20-25 LPA hai, IT/Govt job wali chahiye"
+              value={note} onChange={e => setNote(e.target.value)} style={{ fontSize: 13, resize: 'vertical' }} autoFocus />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-outline btn-sm" onClick={onClose}>Cancel</button>
+              <button className="btn btn-black btn-sm" disabled={generating} onClick={generate}>
+                {generating ? 'Generating...' : 'Generate link'}
+              </button>
+            </div>
+            {result?.error && <div style={{ fontSize: 12, color: '#dc2626' }}>{result.error}</div>}
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 600 }}>Link ready — expires in 7 days</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {navigator.share && (
+                <button className="btn btn-outline btn-sm"
+                  onClick={() => nativeShare({ title: 'LOVEKUSH Profile', text: `Profile from LOVEKUSH (${profile.profile_code})`, url: result.url })}>
+                  Share…
+                </button>
+              )}
+              <button className="btn btn-outline btn-sm" onClick={copy}>{result.copied ? '✓ Copied' : 'Copy link'}</button>
+              <button className="btn btn-black btn-sm" onClick={onClose}>Done</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 // ===== SHARE LINKS MANAGEMENT — view kitni baar khula, revoke karo =====
 function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfile }) {
   const [links, setLinks] = useState([])
@@ -2760,8 +2847,8 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
       // Interested-but-unacknowledged links first, newest interest first —
       // that's what needs the admin's attention right now (audit gap, 2026-10-05).
       data.sort((a, b) => {
-        const aPending = a.interested_at && !a.interest_acknowledged_at
-        const bPending = b.interested_at && !b.interest_acknowledged_at
+        const aPending = (a.interested_at && !a.interest_acknowledged_at) || (a.bureau_reply && !a.bureau_reply_acknowledged_at)
+        const bPending = (b.interested_at && !b.interest_acknowledged_at) || (b.bureau_reply && !b.bureau_reply_acknowledged_at)
         if (aPending !== bPending) return aPending ? -1 : 1
         return new Date(b.created_at) - new Date(a.created_at)
       })
@@ -2803,6 +2890,17 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
     try {
       await acknowledgeShareLinkNotInterested(linkId)
       setLinks(prev => prev.map(l => l.id === linkId ? { ...l, not_interest_acknowledged_at: new Date().toISOString() } : l))
+    } catch (err) {
+      showToast(err.message)
+    }
+  }
+
+  // Bureau ka "match mil gaya" reply dekh/action le liya — "needs attention"
+  // se hata deta hai, record khud rehta hai (Aryan, 2026-10-11).
+  const handleAcknowledgeBureau = async (linkId) => {
+    try {
+      await acknowledgeBureauReply(linkId)
+      setLinks(prev => prev.map(l => l.id === linkId ? { ...l, bureau_reply_acknowledged_at: new Date().toISOString() } : l))
     } catch (err) {
       showToast(err.message)
     }
@@ -2946,6 +3044,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
             const shownProfile = profilesById[l.profile_id]
             const client = l.client_profile_id ? profilesById[l.client_profile_id] : null
             const interestPending = l.interested_at && !l.interest_acknowledged_at
+            const bureauReplyPending = l.bureau_reply && !l.bureau_reply_acknowledged_at
             // Bulk match share = one matching cycle (audit 2026-10-08,
             // P0 #4): several profiles shared to the same client in one
             // bundle, each with its own independent status. Admin should
@@ -2955,7 +3054,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
             const bundleSiblings = l.bundle_token ? links.filter(x => x.bundle_token === l.bundle_token && x.id !== l.id) : []
             const isBundleExpanded = expandedBundles.has(l.bundle_token)
             return (
-              <div key={l.id} className="list-row" style={interestPending ? { borderColor: '#16a34a', background: '#f0fdf4' } : {}}>
+              <div key={l.id} className="list-row" style={(interestPending || bureauReplyPending) ? { borderColor: '#16a34a', background: '#f0fdf4' } : {}}>
                 {/* Share ID — moved to the top corner, prominent, since
                     that's what Aryan actually searches/refers to by
                     (Aryan, 2026-10-09 follow-up). */}
@@ -3040,6 +3139,11 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                         )}
                       </div>
                     )}
+                    {l.is_bureau_share && (
+                      <div style={{marginTop:6,fontSize:12,color:'#b45309',display:'flex',alignItems:'center',gap:4}}>
+                        <Building2 size={12} /> Shared with an external bureau
+                      </div>
+                    )}
                     {status !== 'Active' && (
                       <div style={{fontSize:12,color:statusColor,fontWeight:600,marginTop:6}}>{status}</div>
                     )}
@@ -3070,6 +3174,28 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                         })}
                       </div>
                     )}
+                  </div>
+                )}
+                {/* Admin's manual note shown to the bureau on this share
+                    (Aryan, 2026-10-11) + their free-text reply once they
+                    find a match in their own database. */}
+                {l.is_bureau_share && l.bureau_note && (
+                  <div style={{marginTop:8,fontSize:12,color:'#555',background:'#fafafa',padding:'8px 10px',borderRadius:8}}>
+                    <strong>Note sent:</strong> {l.bureau_note}
+                  </div>
+                )}
+                {l.bureau_reply && (
+                  <div style={{marginTop:8,fontSize:12,display:'flex',flexDirection:'column',gap:6,padding:'8px 10px',
+                    borderRadius:8, background: l.bureau_reply_acknowledged_at ? '#fafafa' : '#f0fdf4'}}>
+                    <div style={{color: l.bureau_reply_acknowledged_at ? '#555' : '#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5}}
+                      title={new Date(l.bureau_replied_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}>
+                      <ThumbsUp size={12} /> Bureau replied: {l.bureau_reply}
+                    </div>
+                    {l.bureau_reply_acknowledged_at
+                      ? <span style={{fontSize:11,color:'#8e8e8e'}}>✓ Noted</span>
+                      : <button className="btn btn-outline btn-sm" style={{padding:'3px 8px',fontSize:11,alignSelf:'flex-start'}}
+                          onClick={()=>handleAcknowledgeBureau(l.id)}>Noted</button>
+                    }
                   </div>
                 )}
                 {/* Client tapped "👍 Interested" or "Not Interested" on this profile

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import {
   Bell, CheckCheck, CircleCheck, Ban, Camera, Handshake, CalendarClock, Flag,
-  Tag, ThumbsUp, ThumbsDown, Heart, HeartHandshake, PenLine, Telescope, Gem, IdCard,
+  Tag, ThumbsUp, ThumbsDown, Heart, HeartHandshake, PenLine, Telescope, Gem, IdCard, Building2,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 
@@ -34,6 +34,7 @@ const TYPE_ICON = {
   share_link_interest: ThumbsUp,
   share_link_not_interested: ThumbsDown,
   share_interest_forwarded: ThumbsUp,
+  bureau_share_reply: Building2,
   id_document_submitted: IdCard,
   id_document_approved: IdCard,
   id_document_rejected: IdCard,

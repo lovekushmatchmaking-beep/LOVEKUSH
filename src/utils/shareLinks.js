@@ -17,6 +17,43 @@ export async function generateShareLink(profileId, userId, clientProfileId) {
   return { ...data, url: `${baseUrl}/share/${data.token}` }
 }
 
+// Client ki apni profile ko ek EXTERNAL marriage bureau ke saath share
+// karta hai taaki woh apne database se match dhoondh sake (Aryan,
+// 2026-10-11) — get_shared_profile wahi pipeline use karta hai, isliye
+// contact details (phone/email) is link par kabhi nahi jaate, sirf
+// profile ki standard fields. client_profile_id yahan nahi lagta (yeh
+// kisi ke liye "match" nahi hai, profile khud share ho rahi hai).
+// bureauNote = is particular share ke liye manual free-text (budget,
+// specific requirement) jo profile ke apne fields mein nahi hai.
+export async function generateBureauShareLink(profileId, userId, bureauNote) {
+  const { data, error } = await supabase
+    .from('share_links')
+    .insert({ profile_id: profileId, created_by: userId, is_bureau_share: true, bureau_note: (bureauNote || '').trim() || null })
+    .select()
+    .single()
+
+  if (error) throw new Error('Could not create bureau share link: ' + error.message)
+
+  const baseUrl = window.location.origin
+  return { ...data, url: `${baseUrl}/share/${data.token}` }
+}
+
+// Bureau (bina login) ne apne database mein match dhoondh liya — share page
+// se seedha free-text wapas bhejte hain. submit_bureau_reply RPC wahi
+// mark_share_link_interest jaisa anon-write pattern hai (token-scoped,
+// revoked/expired check khud karta hai).
+export async function submitBureauReply(token, notes) {
+  const { error } = await supabase.rpc('submit_bureau_reply', { p_token: token, p_notes: notes })
+  if (error) throw new Error(error.message)
+}
+
+// Admin ne bureau ka reply dekh/action le liya — "needs attention" se hata
+// deta hai, record khud rehta hai (interest_acknowledged_at jaisa hi pattern).
+export async function acknowledgeBureauReply(linkId) {
+  const { error } = await supabase.from('share_links').update({ bureau_reply_acknowledged_at: new Date().toISOString() }).eq('id', linkId)
+  if (error) throw new Error('Could not update: ' + error.message)
+}
+
 export async function revokeShareLink(linkId) {
   const { error } = await supabase.from('share_links').update({ revoked: true }).eq('id', linkId)
   if (error) throw new Error('Could not revoke link: ' + error.message)

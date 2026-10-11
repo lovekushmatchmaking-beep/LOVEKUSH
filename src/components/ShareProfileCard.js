@@ -132,10 +132,41 @@ function ShareRmCard({ rm }) {
   )
 }
 
+// Bureau share (Aryan, 2026-10-11): free-text reply box instead of the
+// client's Interested/Not Interested buttons — a marriage bureau viewing
+// this page sends back match details ("budget itna hai, yeh job wali
+// chahiye" etc. ke jawaab mein) instead of liking a specific match.
+// `state`: null | 'sending' | 'sent' | 'error'.
+export function BureauReplyBox({ state, draft, onDraftChange, onSubmit, errorHint }) {
+  if (state === 'sent') {
+    return (
+      <div className="share-btn share-btn-done" style={{ marginTop: 16 }}>
+        <Check size={15} /> Sent — thank you, we'll be in touch
+      </div>
+    )
+  }
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Found a match for this profile?</div>
+      <textarea className="form-input" rows={3}
+        placeholder="e.g. We have a suitable match — M.K., 29, Pune. Please call us to discuss."
+        value={draft} onChange={e => onDraftChange(e.target.value)}
+        style={{ fontSize: 13, resize: 'vertical', width: '100%' }} />
+      <button className="share-btn share-btn-primary" style={{ marginTop: 8, width: '100%' }}
+        disabled={state === 'sending' || !draft.trim()} onClick={onSubmit}>
+        <ThumbsUp size={15} /> {state === 'sending' ? 'Sending...' : 'Send match details'}
+      </button>
+      {state === 'error' && <div style={{ marginTop: 6, fontSize: 11, color: '#dc2626', textAlign: 'center' }}>{errorHint}</div>}
+    </div>
+  )
+}
+
 // One profile. `state`: null | 'int-sending' | 'int-done' | 'int-error' |
 // 'ni-sending' | 'ni-done'. "Not Interested" stays the quieter button, and
-// after it the client only sees a neutral "Thanks for browsing".
-export function ShareProfileCard({ p, state, onInterested, onNotInterested, errorHint }) {
+// after it the client only sees a neutral "Thanks for browsing". `footer`
+// (optional) replaces the default Interested/Not Interested block — used
+// for bureau shares, which pass a <BureauReplyBox> instead (Aryan, 2026-10-11).
+export function ShareProfileCard({ p, state, onInterested, onNotInterested, errorHint, footer }) {
   const about = shareSafeAboutMe(p.about_me)
   const facts = [
     p.age ? p.age + ' yrs' : null,
@@ -167,6 +198,15 @@ export function ShareProfileCard({ p, state, onInterested, onNotInterested, erro
 
       {about && <div className="share-about">"{about}"</div>}
 
+      {/* Admin's manual note for THIS particular bureau share — budget,
+          a specific requirement — separate from the profile's own fields
+          (Aryan, 2026-10-11). */}
+      {p.bureau_note && (
+        <div className="share-about" style={{ background: '#fff7ed', color: '#92400e' }}>
+          <strong>Notes from LOVEKUSH:</strong> {p.bureau_note}
+        </div>
+      )}
+
       {shareSections(p).map(([title, rows]) => (
         <div key={title} className="share-section">
           <div className="share-section-title">{title}</div>
@@ -181,7 +221,7 @@ export function ShareProfileCard({ p, state, onInterested, onNotInterested, erro
         </div>
       ))}
 
-      {state === 'ni-done' ? (
+      {footer !== undefined ? footer : state === 'ni-done' ? (
         <div style={{ marginTop: 16, padding: '12px 0', textAlign: 'center', fontSize: 13, color: '#8e8e8e' }}>
           Thanks for browsing.
         </div>
@@ -199,7 +239,7 @@ export function ShareProfileCard({ p, state, onInterested, onNotInterested, erro
           </button>
         </div>
       )}
-      {state === 'int-error' && (
+      {footer === undefined && state === 'int-error' && (
         <div style={{ marginTop: 6, fontSize: 11, color: '#dc2626', textAlign: 'center' }}>{errorHint}</div>
       )}
     </div>
