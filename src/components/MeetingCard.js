@@ -26,7 +26,9 @@ const BRAND_GRADIENT = 'linear-gradient(135deg, #6A1B9A 0%, #D81B60 42%, #E1306C
 // link (`location`) in place of the venue. A PNG can't hold a clickable
 // link, so the link is printed in full here and also sent as text
 // alongside the image (WhatsAppReminder.js shareCard). Still no client
-// phone/email anywhere on the card — only the bureau's RM box.
+// phone/email anywhere on the card — only the bureau's RM box. No "don't
+// share your contact details" line on it either: Aryan (2026-10-11) said
+// clients already know, and spelling it out reads as rude to them.
 const MeetingCard = React.forwardRef(function MeetingCard(
   { name, otherName, otherAge, otherCity, otherCode, date, time, location, virtual, requestId, rmName, rmPhone, rmEmail }, ref
 ) {
@@ -99,9 +101,7 @@ const MeetingCard = React.forwardRef(function MeetingCard(
         )}
       </div>
       <div style={{ padding: '12px 24px', background: '#FBF9F5', fontSize: 11, color: '#877C83', textAlign: 'center' }}>
-        {virtual
-          ? 'Join from the link above, on time. Please do not share personal phone numbers or emails on the call.'
-          : 'Please be on time.'} Contact LOVEKUSH to reschedule.{requestId ? ` · ${requestId}` : ''}
+        {virtual ? 'Please join from the link above, on time.' : 'Please be on time.'} Contact LOVEKUSH to reschedule.{requestId ? ` · ${requestId}` : ''}
       </div>
     </div>
   )
