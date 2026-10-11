@@ -2,6 +2,7 @@ import React from 'react'
 import { Lock, ThumbsUp, Check, ThumbsDown, Phone, MessageCircle, ShieldCheck } from 'lucide-react'
 import { BrandLockup } from './BrandLogo'
 import { shareSafeAboutMe } from '../utils/shareProfile'
+import { shareRegion } from '../utils/shareRegion'
 import ZoomablePhoto from './ZoomablePhoto'
 
 // Shared look for the public share-link pages (SharedProfile = one
@@ -33,7 +34,8 @@ export function shareSections(p) {
       ['Nakshatra', p.nakshatra],
     ]],
     ['Education & Career', [
-      ['Living In', [p.city, p.state, p.country].filter(Boolean).join(', ')],
+      // State only, never the town/locality (Aryan, 2026-10-11) — see utils/shareRegion.js.
+      ['Living In', shareRegion(p)],
       ['Education', p.education],
       ['Degree', p.degree],
       ['College', p.college_name],
@@ -85,8 +87,8 @@ export function ShareShell({ headline, client, rm, expiresAt, children }) {
           {client?.client_masked_name && (
             <div className="share-for">
               Suggested for <strong>{client.client_full_name || client.client_masked_name}</strong>
-              {(client.client_age || client.client_city) && (
-                <> · {[client.client_age ? client.client_age + ' years' : null, client.client_city].filter(Boolean).join(', ')}</>
+              {(client.client_age || shareRegion({ city: client.client_city })) && (
+                <> · {[client.client_age ? client.client_age + ' years' : null, shareRegion({ city: client.client_city })].filter(Boolean).join(', ')}</>
               )}
             </div>
           )}
@@ -178,7 +180,7 @@ export function ShareProfileCard({ p, state, onInterested, onNotInterested, erro
   const facts = [
     p.age ? p.age + ' yrs' : null,
     p.height,
-    p.city,
+    shareRegion(p),
     p.occupation,
     p.education,
   ].filter(Boolean)

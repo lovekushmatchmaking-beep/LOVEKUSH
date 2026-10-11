@@ -35,7 +35,9 @@ function buildCard(p) {
       description: 'This link has expired or is no longer available. Please ask LOVEKUSH to share a fresh link.',
     }
   }
-  const place = [p.city, p.state].filter(Boolean).join(', ')
+  // State only, never the town (Aryan, 2026-10-11): get_share_preview
+  // returns city = null and state = public.share_region(...).
+  const place = p.state || ''
   const details = [
     p.height,
     p.education,

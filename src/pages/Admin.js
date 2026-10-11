@@ -29,9 +29,11 @@ import BiodataView from './BiodataView'
 import EditPhotos from './EditPhotos'
 import { EditProfileForm } from './Dashboard'
 import { rankMatches } from '../utils/matching'
-import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, computeRmPerformance } from '../utils/adminStats'
+import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, funnelCounts, computeRmPerformance } from '../utils/adminStats'
+import { DonutChart, StackedColumns, FunnelChart, HBarChart, topSlices, GENDER_COLORS } from '../components/AdminCharts'
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { fieldSuggestionLabel, loadApprovedFieldOptions } from '../utils/fieldSuggestions'
+import { shareRegion } from '../utils/shareRegion'
 import { buildMailtoLink, buildWaChooserLink, buildMaskedShareText } from '../utils/shareProfile'
 import { MEETING_MODES, isVirtualMeeting, locationPlaceholder, meetingLinkHref, looksLikeContactDetail } from '../utils/meetingMode'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
@@ -56,12 +58,26 @@ const PAGE_SIZE = 50
 
 // Dashboard Breakdown + Funnel ek hi profiles fetch share karte hain —
 // Breakdown ke columns + Funnel/duplicate-check ke liye id/contact.
-const DASH_PROFILE_COLUMNS = 'id, client_phone, client_email, ' + STATS_COLUMNS
+const DASH_PROFILE_COLUMNS = 'id, client_phone, client_email, managed_by_staff_id, ' + STATS_COLUMNS
 
 // Breakdown/Funnel ki ek upper-limit — abhi (sau-do sau profiles) iska
 // matlab hi nahi padta, par database badhne par poora table ek saath
 // load hone se bachata hai (scale audit, 2026-10-04).
 const DASH_CAP = 5000
+
+// Supabase returns at most 1000 rows per request, so `.limit(DASH_CAP)`
+// alone silently stopped at 1000 (audit 2026-10-11). Pages through in
+// 1000-row chunks up to DASH_CAP. `build` returns a fresh query each call.
+async function fetchAllRows(build, cap = DASH_CAP) {
+  const out = []
+  for (let from = 0; from < cap; from += 1000) {
+    const { data, error } = await build().range(from, Math.min(from + 999, cap - 1))
+    if (error) return { data: out, error }
+    out.push(...(data || []))
+    if (!data || data.length < 1000) break
+  }
+  return { data: out, error: null }
+}
 
 // ===== SELFIE VERIFICATION — existing profiles.verification_status ko hi
 // aage badhaya: not_started → selfie_requested → selfie_submitted →
@@ -310,8 +326,10 @@ export default function Admin({ staffUser }) {
   const [statsUpdatedAt, setStatsUpdatedAt] = useState(null)
   const [listUpdatedAt, setListUpdatedAt] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
-  const [showBreakdown, setShowBreakdown] = useState(false)
-  const [showFunnel, setShowFunnel] = useState(false)
+  // Dashboard tabs (Aryan, 2026-10-11): Today / Business / Profiles instead
+  // of one long page with hidden "Breakdown"/"Funnel" toggles.
+  const [dashTab, setDashTabState] = useState(() => { try { return sessionStorage.getItem('adminDashTab') || 'today' } catch { return 'today' } })
+  const setDashTab = (t) => { setDashTabState(t); try { sessionStorage.setItem('adminDashTab', t) } catch {} }
   const [dashProfiles, setDashProfiles] = useState(null) // shared by Breakdown + Funnel (one fetch)
   const [dashProfilesCapped, setDashProfilesCapped] = useState(false) // true if profiles table is bigger than DASH_CAP (scale audit)
   const [selected, setSelected] = useState(null)
@@ -545,7 +563,14 @@ export default function Admin({ staffUser }) {
   const loadStats = async () => {
     setStatsLoading(true)
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const endOfToday = new Date(startOfToday.getTime() + 86400000)
+    const DAY_MS = 24 * 60 * 60 * 1000
+    const nowIso = new Date().toISOString()
+    const weekAgo = new Date(Date.now() - 7 * DAY_MS).toISOString()
+    const monthAgo = new Date(Date.now() - 30 * DAY_MS).toISOString()
+    const threeDaysAgo = new Date(Date.now() - 3 * DAY_MS).toISOString()
+    const twoDaysAhead = new Date(Date.now() + 2 * DAY_MS).toISOString()
+    const weekAhead = new Date(Date.now() + 7 * DAY_MS).toISOString()
     const counts = await Promise.all([
       supabase.from('profiles').select('*', { count: 'exact', head: true }),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('profile_status', 'pending'),
@@ -579,10 +604,39 @@ export default function Admin({ staffUser }) {
       // Exclude closed requests (audit gap, 2026-10-10) — todayMeetings count
       // was inflated by meetings whose coordination is already closed.
       supabase.from('introductions').select('*', { count: 'exact', head: true })
-        .gte('scheduled_at', startOfToday.toISOString()).lt('scheduled_at', new Date(startOfToday.getTime() + 86400000).toISOString()).neq('status', 'closed'),
+        .gte('scheduled_at', startOfToday.toISOString()).lt('scheduled_at', endOfToday.toISOString()).not('status', 'in', '(closed,declined)'),
       // Bureau share replies — a bureau found a match in their own database
       // and hasn't been acknowledged yet (Aryan, 2026-10-11).
       supabase.from('share_links').select('*', { count: 'exact', head: true }).not('bureau_reply', 'is', null).is('bureau_reply_acknowledged_at', null),
+      // ===== More daily business signals for the Dashboard (Aryan,
+      // 2026-10-11: "jo bhi roz zaroori ho, priority pe, ek hi screen se
+      // poora business dikhe"). All plain count queries on existing tables.
+      // [16] Follow-ups due later today (overdue ones are counted above)
+      supabase.from('profile_notes').select('*', { count: 'exact', head: true }).gte('follow_up_at', startOfToday.toISOString()).lt('follow_up_at', endOfToday.toISOString()),
+      // [17] Met, but the 48h Positive/Negative decision window has passed
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).eq('status', 'meeting_done').is('decision', null).lt('decision_deadline', nowIso),
+      // [18] Requests nobody has answered for 3+ days
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).eq('status', 'pending').lt('created_at', threeDaysAgo),
+      // [19] Both said yes, but no call/meeting date is set yet
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).eq('status', 'accepted').is('scheduled_at', null),
+      // [20] Share links expiring in the next 48h with no reply yet — a nudge to the client
+      supabase.from('share_links').select('*', { count: 'exact', head: true }).not('revoked', 'is', true).eq('is_bureau_share', false)
+        .gt('expires_at', nowIso).lt('expires_at', twoDaysAhead).is('interested_at', null).is('not_interested_at', null),
+      // [21] Share links sent this week, [22] how many times they were opened
+      supabase.from('share_links').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo),
+      supabase.from('share_link_access_log').select('*', { count: 'exact', head: true }).gte('accessed_at', weekAgo),
+      // [23] Links sent in 30 days, [24] how many of those got an Interested
+      supabase.from('share_links').select('*', { count: 'exact', head: true }).gte('created_at', monthAgo).eq('is_bureau_share', false),
+      supabase.from('share_links').select('*', { count: 'exact', head: true }).gte('created_at', monthAgo).eq('is_bureau_share', false).not('interested_at', 'is', null),
+      // [25] Successful matches, all time, [26] in the last 30 days
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).eq('final_outcome', 'successful_match'),
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).eq('final_outcome', 'successful_match').gte('final_outcome_at', monthAgo),
+      // [27] Calls/meetings in the next 7 days
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).gte('scheduled_at', nowIso).lt('scheduled_at', weekAhead).not('status', 'in', '(closed,declined,meeting_done)'),
+      // [28] Matches in progress (accepted / called / met, not closed)
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).in('status', ['accepted', 'contacted', 'meeting_done']),
+      // [29] New profiles in 30 days
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', monthAgo),
     ])
     setStats({
       total: counts[0].count || 0,
@@ -601,7 +655,24 @@ export default function Admin({ staffUser }) {
       pendingShareNotInterested: counts[13].count || 0,
       todayMeetings: counts[14].count || 0,
       pendingBureauReply: counts[15].count || 0,
+      followUpsToday: counts[16].count || 0,
+      decisionsOverdue: counts[17].count || 0,
+      staleCoordination: counts[18].count || 0,
+      acceptedUnscheduled: counts[19].count || 0,
+      expiringLinks: counts[20].count || 0,
+      sharesWeek: counts[21].count || 0,
+      linkOpensWeek: counts[22].count || 0,
+      sharesMonth: counts[23].count || 0,
+      interestedMonth: counts[24].count || 0,
+      successTotal: counts[25].count || 0,
+      successMonth: counts[26].count || 0,
+      meetingsWeek: counts[27].count || 0,
+      inProgress: counts[28].count || 0,
+      newMonth: counts[29].count || 0,
     })
+    // Any failed count used to show up as a silent 0 — say so instead.
+    const failed = counts.filter(c => c.error)
+    if (failed.length) showToast(`${failed.length} dashboard number${failed.length === 1 ? '' : 's'} could not load: ${failed[0].error.message}`)
     setStatsUpdatedAt(new Date())
     setStatsLoading(false)
   }
@@ -635,11 +706,17 @@ export default function Admin({ staffUser }) {
     return q
   }
 
+  // Typing fast fires several searches; an older, slower one could land
+  // last and overwrite the list with results for stale text (audit
+  // 2026-10-11). Only the latest request may write.
+  const querySeq = React.useRef(0)
   const runQuery = async (fromIndex) => {
     if (fromIndex === 0) setLoading(true)
     else setLoadingMore(true)
 
+    const seq = ++querySeq.current
     const { data, error } = await buildQuery(fromIndex, fromIndex + PAGE_SIZE - 1)
+    if (seq !== querySeq.current) return
 
     if (error) {
       // Was console-only — the list silently kept showing the previous
@@ -715,14 +792,14 @@ export default function Admin({ staffUser }) {
   // kabhi unbounded na ho. Server-side aggregation (SQL group-by/RPC) is
   // the real fix for very large scale — reuse-first ke liye abhi sirf cap,
   // woh bada rewrite baad mein alag se discuss karenge.
-  const dashPanelsOpen = showBreakdown || showFunnel
+  const dashPanelsOpen = section === 'dashboard' && view === 'list' && dashTab !== 'today'
   useEffect(() => {
     if (!dashPanelsOpen) return
     let cancelled = false
     setDashProfiles(null)
     setDashProfilesCapped(false)
     Promise.all([
-      supabase.from('profiles').select(DASH_PROFILE_COLUMNS).order('created_at', { ascending: false }).limit(DASH_CAP),
+      fetchAllRows(() => supabase.from('profiles').select(DASH_PROFILE_COLUMNS).order('created_at', { ascending: false })),
       supabase.from('profiles').select('*', { count: 'exact', head: true }),
     ]).then(([{ data, error }, { count }]) => {
       if (cancelled) return
@@ -1153,7 +1230,10 @@ export default function Admin({ staffUser }) {
     : view === it.id
   const sectionForView = { verificationQueue:'queues', reportsQueue:'queues', myQueue:'queues', duplicateLeads:'queues', casteSuggestions:'tools', coordinationRequests:'tools', shareLinks:'tools', sharedMatchLog:'tools', createClient:'profiles', editProfile:'profiles', editPhotos:'profiles', fullProfile:'profiles', findMatches:'profiles' }
   const effectiveSection = view === 'list' ? section : (sectionForView[view] || section)
-  const switchSection = (s) => { if (view !== 'list') navigate(-1); setSectionOnly(s) }
+  // One push, no navigate(-1): the async history pop used to land after
+  // the new section was set and bounce the admin straight back into the
+  // sub-view they were leaving (audit 2026-10-11).
+  const switchSection = (s) => setSectionOnly(s)
   // Jumping to a profile card from a sub-view other than Profiles (e.g.
   // Share Links, notification bell, "View Profile"/profile-ID clicks) —
   // two bugs here, both from Aryan testing the live deploy (2026-10-09):
@@ -1815,47 +1895,30 @@ export default function Admin({ staffUser }) {
       )}
       {view === 'list' && section === 'dashboard' && (
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Dashboard</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500 }}>Dashboard</div>
+            <div style={{ fontSize: 12, color: '#8e8e8e' }}>{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+          </div>
           <button className="btn btn-outline btn-sm" style={{ padding: '6px 10px' }} onClick={loadStats} disabled={statsLoading} title="Refresh stats">
             {statsLoading ? '...' : <RefreshCw size={14} />}
           </button>
         </div>
-        {/* Today's priority — the things that actually need action today,
-            surfaced above everything else so Aryan doesn't have to hunt
-            through tabs to find out what's urgent (2026-10-10 ask: priority
-            items should show first, fewer clicks, less wasted time). */}
-        <PriorityActions stats={stats} onOpen={(v) => setView(v)} />
-        {/* Stat tiles */}
-        <div className="admin-stats">
+        <div className="dash-tabs" role="tablist">
           {[
-            { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555' },
-            { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#4f46e5' },
-            { label: 'Female', val: stats.female, bg: '#fdf2f8', fg: '#db2777' },
-            { label: 'New 7d', val: stats.newWeek, bg: '#ecfeff', fg: '#0891b2' },
-            { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309' },
-            { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#16a34a' },
-            { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626' },
-            { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb' },
-            { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea' },
-          ].map(s => (
-            <div key={s.label} className="admin-stat" style={{ background: s.bg }}>
-              <div style={{ fontFamily:'var(--font-display)', fontSize: 20, fontWeight:600, color: s.fg }}>{s.val}</div>
-              <div style={{ fontSize: 11, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
-            </div>
+            { key: 'today', label: 'Today', Icon: CalendarClock },
+            { key: 'business', label: 'Business', Icon: TrendingUp },
+            { key: 'profiles', label: 'Profiles', Icon: BarChart3 },
+          ].map(t => (
+            <button key={t.key} type="button" role="tab" aria-selected={dashTab === t.key}
+              className={'dash-tab' + (dashTab === t.key ? ' active' : '')} onClick={() => setDashTab(t.key)}>
+              <t.Icon size={14} />{t.label}
+            </button>
           ))}
         </div>
-{/* Stats timestamp removed — visual clutter */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-          <button className="btn btn-outline btn-sm" onClick={() => setShowBreakdown(v => !v)}>
-            <BarChart3 size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showBreakdown ? 'Hide breakdown' : 'Breakdown (age, height, religion...)'}
-          </button>
-          <button className="btn btn-outline btn-sm" onClick={() => setShowFunnel(v => !v)}>
-            <GitBranch size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{showFunnel ? 'Hide funnel' : 'Conversion Funnel'}
-          </button>
-        </div>
-        {showBreakdown && <StatsBreakdown profiles={dashProfiles} capped={dashProfilesCapped} />}
-        {showFunnel && <FunnelView profiles={dashProfiles} capped={dashProfilesCapped} refreshKey={statsUpdatedAt} />}
+        {dashTab === 'today' && <TodayPanel stats={stats} onOpen={(v) => setView(v)} />}
+        {dashTab === 'business' && <BusinessPanel stats={stats} profiles={dashProfiles} capped={dashProfilesCapped} refreshKey={statsUpdatedAt} />}
+        {dashTab === 'profiles' && <ProfilesPanel stats={stats} profiles={dashProfiles} capped={dashProfilesCapped} />}
       </div>
       )}
       {view === 'list' && section === 'queues' && (
@@ -1931,44 +1994,282 @@ export default function Admin({ staffUser }) {
   )
 }
 
-// ===== PRIORITY ACTIONS — Dashboard's "what needs me right now" row,
-// above the stat tiles. Only actionable (count > 0) items show, ranked by
-// urgency, so a review day starts with "what do I need to do" instead of
-// "let me go hunting across tabs" (Aryan's 2026-10-10 ask: priority items
-// first, fewer clicks, less wasted time). All counts already come from
-// the Dashboard's existing loadStats() — no extra fetch here.
-function PriorityActions({ stats, onOpen }) {
+// ===== DASHBOARD PANELS (Aryan, 2026-10-11): "ek hi dashboard screen se
+// poore business ka nichod — kya zaroori hai, kya action lena hai". Three
+// tabs instead of one long page: Today (what needs doing, ranked by
+// urgency), Business (pipeline + 30-day health), Profiles (charts).
+// Counts come from loadStats(); Business/Profiles also use the shared
+// dashProfiles fetch.
+
+const TONES = {
+  urgent: { bg: '#fef2f2', fg: '#b91c1c' },
+  act: { bg: '#fff7ed', fg: '#c2410c' },
+  sched: { bg: '#eff6ff', fg: '#1d4ed8' },
+  like: { bg: '#fdf2f8', fg: '#C2185B' },
+  info: { bg: '#f5f5f4', fg: '#475569' },
+}
+
+// Opens My Queue on a specific tab (MyQueueView reads this on mount).
+const openQueueTab = (onOpen, tab) => {
+  try { sessionStorage.setItem('myQueueTab', tab) } catch {}
+  onOpen('myQueue')
+}
+
+function TodayPanel({ stats, onOpen }) {
+  const q = (tab) => () => openQueueTab(onOpen, tab)
+  const go = (view) => () => onOpen(view)
+  // Ranked most-urgent first; only rows with something to do are shown.
   const items = [
-    { key: 'todayMeetings', count: stats.todayMeetings, label: "Today's calls & meetings", icon: CalendarClock, bg: '#eff6ff', fg: '#2563eb', view: 'myQueue' },
-    { key: 'overdueFollowUps', count: stats.overdueFollowUps, label: 'Overdue follow-ups', icon: Clock, bg: '#fef2f2', fg: '#dc2626', view: 'myQueue' },
-    { key: 'needsVerification', count: stats.needsVerification, label: 'Needs verification', icon: ShieldAlert, bg: '#fff8e1', fg: '#b45309', view: 'verificationQueue' },
-    { key: 'openReports', count: stats.openReports, label: 'Open reports', icon: Flag, bg: '#fdf4ff', fg: '#9333ea', view: 'reportsQueue' },
-    { key: 'pendingCoordination', count: stats.pendingCoordination, label: 'Awaiting response', icon: Handshake, bg: '#f5f3ff', fg: '#7c3aed', view: 'coordinationRequests' },
-    { key: 'pendingShareInterest', count: stats.pendingShareInterest, label: 'Clients interested', icon: ThumbsUp, bg: '#f0fdf4', fg: '#16a34a', view: 'shareLinks' },
-    { key: 'pendingShareNotInterested', count: stats.pendingShareNotInterested, label: 'Not interested in a match', icon: ThumbsDown, bg: '#fef3c7', fg: '#d97706', view: 'shareLinks' },
-    { key: 'pendingBureauReply', count: stats.pendingBureauReply, label: 'Bureau found a match', icon: Building2, bg: '#f0fdf4', fg: '#16a34a', view: 'shareLinks' },
+    { key: 'todayMeetings', count: stats.todayMeetings, label: "Today's calls & meetings", hint: 'Confirm with both sides before the time', icon: CalendarClock, tone: 'sched', onClick: q('meetings') },
+    { key: 'decisionsOverdue', count: stats.decisionsOverdue, label: 'Meeting decisions overdue', hint: '48 hours passed, get a Positive or Negative', icon: CheckCircle2, tone: 'urgent', onClick: q('decisions') },
+    { key: 'overdueFollowUps', count: stats.overdueFollowUps, label: 'Missed follow-ups', hint: 'Were due before today', icon: Clock, tone: 'urgent', onClick: q('followups') },
+    { key: 'pendingShareInterest', count: stats.pendingShareInterest, label: 'Clients interested in a match', hint: 'Tell the other side or set up a call', icon: ThumbsUp, tone: 'like', onClick: q('interested') },
+    { key: 'pendingBureauReply', count: stats.pendingBureauReply, label: 'Bureau found a match', hint: 'Read their reply and follow up', icon: Building2, tone: 'sched', onClick: q('bureau') },
+    { key: 'followUpsToday', count: stats.followUpsToday, label: 'Follow-ups due today', icon: Clock, tone: 'act', onClick: q('followups') },
+    { key: 'acceptedUnscheduled', count: stats.acceptedUnscheduled, label: 'Accepted, no date fixed', hint: 'Schedule the call or meeting', icon: CalendarClock, tone: 'act', onClick: go('coordinationRequests') },
+    { key: 'staleCoordination', count: stats.staleCoordination, label: 'No reply for 3+ days', hint: 'Nudge the member who has to accept', icon: Handshake, tone: 'act', onClick: go('coordinationRequests') },
+    { key: 'needsVerification', count: stats.needsVerification, label: 'Needs verification', hint: 'Selfie or ID waiting to be checked', icon: ShieldAlert, tone: 'act', onClick: go('verificationQueue') },
+    { key: 'openReports', count: stats.openReports, label: 'Open reports', icon: Flag, tone: 'urgent', onClick: go('reportsQueue') },
+    { key: 'expiringLinks', count: stats.expiringLinks, label: 'Share links expiring, no reply', hint: 'Expire within 48 hours, remind the client', icon: Link2, tone: 'act', onClick: go('shareLinks') },
+    { key: 'pendingCoordination', count: stats.pendingCoordination, label: 'Requests awaiting response', icon: Handshake, tone: 'info', onClick: q('coordination') },
+    { key: 'pendingShareNotInterested', count: stats.pendingShareNotInterested, label: 'Said not interested', hint: 'Line up a fresh match for them', icon: ThumbsDown, tone: 'info', onClick: q('notInterested') },
   ].filter(i => i.count > 0)
 
-  if (items.length === 0) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#16a34a', background: '#f0fdf4', borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
-        <CheckCircle2 size={16} />All caught up — nothing urgent right now.
-      </div>
-    )
-  }
+  const kpi = (val, label, sub) => (
+    <div className="kpi"><div className="kpi-val">{val}</div><div className="kpi-label">{label}</div>{sub && <div className="kpi-sub">{sub}</div>}</div>
+  )
+  const interestRate = stats.sharesMonth ? Math.round((stats.interestedMonth / stats.sharesMonth) * 100) + '%' : '–'
 
   return (
-    <div className="admin-priority">
-      {items.map(i => (
-        <button key={i.key} type="button" onClick={() => onOpen(i.view)}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', border: 'none',
-            background: i.bg, borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}>
-          <i.icon size={16} color={i.fg} />
-          <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: '#333' }}>{i.label}</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: i.fg }}>{i.count}</span>
-        </button>
-      ))}
+    <div className="dash-grid">
+      <div className="dash-card span-2">
+        <div className="dash-card-title"><ListChecks size={15} />Needs action now<span className="muted">{items.length ? `${items.length} item${items.length === 1 ? '' : 's'}` : ''}</span></div>
+        {items.length === 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#166534', background: '#f0fdf4', borderRadius: 10, padding: '10px 14px' }}>
+            <CheckCircle2 size={16} />All caught up, nothing urgent right now.
+          </div>
+        ) : (
+          <div className="action-list">
+            {items.map(i => {
+              const t = TONES[i.tone]
+              return (
+                <button key={i.key} type="button" className="action-item" onClick={i.onClick} style={{ background: t.bg }}>
+                  <i.icon size={17} color={t.fg} />
+                  <span className="ai-label">{i.label}{i.hint && <span className="ai-hint">{i.hint}</span>}</span>
+                  <span className="ai-count" style={{ color: t.fg }}>{i.count}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+      <div className="dash-card">
+        <div className="dash-card-title"><CalendarClock size={15} />Today</div>
+        <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+          {kpi(stats.todayMeetings, 'Calls & meetings')}
+          {kpi(stats.followUpsToday + stats.overdueFollowUps, 'Follow-ups to do', stats.overdueFollowUps ? `${stats.overdueFollowUps} overdue` : null)}
+          {kpi(stats.newToday, 'New sign-ups')}
+          {kpi(stats.pending, 'Waiting for approval')}
+        </div>
+      </div>
+      <div className="dash-card">
+        <div className="dash-card-title"><TrendingUp size={15} />This week</div>
+        <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+          {kpi(stats.newWeek, 'New profiles')}
+          {kpi(stats.sharesWeek, 'Profiles shared', `${stats.linkOpensWeek} link opens`)}
+          {kpi(stats.meetingsWeek, 'Meetings next 7 days')}
+          {kpi(interestRate, 'Interest rate', 'Shared → Interested, 30 days')}
+        </div>
+      </div>
     </div>
+  )
+}
+
+function BusinessPanel({ stats, profiles, capped, refreshKey }) {
+  const [activity, setActivity] = useState(null) // { intros, actions, links, photoIds }
+
+  useEffect(() => {
+    let cancelled = false
+    setActivity(null)
+    Promise.all([
+      fetchAllRows(() => supabase.from('introductions').select('from_profile, to_profile, status, decision, final_outcome, created_at')),
+      fetchAllRows(() => supabase.from('match_actions').select('actor_profile_id, target_profile_id').in('action', ['like', 'super_like'])),
+      fetchAllRows(() => supabase.from('share_links').select('profile_id, client_profile_id, interested_at, created_at')),
+      fetchAllRows(() => supabase.from('photos').select('profile_id')),
+    ]).then(([i, a, l, ph]) => {
+      if (cancelled) return
+      const err = [i, a, l, ph].find(r => r.error)
+      if (err) console.error('Business panel load:', err.error.message)
+      setActivity({ intros: i.data, actions: a.data, links: l.data, photoIds: new Set(ph.data.map(p => p.profile_id)) })
+    })
+    return () => { cancelled = true }
+  }, [refreshKey])
+
+  const loading = profiles === null || activity === null
+  const derived = useMemo(() => {
+    if (loading) return null
+    const monthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+    const active = profiles.filter(p => p.profile_status === 'active')
+    // "Idle" = active client who got no share link and no request in 30 days.
+    const touched = new Set()
+    activity.links.forEach(l => { if (new Date(l.created_at).getTime() >= monthAgo) { touched.add(l.client_profile_id); touched.add(l.profile_id) } })
+    activity.intros.forEach(x => { if (new Date(x.created_at).getTime() >= monthAgo) { touched.add(x.from_profile); touched.add(x.to_profile) } })
+    const funnel = computeFunnel(funnelCounts(profiles, { intros: activity.intros, actions: activity.actions, shareLinks: activity.links }))
+    const joined = breakdown(profiles, 'joined').filter(r => r.label !== 'Not filled').slice(0, 6).reverse()
+    const leadRows = breakdown(profiles, 'lead_source').map(r => ({ label: r.label, value: r.total, color: r.label === 'Not filled' ? '#b4b2ab' : undefined }))
+    return {
+      idle: active.filter(p => !touched.has(p.id)).length,
+      noPhoto: active.filter(p => !activity.photoIds.has(p.id)).length,
+      noRm: active.filter(p => !p.managed_by_staff_id).length,
+      activeCount: active.length,
+      dupCount: findDuplicateLeads(profiles).length,
+      funnel, joined, leads: topSlices(leadRows, 5),
+    }
+  }, [loading, profiles, activity])
+
+  const kpi = (val, label, sub, warn) => (
+    <div className="kpi" style={warn ? { background: '#fff7ed' } : undefined}>
+      <div className="kpi-val" style={warn ? { color: '#c2410c' } : undefined}>{val}</div>
+      <div className="kpi-label">{label}</div>{sub && <div className="kpi-sub">{sub}</div>}
+    </div>
+  )
+  const interestRate = stats.sharesMonth ? Math.round((stats.interestedMonth / stats.sharesMonth) * 100) + '%' : '–'
+
+  return (
+    <div className="dash-grid">
+      <div className="dash-card span-2">
+        <div className="dash-card-title"><TrendingUp size={15} />Last 30 days</div>
+        <div className="kpi-grid">
+          {kpi(stats.newMonth, 'New profiles', `${stats.newWeek} this week`)}
+          {kpi(stats.sharesMonth, 'Matches shared', `${stats.interestedMonth} got Interested`)}
+          {kpi(interestRate, 'Interest rate', 'Interested ÷ shared')}
+          {kpi(stats.successMonth, 'Successful matches', `${stats.successTotal} all time`)}
+          {kpi(stats.inProgress, 'Matches in progress', 'Accepted, called or met')}
+          {kpi(derived ? derived.idle : '…', 'Idle active clients', 'No match sent in 30 days', derived && derived.idle > 0)}
+          {kpi(derived ? derived.noPhoto : '…', 'Active without photo', derived ? `of ${derived.activeCount} active` : null, derived && derived.noPhoto > 0)}
+          {kpi(derived ? derived.dupCount : '…', 'Possible duplicates', 'See Duplicate Leads', derived && derived.dupCount > 0)}
+        </div>
+      </div>
+      <div className="dash-card">
+        <div className="dash-card-title"><GitBranch size={15} />Conversion funnel<span className="muted">profiles at each stage</span></div>
+        {loading ? <div style={{ fontSize: 13, color: '#8e8e8e' }}>Loading…</div> : <FunnelChart stages={derived.funnel} />}
+        {capped && <div style={{ fontSize: 12, color: '#b45309', marginTop: 8 }}>Based on the latest {DASH_CAP.toLocaleString('en-IN')} profiles.</div>}
+      </div>
+      <div className="dash-card">
+        <div className="dash-card-title"><Users size={15} />Where leads come from</div>
+        {loading ? <div style={{ fontSize: 13, color: '#8e8e8e' }}>Loading…</div> : <DonutChart data={derived.leads} centerLabel="profiles" />}
+        {!loading && derived.noRm > 0 && (
+          <div style={{ fontSize: 12, color: '#555', marginTop: 12 }}>{derived.noRm} active profile{derived.noRm === 1 ? ' has' : 's have'} no RM assigned.</div>
+        )}
+      </div>
+      <div className="dash-card span-2">
+        <div className="dash-card-title"><BarChart3 size={15} />New profiles by month</div>
+        {loading ? <div style={{ fontSize: 13, color: '#8e8e8e' }}>Loading…</div> : (
+          <StackedColumns rows={derived.joined.map(r => ({ ...r, label: new Date(r.label + '-01').toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }) }))} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProfilesPanel({ stats, profiles, capped }) {
+  const loading = profiles === null
+  const pie = (dim, n = 5) => topSlices(breakdown(profiles, dim).filter(r => r.label !== 'Not filled').map(r => ({ label: r.label, value: r.total })), n)
+  const statusColors = { active: '#1baf7a', pending: '#eda100', blocked: '#e34948' }
+  const charts = loading ? null : {
+    gender: [
+      { label: 'Male', value: stats.male, color: GENDER_COLORS.Male },
+      { label: 'Female', value: stats.female, color: GENDER_COLORS.Female },
+    ],
+    status: breakdown(profiles, 'profile_status').map(r => ({ label: r.label[0].toUpperCase() + r.label.slice(1), value: r.total, color: statusColors[r.label] || '#b4b2ab' })),
+    religion: pie('religion'),
+    marital: pie('marital_status', 4),
+    age: breakdown(profiles, 'age'),
+    height: breakdown(profiles, 'height'),
+  }
+  const card = (title, Icon, body, wide) => (
+    <div className={'dash-card' + (wide ? ' span-2' : '')}>
+      <div className="dash-card-title"><Icon size={15} />{title}</div>
+      {loading ? <div style={{ fontSize: 13, color: '#8e8e8e' }}>Loading…</div> : body()}
+    </div>
+  )
+  return (
+    <>
+      <div className="admin-stats">
+        {[
+          { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555' },
+          { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#2a78d6' },
+          { label: 'Female', val: stats.female, bg: '#fdf2f8', fg: '#C2185B' },
+          { label: 'New 7d', val: stats.newWeek, bg: '#ecfeff', fg: '#0891b2' },
+          { label: 'Pending', val: stats.pending, bg: '#fff8e1', fg: '#b45309' },
+          { label: 'Active', val: stats.active, bg: '#f0fdf4', fg: '#166534' },
+          { label: 'Blocked', val: stats.blocked, bg: '#fef2f2', fg: '#dc2626' },
+        ].map(s => (
+          <div key={s.label} className="admin-stat" style={{ background: s.bg }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, color: s.fg }}>{s.val}</div>
+            <div style={{ fontSize: 11, color: '#6b6b6b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      {capped && <div style={{ fontSize: 12, color: '#b45309', marginBottom: 10 }}>Charts use the latest {DASH_CAP.toLocaleString('en-IN')} profiles.</div>}
+      <div className="dash-grid">
+        {card('Gender', Users, () => <DonutChart data={charts.gender} centerLabel="profiles" />)}
+        {card('Profile status', ShieldCheck, () => <DonutChart data={charts.status} centerLabel="profiles" />)}
+        {card('Age groups', BarChart3, () => <StackedColumns rows={charts.age} />)}
+        {card('Height', BarChart3, () => <StackedColumns rows={charts.height} />)}
+        {card('Religion', Users, () => <DonutChart data={charts.religion} centerLabel="filled" />)}
+        {card('Marital status', Users, () => <DonutChart data={charts.marital} centerLabel="filled" />)}
+        <div className="dash-card span-2">
+          <BreakdownExplorer profiles={profiles} />
+        </div>
+      </div>
+    </>
+  )
+}
+
+// Any-dimension explorer (was the whole "Breakdown" panel): pick a field
+// and filters, see it as a chart. Ordered buckets (age/height/month) draw
+// as columns, everything else as count-sorted bars.
+function BreakdownExplorer({ profiles }) {
+  const [dim, setDim] = useState('community')
+  const [gender, setGender] = useState('')
+  const [status, setStatus] = useState('')
+  const [joined, setJoined] = useState('all')
+  const [showAll, setShowAll] = useState(false)
+  if (profiles === null) return <div style={{ fontSize: 13, color: '#8e8e8e' }}>Loading…</div>
+  const filtered = filterProfiles(profiles, { gender, status, joined })
+  const rows = breakdown(filtered, dim)
+  const ordered = Array.isArray(DIMENSIONS[dim].order) || DIMENSIONS[dim].order === 'recent'
+  const shown = ordered || showAll ? rows : rows.slice(0, 12)
+  return (
+    <>
+      <div className="dash-card-title"><SlidersHorizontal size={15} />Explore any field<span className="muted">{filtered.length} profile{filtered.length === 1 ? '' : 's'}</span></div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <select className="form-select" value={dim} onChange={e => { setDim(e.target.value); setShowAll(false) }} style={{ maxWidth: 220 }}>
+          {Object.entries(DIMENSIONS).map(([key, d]) => <option key={key} value={key}>By {d.label}</option>)}
+        </select>
+        <select className="form-select" value={gender} onChange={e => setGender(e.target.value)} style={{ maxWidth: 140 }}>
+          <option value="">All genders</option><option value="Male">Male</option><option value="Female">Female</option>
+        </select>
+        <select className="form-select" value={status} onChange={e => setStatus(e.target.value)} style={{ maxWidth: 150 }}>
+          <option value="">All statuses</option><option value="active">Active</option><option value="pending">Pending</option><option value="blocked">Blocked</option>
+        </select>
+        <select className="form-select" value={joined} onChange={e => setJoined(e.target.value)} style={{ maxWidth: 160 }}>
+          <option value="all">Joined: any time</option>
+          <option value="today">Joined: today</option>
+          <option value="7d">Joined: last 7 days</option>
+          <option value="30d">Joined: last 30 days</option>
+          <option value="90d">Joined: last 90 days</option>
+        </select>
+      </div>
+      {rows.length === 0 ? <div style={{ fontSize: 13, color: '#8e8e8e' }}>No profiles match these filters.</div>
+        : ordered ? <StackedColumns rows={dim === 'joined' ? [...shown].reverse() : shown} /> : <HBarChart rows={shown} />}
+      {!ordered && rows.length > 12 && (
+        <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={() => setShowAll(v => !v)}>
+          {showAll ? 'Show top 12' : `Show all ${rows.length}`}
+        </button>
+      )}
+    </>
   )
 }
 
@@ -1984,165 +2285,6 @@ function AdminNavCard({ icon: Icon, label, subtitle, badge, onClick }) {
       {subtitle && <span style={{ fontSize: 13, color: 'var(--gray3)', marginTop: -6 }}>{subtitle}</span>}
       {!!badge && <span className="chip chip-primary">{badge}</span>}
     </button>
-  )
-}
-
-// ===== LIVE STATS BREAKDOWN — Aryan ke "jese marji chae dekh saku" ask ke
-// liye: defaults (Total/Male/Female/New) upar hamesha visible hain, yeh
-// expandable panel har dimension (age/height/religion/etc, adminStats.js
-// mein defined) pe on-demand filter/breakdown deta hai. Existing profiles
-// table se hi — koi naya column/table nahi.
-// `profiles` comes from Admin's shared dashboard fetch (null while loading).
-function StatsBreakdown({ profiles, capped }) {
-  const [dim, setDim] = useState('age')
-  const [gender, setGender] = useState('')
-  const [status, setStatus] = useState('')
-  const [joined, setJoined] = useState('all')
-  const loading = profiles === null
-
-  const filtered = profiles ? filterProfiles(profiles, { gender, status, joined }) : []
-  const rows = profiles ? breakdown(filtered, dim) : []
-  const maxTotal = Math.max(1, ...rows.map(r => r.total))
-
-  return (
-    <div style={{ background: '#fafafa', border: '1px solid #ededed', borderRadius: 'var(--radius)', padding: 16, marginBottom: 20 }}>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        <select className="form-select" value={dim} onChange={e => setDim(e.target.value)} style={{ maxWidth: 220 }}>
-          {Object.entries(DIMENSIONS).map(([key, d]) => <option key={key} value={key}>Break down by: {d.label}</option>)}
-        </select>
-        <select className="form-select" value={gender} onChange={e => setGender(e.target.value)} style={{ maxWidth: 140 }}>
-          <option value="">All genders</option><option value="Male">Male</option><option value="Female">Female</option>
-        </select>
-        <select className="form-select" value={status} onChange={e => setStatus(e.target.value)} style={{ maxWidth: 150 }}>
-          <option value="">All statuses</option><option value="active">Active</option><option value="pending">Pending</option><option value="blocked">Blocked</option>
-        </select>
-        <select className="form-select" value={joined} onChange={e => setJoined(e.target.value)} style={{ maxWidth: 150 }}>
-          <option value="all">Joined: any time</option>
-          <option value="today">Joined: today</option>
-          <option value="7d">Joined: last 7 days</option>
-          <option value="30d">Joined: last 30 days</option>
-          <option value="90d">Joined: last 90 days</option>
-        </select>
-      </div>
-      {loading && <div style={{ fontSize: 13, color: '#8e8e8e' }}>Loading…</div>}
-      {!loading && (
-        <>
-          <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 10 }}>{filtered.length} profile{filtered.length === 1 ? '' : 's'} matched</div>
-          {capped && (
-            <div style={{ fontSize: 13, color: '#b45309', background: '#fff8e1', padding: '6px 10px', borderRadius: 8, marginBottom: 10 }}>
-              Database is bigger than {DASH_CAP.toLocaleString('en-IN')} profiles — showing the most recent {DASH_CAP.toLocaleString('en-IN')} only.
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {rows.map(r => (
-              <div key={r.label}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
-                  <span>{r.label}</span>
-                  <span style={{ color: '#8e8e8e' }}>{r.total} <span style={{ color: '#4f46e5' }}>M {r.male}</span> · <span style={{ color: '#db2777' }}>F {r.female}</span></span>
-                </div>
-                <div style={{ height: 6, borderRadius: 4, background: '#eee', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${(r.total / maxTotal) * 100}%`, background: '#9333ea' }} />
-                </div>
-              </div>
-            ))}
-            {rows.length === 0 && <div style={{ fontSize: 13, color: '#8e8e8e' }}>No profiles match these filters.</div>}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-// ===== CONVERSION FUNNEL — Registered → Active → Matched → Meeting
-// Requested → Meeting Done. Counts come from profiles.profile_status
-// (existing) plus introductions/match_actions (existing tables) — no new
-// lead/stage table. Small data volume today, so distinct-profile counts
-// are computed client-side like StatsBreakdown already does.
-// `profiles` comes from Admin's shared dashboard fetch (same rows as Breakdown);
-// only introductions/match_actions are fetched here.
-function FunnelView({ profiles, capped, refreshKey }) {
-  const [activity, setActivity] = useState(null) // { intros, actions }
-
-  useEffect(() => {
-    let cancelled = false
-    setActivity(null)
-    Promise.all([
-      supabase.from('introductions').select('from_profile, to_profile, status').limit(DASH_CAP),
-      supabase.from('match_actions').select('actor_profile_id, target_profile_id, action').in('action', ['like', 'super_like']).limit(DASH_CAP),
-    ]).then(([introsRes, actionsRes]) => {
-      if (!cancelled) setActivity({ intros: introsRes.data || [], actions: actionsRes.data || [] })
-    })
-    return () => { cancelled = true }
-  }, [refreshKey])
-
-  const loading = profiles === null || activity === null
-
-  const { counts, dupCount } = useMemo(() => {
-    if (loading) return { counts: null, dupCount: 0 }
-    const { intros, actions } = activity
-    const matched = new Set()
-    actions.forEach(a => { matched.add(a.actor_profile_id); matched.add(a.target_profile_id) })
-    const meetingRequested = new Set()
-    const meetingDone = new Set()
-    intros.forEach(i => {
-      meetingRequested.add(i.from_profile); meetingRequested.add(i.to_profile)
-      if (i.status === 'contacted' || i.status === 'closed') { meetingDone.add(i.from_profile); meetingDone.add(i.to_profile) }
-    })
-    return {
-      counts: {
-        registered: profiles.length,
-        active: profiles.filter(p => p.profile_status === 'active').length,
-        matched: matched.size,
-        meetingRequested: meetingRequested.size,
-        meetingDone: meetingDone.size,
-      },
-      dupCount: findDuplicateLeads(profiles).length,
-    }
-  }, [loading, profiles, activity])
-
-  const stages = counts ? computeFunnel(counts) : []
-  const maxCount = Math.max(1, ...stages.map(s => s.count))
-
-  return (
-    <div style={{ background: '#fafafa', border: '1px solid #ededed', borderRadius: 'var(--radius)', padding: 16, marginBottom: 20 }}>
-      {loading && <div style={{ fontSize: 13, color: '#8e8e8e' }}>Loading…</div>}
-      {!loading && (
-        <>
-          {capped && (
-            <div style={{ fontSize: 13, color: '#b45309', background: '#fff8e1', padding: '6px 10px', borderRadius: 8, marginBottom: 10 }}>
-              Database is bigger than {DASH_CAP.toLocaleString('en-IN')} profiles — counts below are based on a capped sample, not every profile.
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {stages.map(s => (
-              <div key={s.key}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
-                  <span>{s.label}</span>
-                  <span style={{ color: '#8e8e8e' }}>
-                    {s.count}
-                    {s.conversionPct !== null && <span style={{ color: s.conversionPct >= 50 ? '#16a34a' : '#b45309' }}> · {s.conversionPct}% of previous</span>}
-                  </span>
-                </div>
-                <div style={{ height: 8, borderRadius: 4, background: '#eee', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${(s.count / maxCount) * 100}%`, background: '#2563eb' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: 13, color: '#8e8e8e', marginTop: 14 }}>
-            "% of previous" = yeh stage ki count ÷ pichle stage ki count — har stage par kitna drop-off hua, yeh dikhata hai (funnel khud raw counts hai, yeh us par ratio hai).
-          </div>
-          {dupCount > 0 && (
-            // Shortcut button hata diya — Duplicate Leads already Queues tab
-            // ke card se khulti hai, teesri entry point ki zaroorat nahi.
-            // Count yahan sirf context ke liye.
-            <div style={{ marginTop: 10, fontSize: 12, color: '#8e8e8e' }}>
-              🧬 {dupCount} possible duplicate lead{dupCount === 1 ? '' : 's'} found — see Queues → Duplicate Leads
-            </div>
-          )}
-        </>
-      )}
-    </div>
   )
 }
 
@@ -3002,6 +3144,8 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
   }
 
   const handleRevoke = async (linkId) => {
+    // Can't be undone from the app — confirm first (audit 2026-10-11).
+    if (!window.confirm('Revoke this link? The client will no longer be able to open it.')) return
     try {
       await revokeShareLink(linkId)
       load()
@@ -3206,7 +3350,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
             const effectiveForwardedAt = l.forwarded_at || reverseLink?.forwarded_at
             const effectiveIntroId = l.forwarded_introduction_id || reverseLink?.forwarded_introduction_id
             return (
-              <div key={l.id} className="list-row" style={(interestPending || bureauReplyPending) ? { borderColor: '#16a34a', background: '#f0fdf4' } : {}}>
+              <div key={l.id} className={'list-row' + (interestPending ? ' resp-row-interested' : bureauReplyPending ? ' resp-row-bureau' : '')}>
                 {/* Share ID — moved to the top corner, prominent, since
                     that's what Aryan actually searches/refers to by
                     (Aryan, 2026-10-09 follow-up). */}
@@ -3320,7 +3464,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                           return (
                             <div key={s.id} style={{fontSize:12,color:'#555',display:'flex',justifyContent:'space-between',gap:8}}>
                               <span>{sp ? sp.full_name : 'Profile'}</span>
-                              <span style={{color:'#8e8e8e'}}>{sStatus}</span>
+                              <span style={{color: s.interested_at ? '#C2185B' : s.not_interested_at ? '#475569' : '#8e8e8e', fontWeight: s.interested_at || s.not_interested_at ? 600 : 400}}>{sStatus}</span>
                             </div>
                           )
                         })}
@@ -3338,8 +3482,8 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                 )}
                 {l.bureau_reply && (
                   <div style={{marginTop:8,fontSize:12,display:'flex',flexDirection:'column',gap:6,padding:'8px 10px',
-                    borderRadius:8, background: l.bureau_reply_acknowledged_at ? '#fafafa' : '#f0fdf4'}}>
-                    <div style={{color: l.bureau_reply_acknowledged_at ? '#555' : '#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5}}
+                    borderRadius:8, background: l.bureau_reply_acknowledged_at ? '#fafafa' : '#eff6ff'}}>
+                    <div style={{color: l.bureau_reply_acknowledged_at ? '#555' : '#1D4ED8',fontWeight:600,display:'flex',alignItems:'center',gap:5}}
                       title={new Date(l.bureau_replied_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}>
                       <ThumbsUp size={12} /> Bureau replied: {l.bureau_reply}
                     </div>
@@ -3355,9 +3499,9 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                     sirf admin ke liye — client ko pata nahi chalta). */}
                 {l.not_interested_at && !l.interested_at && (
                   <div style={{marginTop:8,fontSize:12,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                    <span style={{color: l.not_interest_acknowledged_at ? '#8e8e8e' : '#b45309', display:'flex',alignItems:'center',gap:5}}
+                    <span className="resp-badge resp-not" style={l.not_interest_acknowledged_at ? { opacity: 0.7 } : undefined}
                       title={l.not_interest_acknowledged_at ? `Noted ${new Date(l.not_interest_acknowledged_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}` : 'Client tapped Not Interested on this profile'}>
-                      <ThumbsDown size={12} /> {new Date(l.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                      <ThumbsDown size={12} /> Not interested · {new Date(l.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                     </span>
                     {l.not_interest_acknowledged_at
                       ? <span style={{fontSize:11,color:'#8e8e8e'}}>✓ Noted</span>
@@ -3375,8 +3519,8 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                         proper solid green badge, same visual weight as any
                         other status pill on this page. */}
                     <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                      <span className="badge badge-active" title={`Liked ${new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}`}>
-                        <ThumbsUp size={12} style={{marginRight:5}} /> Liked · {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                      <span className="resp-badge resp-interested" title={`Interested ${new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}`}>
+                        <ThumbsUp size={12} /> Interested · {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                       </span>
                       {l.not_interested_at && (
                         <div style={{fontSize:11,color:'#8e8e8e',display:'flex',alignItems:'center',gap:3}} title="Client later tapped Not Interested">
@@ -3390,7 +3534,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                         instead of leaving the admin to notice two separate
                         green cards on their own (Aryan, 2026-10-11). */}
                     {mutualInterest && !effectiveForwardedAt && (
-                      <div style={{fontSize:12,fontWeight:600,color:'#16a34a',background:'#ecfdf5',border:'1px solid #bbf7d0',
+                      <div style={{fontSize:12,fontWeight:600,color:'#fff',background:'#C2185B',
                         borderRadius:8,padding:'6px 10px',display:'flex',alignItems:'center',gap:6}}>
                         <ThumbsUp size={13} /> Both profiles liked each other — ready for a meeting
                       </div>
@@ -3766,6 +3910,13 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   // wasn't found (audit 2026-10-08, P1 #10 re-scope). A non-empty query now
   // runs its own broader fetch across every status instead.
   const [searchResults, setSearchResults] = useState(null) // null = not searching, else rows from every status
+  // Every card action updates BOTH lists — while searching, the visible
+  // cards come from searchResults, which used to stay stale after "Met",
+  // "Schedule" etc. (audit 2026-10-11).
+  const patchRequests = (fn) => {
+    setRequests(fn)
+    setSearchResults(prev => prev && fn(prev))
+  }
   const [searching, setSearching] = useState(false)
   const [showScheduler, setShowScheduler] = useState(false)
   // "Send meeting details" now lives inside each profile's WhatsApp button
@@ -3792,7 +3943,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       // rashi/nakshatra/pada: Next round "Horoscope review" Guna Milan inhi
       // se nikalta hai — pehle yahan load hi nahi hote the, to har request
       // par "Horoscope data not available" dikhta tha.
-      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone, gender, rashi, nakshatra, nakshatra_pada, age, city').in('id', ids)
+      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone, gender, rashi, nakshatra, nakshatra_pada, age, city, state, country, external_bureau_name, external_bureau_contact').in('id', ids)
       const map = {}
       ;(profs || []).forEach(p => { map[p.id] = p })
       setProfilesById(prev => ({ ...prev, ...map }))
@@ -3895,7 +4046,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       // Coordination status change kahin audit log nahi likhta tha — Aryan
       // ka audit gap #7. entity_id = introduction id.
       await writeAuditLog(staffUser, 'coordination_status_change', id, { new_status: status })
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+      patchRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
       refreshPendingCount()
     } catch (err) {
       showToast(err.message)
@@ -3918,7 +4069,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
       await writeAuditLog(staffUser, 'coordination_decision_recorded', id, patch)
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+      patchRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
       if (patch.status === 'closed') refreshPendingCount()
     } catch (err) {
       showToast(err.message)
@@ -3937,7 +4088,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
       await writeAuditLog(staffUser, 'coordination_round_advanced', id, patch)
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+      patchRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
     } catch (err) {
       showToast(err.message)
     }
@@ -3962,7 +4113,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
       await writeAuditLog(staffUser, 'contact_disclosed', id, patch)
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+      patchRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
       refreshPendingCount()
     } catch (err) {
       showToast(err.message)
@@ -3976,7 +4127,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       const { error } = await supabase.from('introductions').update(patch).eq('id', id)
       if (error) throw error
       await writeAuditLog(staffUser, 'coordination_round_ended', id, patch)
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+      patchRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
       refreshPendingCount()
     } catch (err) {
       showToast(err.message)
@@ -3989,7 +4140,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       const viewed_at = new Date().toISOString()
       const { error } = await supabase.from('introductions').update({ viewed_at }).eq('id', id)
       if (error) throw error
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, viewed_at } : r))
+      patchRequests(prev => prev.map(r => r.id === id ? { ...r, viewed_at } : r))
     } catch (err) {
       showToast(err.message)
     }
@@ -4032,7 +4183,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
         const { error } = await supabase.from('introductions').update(patch).eq('id', id)
         if (error) throw error
         await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: prevScheduledAt, location: location || null, meeting_mode: mode || 'in_person', previous: prevScheduledAt })
-        setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+        patchRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
         setModeDraft(prev => ({ ...prev, [id]: undefined }))
         showToast(mode === 'virtual' ? 'Meeting link saved.' : 'Location saved.')
       } catch (err) {
@@ -4065,7 +4216,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       await writeAuditLog(staffUser, 'coordination_meeting_scheduled', id, { scheduled_at: newWhen, location: location || null, meeting_mode: mode || 'in_person', previous: prevScheduledAt || null })
       setScheduleDraft(prev => ({ ...prev, [id]: undefined }))
       setModeDraft(prev => ({ ...prev, [id]: undefined }))
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+      patchRequests(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
       if (statusPatch.status) refreshPendingCount()
     } catch (err) {
       showToast(migrationHint(err))
@@ -4081,7 +4232,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       // didn't, so a cleared meeting vanished from the History/audit trail
       // with no record of who cleared it or what time was lost (audit gap).
       await writeAuditLog(staffUser, 'coordination_meeting_cleared', id, { previous: prevScheduledAt || null })
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: null } : r))
+      patchRequests(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: null } : r))
     } catch (err) {
       showToast(err.message)
     }
@@ -4093,7 +4244,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       const { error } = await supabase.from('introductions').update(fb).eq('id', id)
       if (error) throw error
       await writeAuditLog(staffUser, 'coordination_feedback_saved', id, fb)
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, ...fb } : r))
+      patchRequests(prev => prev.map(r => r.id === id ? { ...r, ...fb } : r))
     } catch (err) {
       showToast(err.message)
     }
@@ -4225,7 +4376,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                               card: {
                                 name: x.full_name,
                                 otherName: other?.full_name || 'the other member',
-                                otherAge: other?.age, otherCity: other?.city, otherCode: other?.profile_code,
+                                otherAge: other?.age, otherCity: other ? shareRegion(other) : null, otherCode: other?.profile_code,
                                 date: new Date(r.scheduled_at).toLocaleDateString('en-IN', { dateStyle: 'medium' }),
                                 time: new Date(r.scheduled_at).toLocaleTimeString('en-IN', { timeStyle: 'short' }),
                                 location: r.location || '',
@@ -4293,7 +4444,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                     { label: 'Declined (family said no)', icon: ThumbsDown, color: '#dc2626', onClick: () => handleAction(r.id, 'declined'), hidden: r.status !== 'pending' },
                     { label: 'Called', icon: Phone, color: '#b45309', onClick: () => handleAction(r.id, 'contacted'), hidden: ['contacted', 'meeting_done', 'closed'].includes(r.status) },
                     { label: 'Met', icon: Handshake, color: '#7c3aed', onClick: () => handleAction(r.id, 'meeting_done'), hidden: r.status === 'meeting_done' || r.status === 'closed' },
-                    { label: 'Close', icon: X, onClick: () => handleAction(r.id, 'closed'), hidden: r.status === 'closed' },
+                    { label: 'Close', icon: X, onClick: () => { if (window.confirm('Close this request? All its actions will be hidden.')) handleAction(r.id, 'closed') }, hidden: r.status === 'closed' },
                   ]} />
                 </div>
                 {r.viewed_at && <div style={{fontSize:12,color:'#bbb',marginTop:6}}>Viewed {new Date(r.viewed_at).toLocaleString('en-IN')}</div>}
@@ -4355,8 +4506,8 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                 {r.decision === 'interested' && r.next_round_stage && r.status !== 'closed' && (
                   <NextRoundPanel request={r} fromProfile={from} toProfile={to}
                     onAdvance={(stage, patch)=>handleAdvanceRound(r.id, stage, patch)}
-                    onDiscloseAndComplete={()=>handleDiscloseAndComplete(r.id)}
-                    onNotProceeding={()=>handleNotProceeding(r.id)} />
+                    onDiscloseAndComplete={()=>{ if (window.confirm('Share contact details and mark this as a successful match?')) handleDiscloseAndComplete(r.id) }}
+                    onNotProceeding={()=>{ if (window.confirm('Mark as not proceeding? This closes the request.')) handleNotProceeding(r.id) }} />
                 )}
                 {r.final_outcome && (
                   <div style={{fontSize:12,marginTop:8,display:'flex',alignItems:'center',gap:6,
@@ -4417,7 +4568,7 @@ function DecisionWindow({ deadline, onDecide }) {
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <button className="btn btn-black btn-sm" onClick={() => onDecide('interested')}>👍 Positive</button>
-        <button className="btn btn-outline btn-sm" onClick={() => onDecide('not_interested')}>👎 Negative</button>
+        <button className="btn btn-outline btn-sm" onClick={() => { if (window.confirm('Record a Negative decision? This closes the request.')) onDecide('not_interested') }}>👎 Negative</button>
       </div>
     </div>
   )
@@ -4438,6 +4589,9 @@ const ROUND_STAGE_LABELS = {
 function NextRoundPanel({ request, fromProfile, toProfile, onAdvance, onDiscloseAndComplete, onNotProceeding }) {
   const [dateDraft, setDateDraft] = useState('')
   const stage = request.next_round_stage
+  // The house-visit date used to carry over into the Final Meeting field
+  // (audit 2026-10-11).
+  useEffect(() => { setDateDraft('') }, [stage])
   const guna = gunaMilanFor(fromProfile, toProfile)
 
   return (
@@ -4570,7 +4724,8 @@ function VerificationQueueView({ staffUser, onBack }) {
   const load = async (fromIndex = 0) => {
     if (fromIndex === 0) setLoading(true); else setLoadingMore(true)
     const { data, error } = await buildQuery(fromIndex, fromIndex + PAGE_SIZE - 1)
-    if (error) console.error(error.message)
+    // A load error used to look like "nothing waiting" (audit 2026-10-11).
+    if (error) showToast('Could not load the queue: ' + error.message)
     const newRows = data || []
     setHasMore(newRows.length === PAGE_SIZE)
     if (fromIndex === 0) setProfiles(newRows)
@@ -4702,7 +4857,7 @@ function ReportsQueueView({ staffUser, onBack }) {
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
       .range(fromIndex, fromIndex + PAGE_SIZE - 1)
-    if (error) { console.error(error.message); setLoading(false); setLoadingMore(false); return }
+    if (error) { showToast('Could not load reports: ' + error.message); setLoading(false); setLoadingMore(false); return }
     const newRows = data || []
     setHasMore(newRows.length === PAGE_SIZE)
     if (fromIndex === 0) setReports(newRows)
@@ -4798,7 +4953,7 @@ function ReportsQueueView({ staffUser, onBack }) {
 // with just an inline "Overdue" flag (audit 2026-10-08, P1 #11 re-scope —
 // the flat list made it easy to miss that most of what was showing wasn't
 // actually due yet once "Upcoming" started being fetched at all).
-function FollowUpsSection({ items, onOpenProfile, onDone }) {
+function FollowUpsSection({ items, onOpenProfile, onDone, hideTitle }) {
   const now = new Date()
   const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
   const endOfToday = new Date(now); endOfToday.setHours(23, 59, 59, 999)
@@ -4838,9 +4993,11 @@ function FollowUpsSection({ items, onOpenProfile, onDone }) {
 
   return (
     <div style={{ marginBottom: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
-        <Clock size={14} /> Follow-ups {items.length > 0 && `(${items.length})`}
-      </div>
+      {!hideTitle && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+          <Clock size={14} /> Follow-ups {items.length > 0 && `(${items.length})`}
+        </div>
+      )}
       {items.length === 0 ? (
         <div style={{ fontSize: 12, color: '#bbb' }}>Nothing due.</div>
       ) : (
@@ -4873,6 +5030,9 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   // Share-link clients who tapped "Not Interested" (Aryan, 2026-10-10).
   // Informational only — no dedicated ack column; admin sees it here and in Share Links.
   const [shareNotInterested, setShareNotInterested] = useState([])
+  // Bureau shares where the other bureau replied "found a match" — had a
+  // Dashboard badge but no My Queue list (audit 2026-10-11).
+  const [bureauReplies, setBureauReplies] = useState([])
   // Admin-only: how much pending work each staff member is carrying, so a
   // bulk burst of new profiles/requests can be spread out instead of
   // landing on whoever happens to click first (scale audit #8).
@@ -4880,6 +5040,9 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   // One search box across every My Queue section (2026-10-10, universal
   // search ask) — name / Profile ID / phone / city / note / location.
   const [query, setQuery] = useState('')
+  // Which My Queue tab is open — remembered for the session so "Manage" →
+  // Back returns to the same list.
+  const [tab, setTab] = useState(() => { try { return sessionStorage.getItem('myQueueTab') } catch { return null } })
   const inQueue = (list, bitsOf) => list.filter(x => matchesSearch(query, ...bitsOf(x)))
 
   useEffect(() => { load() }, [])
@@ -4889,7 +5052,11 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     const nowIso = new Date().toISOString()
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
     const weekFromNow = new Date(Date.now() + 7*24*60*60*1000).toISOString()
-    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes, shareNotInterestedRes, decisionsRes] = await Promise.all([
+    // Past meetings still show (as Overdue) — but only from the last 30
+    // days. With no lower bound, months-old unmarked calls filled all 20
+    // slots and pushed today's meetings off the list (audit 2026-10-11).
+    const monthAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString()
+    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes, shareNotInterestedRes, decisionsRes, bureauRes] = await Promise.all([
       // Was lte(nowIso) only — upcoming follow-ups (due later this week)
       // never got fetched at all, so there was nothing to group into an
       // "Upcoming" section (audit 2026-10-08, P1 #11 re-scope).
@@ -4903,9 +5070,9 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       // dopahar tak list se gayab, aur jo meeting ho chuki par "Met" mark
       // nahi hui wo kahin nahi dikhti thi. Ab past meetings bhi aati hain
       // jab tak Met/Closed/Declined na ho (upar "Overdue" ke saath).
-      supabase.from('introductions').select('*').lte('scheduled_at', weekFromNow).not('status', 'in', '(closed,meeting_done,declined)').order('scheduled_at', { ascending: true }).limit(20),
+      supabase.from('introductions').select('*').gte('scheduled_at', monthAgo).lte('scheduled_at', weekFromNow).not('status', 'in', '(closed,meeting_done,declined)').order('scheduled_at', { ascending: true }).limit(20),
       // Same window + same filter — so a burst of >20 meetings shows "+N more" instead of silently hiding them (scale audit #7)
-      supabase.from('introductions').select('*', { count: 'exact', head: true }).lte('scheduled_at', weekFromNow).not('status', 'in', '(closed,meeting_done,declined)'),
+      supabase.from('introductions').select('*', { count: 'exact', head: true }).gte('scheduled_at', monthAgo).lte('scheduled_at', weekFromNow).not('status', 'in', '(closed,meeting_done,declined)'),
       // Coordination requests awaiting the receiver's accept/decline — previously
       // invisible to admin anywhere. Folded in here per Aryan's ask (2026-10-03).
       supabase.from('introductions').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
@@ -4916,6 +5083,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       // Meeting ho gayi ("Met"), 48 ghante mein Positive/Negative decision
       // chahiye — yeh list pehle sirf Coordination card par dikhti thi.
       supabase.from('introductions').select('*').eq('status', 'meeting_done').is('decision', null).order('decision_deadline', { ascending: true, nullsFirst: false }).limit(20),
+      supabase.from('share_links').select('*').not('bureau_reply', 'is', null).is('bureau_reply_acknowledged_at', null).order('bureau_replied_at', { ascending: false }).limit(20),
     ])
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
@@ -4927,10 +5095,14 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     const shareInterestRows = shareInterestRes.data || []
     const shareNotInterestedRows = shareNotInterestedRes.data || []
     const decisions = decisionsRes.data || []
-    const ids = [...new Set([...meetings, ...pendingReqs, ...decisions].flatMap(m => [m.from_profile, m.to_profile]).concat([...shareInterestRows, ...shareNotInterestedRows].flatMap(s => [s.profile_id, s.client_profile_id])).filter(Boolean))]
+    const bureauRows = bureauRes.data || []
+    const ids = [...new Set([...meetings, ...pendingReqs, ...decisions].flatMap(m => [m.from_profile, m.to_profile]).concat([...shareInterestRows, ...shareNotInterestedRows, ...bureauRows].flatMap(s => [s.profile_id, s.client_profile_id])).filter(Boolean))]
     let profilesById = {}
     if (ids.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone').in('id', ids)
+      // external_bureau_* too — ProfileContact reads them; without them a
+      // bureau-sourced profile showed "+ Mark as external bureau profile"
+      // even when already tagged (audit 2026-10-11).
+      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone, external_bureau_name, external_bureau_contact').in('id', ids)
       ;(profs || []).forEach(p => { profilesById[p.id] = p })
     }
     setUpcomingMeetings(meetings.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
@@ -4938,6 +5110,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     setDecisionsDue(decisions.map(m => ({ ...m, fromProfile: profilesById[m.from_profile], toProfile: profilesById[m.to_profile] })))
     setShareInterest(shareInterestRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id], clientProfile: s.client_profile_id ? profilesById[s.client_profile_id] : null })))
     setShareNotInterested(shareNotInterestedRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id], clientProfile: s.client_profile_id ? profilesById[s.client_profile_id] : null })))
+    setBureauReplies(bureauRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id] })))
 
     // Team workload — admin-only (list_staff_with_email RPC is admin-gated).
     // Small number of staff, so one count query per staff member is fine
@@ -4971,6 +5144,25 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     }
   }
 
+  // Not-interested rows and bureau replies had no way to be cleared from
+  // My Queue, so their Dashboard badges never went away (audit 2026-10-11).
+  const handleAcknowledgeNotInterested = async (linkId) => {
+    try {
+      await acknowledgeShareLinkNotInterested(linkId)
+      setShareNotInterested(prev => prev.filter(s => s.id !== linkId))
+    } catch (err) {
+      showToast(err.message)
+    }
+  }
+  const handleAcknowledgeBureauReply = async (linkId) => {
+    try {
+      await acknowledgeBureauReply(linkId)
+      setBureauReplies(prev => prev.filter(s => s.id !== linkId))
+    } catch (err) {
+      showToast(err.message)
+    }
+  }
+
   const updatePendingContact = (profileId, phone) => {
     setPendingCoordination(prev => prev.map(m => ({
       ...m,
@@ -4982,214 +5174,223 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   const isToday = (iso) => new Date(iso).toDateString() === new Date().toDateString()
   const isPastDay = (iso) => { const d = new Date(); d.setHours(0, 0, 0, 0); return new Date(iso) < d }
 
-  const Section = ({ icon: Icon, title, hint, items, renderItem, empty }) => (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
-        <Icon size={14} /> {title} {items.length > 0 && `(${items.length})`}
-      </div>
-      {hint && <div style={{ fontSize: 13, color: '#bbb', marginTop: -6, marginBottom: 8 }}>{hint}</div>}
-      {items.length === 0 ? (
-        <div style={{ fontSize: 12, color: '#bbb' }}>{empty}</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {items.map(renderItem)}
+  const fmt = (iso) => new Date(iso).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })
+  const pairName = (r) => <>{r.fromProfile?.full_name || 'Unknown'} → {r.toProfile?.full_name || 'Unknown'}</>
+  const manageBtn = (id) => onManageCoordination && (
+    <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}} onClick={()=>onManageCoordination(id)}>Manage</button>
+  )
+  const openShareBtn = onOpenShareLinks && (
+    <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}} onClick={onOpenShareLinks}>Open</button>
+  )
+  const profileRow = (p) => (
+    <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
+          <div style={{fontSize:12,color:'#8e8e8e'}}>{[p.age && `${p.age}y`, p.city, p.profile_code].filter(Boolean).join(' · ')}</div>
         </div>
-      )}
+        <ContactButtons phone={p.client_phone} logProfile={p} />
+      </div>
     </div>
   )
 
+  // ===== TABS (Aryan, 2026-10-11): nine sections used to be stacked in one
+  // long scroll. Now a tile grid on top doubles as the tab bar — every
+  // count visible at a glance, one list on screen at a time.
+  const tabs = [
+    { key: 'interested', icon: ThumbsUp, label: 'Clients interested', color: '#C2185B',
+      items: inQueue(shareInterest, s => [...profileSearchBits(s.shownProfile), ...profileSearchBits(s.clientProfile), s.share_id]),
+      empty: 'No unread interest from share links right now.',
+      render: s => (
+        <div key={s.id} className="list-row resp-row-interested">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+            <div style={{fontSize:13,fontWeight:600}}>
+              {s.shownProfile?.full_name || 'Profile'}
+              {s.clientProfile && <span style={{fontWeight:400,color:'#8e8e8e'}}> · for {s.clientProfile.full_name}</span>}
+            </div>
+            {openShareBtn}
+          </div>
+          <div style={{marginTop:6}}><span className="resp-badge resp-interested"><ThumbsUp size={12} /> Interested · {fmt(s.interested_at)}</span></div>
+          <div style={{display:'flex',gap:8,marginTop:8,flexWrap:'wrap'}}>
+            {s.clientProfile?.client_phone && <ContactButtons phone={s.clientProfile.client_phone} logProfile={s.clientProfile} />}
+            <button className="btn btn-outline btn-sm" onClick={()=>handleAcknowledgeShareInterest(s.id)}>Mark as noted</button>
+          </div>
+        </div>
+      ) },
+    { key: 'notInterested', icon: ThumbsDown, label: 'Not interested', color: '#475569',
+      items: inQueue(shareNotInterested, s => [...profileSearchBits(s.shownProfile), ...profileSearchBits(s.clientProfile), s.share_id]),
+      empty: 'Nobody has said Not Interested since you last checked.',
+      render: s => (
+        <div key={s.id} className="list-row resp-row-not">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+            <div style={{fontSize:13,fontWeight:600}}>
+              {s.shownProfile?.full_name || 'Profile'}
+              {s.clientProfile && <span style={{fontWeight:400,color:'#8e8e8e'}}> · for {s.clientProfile.full_name}</span>}
+            </div>
+            {openShareBtn}
+          </div>
+          <div style={{display:'flex',gap:8,marginTop:6,alignItems:'center',flexWrap:'wrap'}}>
+            <span className="resp-badge resp-not"><ThumbsDown size={12} /> Not interested · {fmt(s.not_interested_at)}</span>
+            <button className="btn btn-outline btn-sm" style={{padding:'4px 10px',fontSize:12}} onClick={()=>handleAcknowledgeNotInterested(s.id)}>Noted</button>
+          </div>
+        </div>
+      ) },
+    { key: 'bureau', icon: Building2, label: 'Bureau replies', color: '#1D4ED8', hideWhenEmpty: true,
+      items: inQueue(bureauReplies, s => [...profileSearchBits(s.shownProfile), s.bureau_reply, s.share_id]),
+      empty: 'No bureau replies waiting.',
+      render: s => (
+        <div key={s.id} className="list-row resp-row-bureau">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+            <div style={{fontSize:13,fontWeight:600}}>{s.shownProfile?.full_name || 'Profile'}</div>
+            {openShareBtn}
+          </div>
+          <div style={{marginTop:6}}><span className="resp-badge resp-bureau"><Building2 size={12} /> Bureau found a match · {fmt(s.bureau_replied_at)}</span></div>
+          <div style={{fontSize:13,color:'#333',marginTop:6,whiteSpace:'pre-wrap'}}>{s.bureau_reply}</div>
+          <button className="btn btn-outline btn-sm" style={{marginTop:8}} onClick={()=>handleAcknowledgeBureauReply(s.id)}>Mark as noted</button>
+        </div>
+      ) },
+    { key: 'coordination', icon: Handshake, label: 'Awaiting response', color: '#7c3aed',
+      items: inQueue(pendingCoordination, r => [...profileSearchBits(r.fromProfile), ...profileSearchBits(r.toProfile), r.request_id, r.request_type]),
+      empty: 'Nothing waiting on a member right now.',
+      render: r => (
+        <div key={r.id} className="list-row">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+            <div style={{fontSize:13,fontWeight:600}}>
+              {pairName(r)}
+              <span style={{fontWeight:400,color:'#8e8e8e'}}> · {r.request_type === 'meeting' ? 'Meeting' : 'Talk'} request</span>
+            </div>
+            {manageBtn(r.id)}
+          </div>
+          <div style={{fontSize:12,color:'#8e8e8e',marginTop:2}}>Sent {new Date(r.created_at).toLocaleDateString('en-IN')} · waiting on {r.toProfile?.full_name || 'receiver'} to accept</div>
+          <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:8}}>
+            {[r.fromProfile, r.toProfile].filter(Boolean).map(x => (
+              <div key={x.id}>
+                <div style={{fontSize:13,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
+                <ProfileContact profile={x} logCalls introductionId={r.id} staffUser={staffUser} compact onSaved={(phone)=>updatePendingContact(x.id, phone)} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) },
+    { key: 'meetings', icon: CalendarClock, label: 'Calls & meetings', color: '#2563eb',
+      items: inQueue(upcomingMeetings, m => [...profileSearchBits(m.fromProfile), ...profileSearchBits(m.toProfile), m.request_id, m.location]),
+      empty: 'Nothing scheduled.',
+      hint: meetingsTotal > upcomingMeetings.length ? `Showing the first ${upcomingMeetings.length}. ${meetingsTotal - upcomingMeetings.length} more are scheduled; open Coordination to see them all.` : 'Next 7 days, plus unmarked ones from the last 30 days.',
+      render: m => (
+        <div key={m.id} className="list-row" style={isPastDay(m.scheduled_at) ? { borderLeft: '4px solid #dc2626' } : isToday(m.scheduled_at) ? { borderLeft: '4px solid #2563eb' } : {}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:600}}>
+                {pairName(m)}
+                <span style={{fontWeight:400,color:'#8e8e8e'}}> · {m.request_type === 'meeting' ? (isVirtualMeeting(m) ? 'Virtual meeting' : 'Meeting') : 'Talk'}</span>
+              </div>
+              <div style={{fontSize:13,color: isPastDay(m.scheduled_at) ? '#dc2626' : isToday(m.scheduled_at) ? '#2563eb' : '#666',marginTop:2,fontWeight: isToday(m.scheduled_at) || isPastDay(m.scheduled_at) ? 600 : 400}}>
+                {isPastDay(m.scheduled_at) ? 'Overdue · ' : ''}
+                {isToday(m.scheduled_at) ? 'Today' : new Date(m.scheduled_at).toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' })}
+                {' · '}{new Date(m.scheduled_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}
+                {isPastDay(m.scheduled_at) && <span style={{fontWeight:400,color:'#8e8e8e'}}> (mark Met or reschedule)</span>}
+              </div>
+              <MeetingPlace r={m} style={{marginTop:2}} />
+            </div>
+            {manageBtn(m.id)}
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:8}}>
+            {[m.fromProfile, m.toProfile].filter(x=>x?.client_phone).map(x => (
+              <div key={x.id} style={{display:'flex',alignItems:'center',gap:8,fontSize:12}}>
+                <span style={{color:'#8e8e8e',minWidth:90}}>{x.full_name}</span>
+                <ContactButtons phone={x.client_phone} logProfile={x} introductionId={m.id} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) },
+    { key: 'decisions', icon: CheckCircle2, label: 'Decisions due', color: '#b45309',
+      items: inQueue(decisionsDue, m => [...profileSearchBits(m.fromProfile), ...profileSearchBits(m.toProfile), m.request_id]),
+      empty: 'No meeting is waiting on a Positive/Negative decision.',
+      render: m => {
+        const overdue = m.decision_deadline && new Date(m.decision_deadline) < new Date()
+        return (
+          <div key={m.id} className="list-row" style={overdue ? { borderLeft: '4px solid #dc2626' } : {}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:600}}>{pairName(m)}</div>
+                <div style={{fontSize:12,color: overdue ? '#dc2626' : '#b45309',marginTop:2,fontWeight:600}}>
+                  {m.decision_deadline ? `${overdue ? 'Decision overdue since' : 'Decide by'} ${fmt(m.decision_deadline)}` : 'Met, decision pending'}
+                </div>
+              </div>
+              {manageBtn(m.id)}
+            </div>
+          </div>
+        )
+      } },
+    { key: 'followups', icon: Clock, label: 'Follow-ups', color: '#dc2626',
+      items: inQueue(overdueFollowUps, n => [...profileSearchBits(n.profiles), n.note]),
+      custom: (items) => <FollowUpsSection items={items} onOpenProfile={onOpenProfile} onDone={handleFollowUpDone} hideTitle /> },
+    { key: 'pending', icon: ListChecks, label: 'My pending profiles', color: '#b45309',
+      items: inQueue(assignedPending, profileSearchBits), empty: 'No pending profiles assigned to you.',
+      hint: 'Your assigned profiles still pending approval (up to 20).', render: profileRow },
+    { key: 'new', icon: Users, label: 'New this week', color: '#0891b2',
+      items: inQueue(newSubmissions, profileSearchBits), empty: 'No new submissions this week.', render: profileRow },
+    ...(staffWorkload !== null ? [{ key: 'team', icon: UserCog, label: 'Team workload', color: '#555', count: staffWorkload.length,
+      items: staffWorkload, empty: 'No active staff found.',
+      render: s => (
+        <div key={s.user_id} className="list-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{s.email}</div>
+            <div style={{ fontSize: 13, color: '#8e8e8e', textTransform: 'capitalize' }}>{s.role.replace('_', ' ')}</div>
+          </div>
+          <div className="badge" style={{ fontSize: 13, background: s.pendingCount > 0 ? '#fff8e1' : '#f5f5f5', color: s.pendingCount > 0 ? '#b45309' : '#555' }}>
+            {s.pendingCount} pending
+          </div>
+        </div>
+      ) }] : []),
+  ].filter(t => !t.hideWhenEmpty || t.items.length > 0)
+
+  // Default to the first tab that actually has something in it.
+  const firstBusy = (tabs.find(t => t.key !== 'team' && t.items.length > 0) || tabs[0]).key
+  const activeKey = tabs.some(t => t.key === tab) ? tab : firstBusy
+  const active = tabs.find(t => t.key === activeKey)
+  const pickTab = (k) => {
+    setTab(k)
+    try { sessionStorage.setItem('myQueueTab', k) } catch {}
+  }
+
   return (
-    <div className="admin-view" style={{ maxWidth: 800 }}>
+    <div className="admin-view" style={{ maxWidth: 900 }}>
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>My Queue</h2>
-      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Coordination requests, today's follow-ups, your assigned profiles, and new submissions</div>
+      <div style={{fontSize:12,color:'#8e8e8e',marginBottom:16}}>Tap a box to see that list.</div>
       {!loading && <ListSearch value={query} onChange={setQuery} placeholder="Search" />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
       ) : (
         <>
-          <Section icon={ThumbsUp} title="Clients interested in shared matches" items={inQueue(shareInterest, s => [...profileSearchBits(s.shownProfile), ...profileSearchBits(s.clientProfile), s.share_id])}
-            empty="No unread interest from share links right now."
-            renderItem={s => (
-              <div key={s.id} className="list-row" style={{borderColor:'#16a34a',background:'#f0fdf4'}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-                  <div style={{fontSize:13,fontWeight:600}}>
-                    {s.shownProfile?.full_name || 'Profile'}
-                    {s.clientProfile && <span style={{fontWeight:400,color:'#8e8e8e'}}> · for {s.clientProfile.full_name}</span>}
-                  </div>
-                  {onOpenShareLinks && (
-                    <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
-                      onClick={onOpenShareLinks}>Open</button>
-                  )}
-                </div>
-                <div style={{fontSize:12,color:'#16a34a',marginTop:2}}>
-                  Interested {new Date(s.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
-                </div>
-                <div style={{display:'flex',gap:8,marginTop:8}}>
-                  {s.clientProfile?.client_phone && (
-                    <ContactButtons phone={s.clientProfile.client_phone} logProfile={s.clientProfile} />
-                  )}
-                  <button className="btn btn-outline btn-sm" onClick={()=>handleAcknowledgeShareInterest(s.id)}>Mark as noted</button>
-                </div>
-              </div>
-            )} />
-          {shareNotInterested.length > 0 && (
-            <Section icon={ThumbsDown} title="Not interested in shared profiles" items={inQueue(shareNotInterested, s => [...profileSearchBits(s.shownProfile), ...profileSearchBits(s.clientProfile), s.share_id])}
-              empty=""
-              renderItem={s => (
-                <div key={s.id} className="list-row" style={{borderColor:'#e5e5e5'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-                    <div style={{fontSize:13,fontWeight:600}}>
-                      {s.shownProfile?.full_name || 'Profile'}
-                      {s.clientProfile && <span style={{fontWeight:400,color:'#8e8e8e'}}> · for {s.clientProfile.full_name}</span>}
-                    </div>
-                    {onOpenShareLinks && (
-                      <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
-                        onClick={onOpenShareLinks}>Open</button>
-                    )}
-                  </div>
-                  <div style={{fontSize:12,color:'#8e8e8e',marginTop:2}}>
-                    Not Interested · {new Date(s.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
-                  </div>
-                </div>
-              )} />
-          )}
-          <Section icon={Handshake} title="Coordination requests awaiting response" items={inQueue(pendingCoordination, r => [...profileSearchBits(r.fromProfile), ...profileSearchBits(r.toProfile), r.request_id, r.request_type])}
-            empty="Nothing waiting on a member right now."
-            renderItem={r => (
-              <div key={r.id} className="list-row">
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-                  <div style={{fontSize:13,fontWeight:600}}>
-                    {r.fromProfile?.full_name || 'Unknown'} → {r.toProfile?.full_name || 'Unknown'}
-                    <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {r.request_type === 'meeting' ? 'Meeting' : 'Talk'} request</span>
-                  </div>
-                  {onManageCoordination && (
-                    <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
-                      onClick={()=>onManageCoordination(r.id)}>Manage</button>
-                  )}
-                </div>
-                <div style={{fontSize:12,color:'#bbb',marginTop:2}}>Sent {new Date(r.created_at).toLocaleDateString('en-IN')} · waiting on {r.toProfile?.full_name || 'receiver'} to accept</div>
-                <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:8}}>
-                  {[r.fromProfile, r.toProfile].filter(Boolean).map(x => (
-                    <div key={x.id}>
-                      <div style={{fontSize:13,color:'#8e8e8e',marginBottom:2}}>{x.full_name}</div>
-                      <ProfileContact profile={x} logCalls introductionId={r.id} staffUser={staffUser} onSaved={(phone)=>updatePendingContact(x.id, phone)} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )} />
-          <Section icon={CalendarClock} title="Calls & meetings (next 7 days)" items={inQueue(upcomingMeetings, m => [...profileSearchBits(m.fromProfile), ...profileSearchBits(m.toProfile), m.request_id, m.location])} empty="Nothing scheduled."
-            hint={meetingsTotal > upcomingMeetings.length ? `Showing the first ${upcomingMeetings.length} — +${meetingsTotal - upcomingMeetings.length} more scheduled this week. Manage from Coordination Requests to see them all.` : null}
-            renderItem={m => (
-              <div key={m.id} className="list-row" style={isToday(m.scheduled_at) ? { borderColor: '#2563eb' } : {}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:600}}>
-                      {m.fromProfile?.full_name || 'Unknown'} → {m.toProfile?.full_name || 'Unknown'}
-                      <span style={{fontWeight:400,color:'#8e8e8e',textTransform:'capitalize'}}> · {m.request_type === 'meeting' ? (isVirtualMeeting(m) ? 'Virtual meeting' : 'Meeting') : 'Talk'}</span>
-                    </div>
-                    <div style={{fontSize:13,color: isPastDay(m.scheduled_at) ? '#dc2626' : isToday(m.scheduled_at) ? '#2563eb' : '#8e8e8e',marginTop:2,fontWeight: isToday(m.scheduled_at) || isPastDay(m.scheduled_at) ? 600 : 400}}>
-                      {isPastDay(m.scheduled_at) ? 'Overdue · ' : ''}
-                      {isToday(m.scheduled_at) ? 'Today' : new Date(m.scheduled_at).toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' })}
-                      {' · '}{new Date(m.scheduled_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}
-                      {isPastDay(m.scheduled_at) && <span style={{fontWeight:400,color:'#8e8e8e'}}> — mark Met or reschedule</span>}
-                    </div>
-                    <MeetingPlace r={m} style={{marginTop:2}} />
-                  </div>
-                  {onManageCoordination && (
-                    <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
-                      onClick={()=>onManageCoordination(m.id)}>Manage</button>
-                  )}
-                </div>
-                <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:8}}>
-                  {[m.fromProfile, m.toProfile].filter(x=>x?.client_phone).map(x => (
-                    <div key={x.id} style={{display:'flex',alignItems:'center',gap:8,fontSize:12}}>
-                      <span style={{color:'#8e8e8e',minWidth:90}}>{x.full_name}</span>
-                      <ContactButtons phone={x.client_phone} logProfile={x} introductionId={m.id} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )} />
-          <Section icon={CheckCircle2} title="Decisions due after meeting" items={inQueue(decisionsDue, m => [...profileSearchBits(m.fromProfile), ...profileSearchBits(m.toProfile), m.request_id])}
-            empty="No meeting is waiting on a Positive/Negative decision."
-            renderItem={m => {
-              const overdue = m.decision_deadline && new Date(m.decision_deadline) < new Date()
+          <div className="queue-tiles" role="tablist">
+            {tabs.map(t => {
+              const n = t.count ?? t.items.length
               return (
-                <div key={m.id} className="list-row" style={overdue ? { borderColor: '#dc2626' } : {}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:600}}>{m.fromProfile?.full_name || 'Unknown'} → {m.toProfile?.full_name || 'Unknown'}</div>
-                      <div style={{fontSize:12,color: overdue ? '#dc2626' : '#b45309',marginTop:2}}>
-                        {m.decision_deadline
-                          ? `${overdue ? 'Decision overdue since' : 'Decide by'} ${new Date(m.decision_deadline).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}`
-                          : 'Met — decision pending'}
-                      </div>
-                    </div>
-                    {onManageCoordination && (
-                      <button className="btn btn-outline btn-sm" style={{padding:'6px 12px',fontSize:13}}
-                        onClick={()=>onManageCoordination(m.id)}>Manage</button>
-                    )}
-                  </div>
-                </div>
+                <button key={t.key} type="button" role="tab" aria-selected={t.key === activeKey}
+                  className={'queue-tile' + (t.key === activeKey ? ' active' : '') + (n === 0 ? ' zero' : '')}
+                  onClick={() => pickTab(t.key)}>
+                  <t.icon size={16} color={t.color} />
+                  <span className="qt-count" style={{ color: t.color }}>{n}</span>
+                  <span className="qt-label">{t.label}</span>
+                </button>
               )
-            }} />
-          <FollowUpsSection items={inQueue(overdueFollowUps, n => [...profileSearchBits(n.profiles), n.note])} onOpenProfile={onOpenProfile} onDone={handleFollowUpDone} />
-          <Section icon={ListChecks} title="Your pending profiles (to-do)" items={inQueue(assignedPending, profileSearchBits)} empty="No pending profiles assigned to you."
-            hint="Only your assigned profiles still pending approval (up to 20)."
-            renderItem={p => (
-              <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
-                    <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
-                  </div>
-                  <ContactButtons phone={p.client_phone} logProfile={p} />
-                </div>
-              </div>
-            )} />
-          <Section icon={Users} title="New submissions this week" items={inQueue(newSubmissions, profileSearchBits)} empty="No new submissions this week."
-            renderItem={p => (
-              <div key={p.id} className="list-row clickable" onClick={()=>onOpenProfile(p)}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:600}}>{p.full_name}</div>
-                    <div style={{fontSize:12,color:'#8e8e8e'}}>{p.age}y · {p.city} · {p.profile_code}</div>
-                  </div>
-                  <ContactButtons phone={p.client_phone} logProfile={p} />
-                </div>
-              </div>
-            )} />
-          {/* Team workload — admin-only. Who's carrying how much pending
-              work, so a bulk burst of new profiles/requests can be spread
-              around instead of landing on whoever clicks first (scale audit #8). */}
-          {staffWorkload !== null && (
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
-                <UserCog size={14} /> Team workload
-              </div>
-              {staffWorkload.length === 0 ? (
-                <div style={{ fontSize: 12, color: '#bbb' }}>No active staff found.</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {staffWorkload.map(s => (
-                    <div key={s.user_id} className="list-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{s.email}</div>
-                        <div style={{ fontSize: 13, color: '#8e8e8e', textTransform: 'capitalize' }}>{s.role.replace('_', ' ')}</div>
-                      </div>
-                      <div className="badge" style={{ fontSize: 13, background: s.pendingCount > 0 ? '#fff8e1' : '#f0fdf4', color: s.pendingCount > 0 ? '#b45309' : '#16a34a' }}>
-                        {s.pendingCount} pending
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+            })}
+          </div>
+
+          <div className="queue-section-title"><active.icon size={16} color={active.color} />{active.label}</div>
+          {active.hint && <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 10 }}>{active.hint}</div>}
+          <div style={{ marginTop: 10 }}>
+            {active.custom ? active.custom(active.items) : active.items.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#8e8e8e', padding: '18px 0' }}>{active.empty}</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{active.items.map(active.render)}</div>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -5524,7 +5725,7 @@ function StaffManagementView({ staffUser, onBack }) {
     if (!staffList.length) { setPerfByStaff({}); return }
     const [notesRes, introRes, managedRes] = await Promise.all([
       supabase.from('profile_notes').select('staff_user_id, introduction_id, created_at').not('staff_user_id', 'is', null),
-      supabase.from('introductions').select('id, from_profile, to_profile, status, created_at'),
+      supabase.from('introductions').select('id, from_profile, to_profile, status, final_outcome, created_at').limit(DASH_CAP),
       supabase.from('profiles').select('id, managed_by_staff_id').not('managed_by_staff_id', 'is', null),
     ])
     const rows = computeRmPerformance(staffList, {
@@ -5604,7 +5805,7 @@ function StaffManagementView({ staffUser, onBack }) {
                 <div style={{display:'flex',gap:14,flexWrap:'wrap',marginTop:10,paddingTop:10,borderTop:'1px solid #ededed',fontSize:12}}>
                   <div><TrendingUp size={12} style={{verticalAlign:'-2px',marginRight:3}} color="#8e8e8e" />
                     <span style={{fontWeight:600}}>{perf.followUps30d}</span> <span style={{color:'#8e8e8e'}}>follow-ups (30d)</span></div>
-                  <div><span style={{fontWeight:600}}>{perf.matchesClosed}</span> <span style={{color:'#8e8e8e'}}>matches closed</span></div>
+                  <div><span style={{fontWeight:600}}>{perf.matchesClosed}</span> <span style={{color:'#8e8e8e'}}>successful matches</span></div>
                   <div><span style={{fontWeight:600}}>{perf.avgResponseHours == null ? '—' : perf.avgResponseHours < 1 ? '<1h' : Math.round(perf.avgResponseHours) + 'h'}</span> <span style={{color:'#8e8e8e'}}>avg first response</span></div>
                 </div>
               )}

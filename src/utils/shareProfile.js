@@ -1,3 +1,5 @@
+import { shareRegion } from './shareRegion'
+
 // Masked profile sharing — jab Admin kisi client ko doosre profile ka
 // match share karta hai, sensitive/private info kabhi text mein nahi
 // jaati (phone, email, exact address, internal notes). Yeh wahi
@@ -10,7 +12,7 @@ export function buildMaskedShareText(profile) {
     '',
     `Profile ID: ${profile.profile_code}`,
     `${profile.gender} • ${profile.age} Years`,
-    profile.city ? `${profile.city}${profile.state ? ', ' + profile.state : ''}` : '',
+    shareRegion(profile) || '', // state only — never the town (Aryan, 2026-10-11)
     [profile.religion, profile.community].filter(Boolean).join(' • '),
     profile.education,
     '',

@@ -1,4 +1,4 @@
-import { breakdown, filterProfiles, computeFunnel } from './adminStats'
+import { breakdown, filterProfiles, computeFunnel, funnelCounts } from './adminStats'
 
 const P = [
   { gender: 'Male', age: 27, height: '5\'9" (175 cm)', religion: 'Hindu', profile_status: 'active', created_at: '2026-10-02T10:00:00Z' },
@@ -46,4 +46,15 @@ test('funnel computes stage-over-stage conversion %, first stage has none', () =
 test('funnel handles a zero stage without dividing by zero', () => {
   const stages = computeFunnel({ registered: 0, active: 0, matched: 0, meetingRequested: 0, meetingDone: 0 })
   expect(stages.every(s => s.conversionPct === null || s.conversionPct === 0)).toBe(true)
+})
+
+test('funnelCounts never lets a later stage exceed "matched"', () => {
+  const profiles = [{ id: 'a', profile_status: 'active' }, { id: 'b', profile_status: 'active' }, { id: 'c', profile_status: 'pending' }]
+  const c = funnelCounts(profiles, {
+    intros: [{ from_profile: 'a', to_profile: 'b', status: 'meeting_done', final_outcome: 'successful_match' }],
+    actions: [],
+    shareLinks: [{ profile_id: 'c', client_profile_id: 'a', interested_at: '2026-10-01' }],
+  })
+  expect(c).toEqual({ registered: 3, active: 2, matched: 3, meetingRequested: 2, meetingDone: 2, success: 2 })
+  expect(computeFunnel(c).map(s => s.key)).toEqual(['registered', 'active', 'matched', 'meetingRequested', 'meetingDone', 'success'])
 })

@@ -70,15 +70,17 @@ export const DIMENSIONS = {
 export const FUNNEL_STAGE_LABELS = {
   registered: 'Registered',
   active: 'Active / Verified',
-  matched: 'Matched (sent or received interest)',
+  matched: 'Matched (liked / interested / introduced)',
   meetingRequested: 'Talk / Meeting Requested',
-  meetingDone: 'Meeting Done (Contacted / Closed)',
+  meetingDone: 'Meeting Done',
+  success: 'Successful Match',
 }
 
 // counts: { registered, active, matched, meetingRequested, meetingDone } — plain numbers,
 // each one a count of DISTINCT profiles reaching that stage.
 export function computeFunnel(counts) {
   const order = ['registered', 'active', 'matched', 'meetingRequested', 'meetingDone']
+  if (counts.success !== undefined) order.push('success')
   let prev = null
   return order.map(key => {
     const count = counts[key] || 0
@@ -86,6 +88,41 @@ export function computeFunnel(counts) {
     prev = count
     return { key, label: FUNNEL_STAGE_LABELS[key], count, conversionPct }
   })
+}
+
+// Distinct-profile counts per funnel stage (audit 2026-10-11): "Matched"
+// used to count only in-app likes (match_actions), but most matches start
+// from an admin share link or a coordination request — so the funnel read
+// "3 matched → 20 meeting requested (667%)". Every later stage is now
+// also counted in the earlier ones, and "Meeting Done" includes
+// meeting_done / a decision / an outcome (it used to look only at
+// contacted/closed, so a "Met" meeting never counted).
+// intros: [{ from_profile, to_profile, status, decision, final_outcome }],
+// actions: [{ actor_profile_id, target_profile_id }] (likes),
+// shareLinks: [{ profile_id, client_profile_id, interested_at }]
+export function funnelCounts(profiles, { intros = [], actions = [], shareLinks = [] } = {}) {
+  const matched = new Set()
+  const meetingRequested = new Set()
+  const meetingDone = new Set()
+  const success = new Set()
+  const add = (set, ...ids) => ids.forEach(id => id && set.add(id))
+  actions.forEach(a => add(matched, a.actor_profile_id, a.target_profile_id))
+  shareLinks.forEach(l => { if (l.interested_at) add(matched, l.profile_id, l.client_profile_id) })
+  intros.forEach(i => {
+    add(matched, i.from_profile, i.to_profile)
+    add(meetingRequested, i.from_profile, i.to_profile)
+    const met = i.status === 'meeting_done' || !!i.decision || !!i.final_outcome
+    if (met) add(meetingDone, i.from_profile, i.to_profile)
+    if (i.final_outcome === 'successful_match') add(success, i.from_profile, i.to_profile)
+  })
+  return {
+    registered: profiles.length,
+    active: profiles.filter(p => p.profile_status === 'active').length,
+    matched: matched.size,
+    meetingRequested: meetingRequested.size,
+    meetingDone: meetingDone.size,
+    success: success.size,
+  }
 }
 
 // ===== RM PERFORMANCE — business-owner audit (2026-10-04): "kis RM ne
@@ -131,7 +168,9 @@ export function computeRmPerformance(staffList, { profileNotes, introductions, m
       user_id: s.user_id,
       followUpsTotal: notes.length,
       followUps30d: notes.filter(n => new Date(n.created_at).getTime() >= sinceMs).length,
-      matchesClosed: theirIntros.filter(i => i.status === 'closed' || i.status === 'meeting_done').length,
+      // Successful outcomes only — counting every closed/met request also
+      // counted Negative / Not Proceeding ones (audit 2026-10-11).
+      matchesClosed: theirIntros.filter(i => i.final_outcome === 'successful_match').length,
       avgResponseHours,
     }
   })
