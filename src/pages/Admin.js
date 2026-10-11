@@ -10,6 +10,7 @@ import {
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
   ThumbsUp, ThumbsDown, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2, Video,
+  Share2, UserPlus, Send,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -31,7 +32,7 @@ import { rankMatches } from '../utils/matching'
 import { STATS_COLUMNS, DIMENSIONS, filterProfiles, breakdown, computeFunnel, computeRmPerformance } from '../utils/adminStats'
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { fieldSuggestionLabel, loadApprovedFieldOptions } from '../utils/fieldSuggestions'
-import { buildMailtoLink } from '../utils/shareProfile'
+import { buildMailtoLink, buildWaChooserLink, buildMaskedShareText } from '../utils/shareProfile'
 import { MEETING_MODES, isVirtualMeeting, locationPlaceholder, meetingLinkHref, looksLikeContactDetail } from '../utils/meetingMode'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, generateBureauShareLink, acknowledgeBureauReply, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, acknowledgeShareLinkNotInterested, forwardShareLinkInterest, markInterestSent } from '../utils/shareLinks'
@@ -120,7 +121,9 @@ async function writeAuditLog(staffUser, action, entityId, metadata) {
 }
 
 // ===== OVERFLOW MENU — three-dot (⋮) menu for condensing action buttons
-function OverflowMenu({ items }) {
+// `trigger` (optional) swaps the ⋮ icon for custom button content — the
+// profile card's Share button reuses this same dropdown (2026-10-11).
+function OverflowMenu({ items, trigger, title = 'More actions' }) {
   const [open, setOpen] = useState(false)
   const ref = React.useRef(null)
   useEffect(() => {
@@ -134,10 +137,10 @@ function OverflowMenu({ items }) {
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button type="button" className="btn btn-outline btn-sm" style={{ padding: '5px 6px', lineHeight: 1 }}
-        onClick={e => { e.stopPropagation(); setOpen(v => !v) }} title="More actions"><MoreVertical size={14} /></button>
+        onClick={e => { e.stopPropagation(); setOpen(v => !v) }} title={title}>{trigger || <MoreVertical size={14} />}</button>
       {open && (
         <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#fff', border: '1px solid #ededed',
-          borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.10)', zIndex: 50, minWidth: 150, overflow: 'hidden' }}
+          borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.10)', zIndex: 50, minWidth: 150, overflow: 'hidden', whiteSpace: 'nowrap' }}
           onClick={e => e.stopPropagation()}>
           {visible.map((item, i) => (
             <button key={i} type="button" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px',
@@ -296,6 +299,9 @@ export default function Admin({ staffUser }) {
   const [showToast, ToastView] = useToast()
   const [profiles, setProfiles] = useState([])
   const [photos, setPhotos] = useState({})
+  const [cardCounts, setCardCounts] = useState({}) // profile_id -> { shares, linkViews, memberViews }
+  const [infoOpenFor, setInfoOpenFor] = useState(null) // profile id whose ⓘ "added by / date" detail is open
+  const [notifyFor, setNotifyFor] = useState(null) // { profile, eventType } — WhatsApp sheet opened from the card's ⋮ menu
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
@@ -654,7 +660,7 @@ export default function Admin({ staffUser }) {
       setProfiles(prev => [...prev, ...newRows])
     }
 
-    await loadPhotosFor(newRows)
+    await Promise.all([loadPhotosFor(newRows), loadCardCountsFor(newRows)])
     setLoading(false); setLoadingMore(false)
     if (fromIndex === 0) setListUpdatedAt(new Date())
   }
@@ -672,6 +678,28 @@ export default function Admin({ staffUser }) {
       })
     }
   }
+
+  // Share + view counts shown on the collapsed profile card (Aryan,
+  // 2026-10-11: "share count, phir profile view wala aankh"). Two batched
+  // reads per page, staff RLS already allows both tables:
+  //   shares = share_links rows created for this profile (link, bureau, bundle)
+  //   views  = members who opened it in-app (profile_views) + share-link opens
+  const loadCardCountsFor = async (rows) => {
+    if (rows.length === 0) return
+    const ids = rows.map(r => r.id)
+    const [{ data: links }, { data: visits }] = await Promise.all([
+      supabase.from('share_links').select('profile_id, view_count').in('profile_id', ids),
+      supabase.from('profile_views').select('profile_id').in('profile_id', ids),
+    ])
+    setCardCounts(prev => {
+      const next = { ...prev }
+      ids.forEach(id => { next[id] = { shares: 0, linkViews: 0, memberViews: 0 } })
+      ;(links || []).forEach(l => { next[l.profile_id].shares++; next[l.profile_id].linkViews += l.view_count || 0 })
+      ;(visits || []).forEach(v => { next[v.profile_id].memberViews++ })
+      return next
+    })
+  }
+  const bumpShareCount = (id) => setCardCounts(prev => ({ ...prev, [id]: { ...(prev[id] || { linkViews: 0, memberViews: 0 }), shares: (prev[id]?.shares || 0) + 1 } }))
 
   const loadMore = () => {
     if (!hasMore || loadingMore) return
@@ -875,6 +903,7 @@ export default function Admin({ staffUser }) {
   const shareProfileLink = async (p) => {
     try {
       const link = await generateShareLink(p.id, staffUser.user_id)
+      bumpShareCount(p.id)
       const shared = await nativeShare({ title: 'LOVEKUSH Profile', text: `Profile from LOVEKUSH (${p.profile_code})`, url: link.url })
       if (!shared) {
         await navigator.clipboard?.writeText(link.url)
@@ -883,6 +912,61 @@ export default function Admin({ staffUser }) {
     } catch (e) {
       showToast(e.message || 'Could not create link')
     }
+  }
+
+  // Share menu on the collapsed card — every share type in one place.
+  // Each "new link" option creates a share_links row, so the card's share
+  // count goes up by one right away (no refetch).
+  const makeShareLink = async (p) => {
+    const link = await generateShareLink(p.id, staffUser.user_id)
+    bumpShareCount(p.id)
+    return link.url
+  }
+  const copyProfileLink = async (p) => {
+    try {
+      const url = await makeShareLink(p)
+      await navigator.clipboard?.writeText(url)
+      showToast('Link copied')
+    } catch (e) { showToast(e.message || 'Could not create link') }
+  }
+  const whatsappProfileLink = async (p) => {
+    // Open the tab synchronously (before the await) so mobile browsers
+    // don't treat it as a blocked popup, then point it at wa.me.
+    const win = window.open('', '_blank')
+    try {
+      const url = await makeShareLink(p)
+      const waUrl = buildWaChooserLink(`Profile from LOVEKUSH (${p.profile_code})\n${url}`)
+      if (win) win.location.href = waUrl; else window.location.href = waUrl
+    } catch (e) { if (win) win.close(); showToast(e.message || 'Could not create link') }
+  }
+  const whatsappProfileText = (p) => {
+    window.open(buildWaChooserLink(buildMaskedShareText(p)), '_blank')
+  }
+
+  // ⋮ menu actions that used to sit inside the expanded card.
+  const markExternalBureau = async (p) => {
+    const name = window.prompt(p.external_bureau_name
+      ? 'Bureau name (leave empty to remove the external tag):'
+      : 'Which marriage bureau shared this profile? e.g. "X.MB"', p.external_bureau_name || '')
+    if (name === null) return
+    const value = name.trim() || null
+    const { error } = await supabase.from('profiles').update({ external_bureau_name: value }).eq('id', p.id)
+    if (error) { showToast('Could not save: ' + error.message); return }
+    updateExternalBureau(p.id, value)
+    showToast(value ? `Marked as ${value} profile` : 'External tag removed')
+  }
+  // Downloads a .vcf so the number can be saved straight into the phone's
+  // contacts (named with the profile ID, easy to find on WhatsApp later).
+  const saveProfileContact = (p) => {
+    const phone = p.client_phone || p.external_bureau_contact
+    if (!phone) { setSelected(p); showToast('No number saved yet — add it in the Contact section'); return }
+    const label = `${p.full_name || 'Client'} (${p.profile_code})${!p.client_phone && p.external_bureau_name ? ' via ' + p.external_bureau_name : ''}`
+    const vcf = ['BEGIN:VCARD', 'VERSION:3.0', `FN:${label}`, `TEL;TYPE=CELL:${phone}`, `NOTE:LOVEKUSH ${p.profile_code}`, 'END:VCARD'].join('\r\n')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([vcf], { type: 'text/vcard' }))
+    a.download = `${p.profile_code || 'contact'}.vcf`
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
   }
 
   // Share a client's profile with an EXTERNAL bureau, with a manual note,
@@ -1295,6 +1379,10 @@ export default function Admin({ staffUser }) {
 
       {view === 'list' && section === 'profiles' && (
       <div>
+        {notifyFor && (
+          <ReminderSheet profile={notifyFor.profile} eventType={notifyFor.eventType} staffUserId={staffUser.user_id}
+            onClose={() => setNotifyFor(null)} />
+        )}
         {bureauShareFor && (
           <BureauShareSheet profile={bureauShareFor} staffUserId={staffUser.user_id}
             onClose={() => setBureauShareFor(null)} />
@@ -1477,7 +1565,7 @@ export default function Admin({ staffUser }) {
                           (Aryan's audit, 2026-10-08: compact verification). */}
                       {p.verification_status === 'verified' && <BadgeCheck size={15} color="#2563eb" title="Selfie/ID verified by staff" />}
                     </div>
-                    <div style={{ fontSize: 12, color: '#8e8e8e' }}>{p.age}y · {p.city} · {p.religion}</div>
+                    <div style={{ fontSize: 12, color: '#8e8e8e' }}>{[p.age && p.age + 'y', p.city, p.religion].filter(Boolean).join(' · ')}</div>
                   </div>
                   {/* Ek hi row mein wrap karo — pehle "active" + "✓ Verified" + "Premium"
                       alag-alag lines mein stack hoke card ko lamba bana rahe the. "active"
@@ -1506,11 +1594,54 @@ export default function Admin({ staffUser }) {
                       {selected?.id !== p.id && (getNoteDraft(p.id).note.trim() || getNoteDraft(p.id).outcome) &&
                         <div className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#c2410c' }} title="You have an unsaved note draft for this profile">✎</div>}
                     </div>
-                    <div style={{ fontSize: 12, color: '#8e8e8e', fontFamily: 'monospace' }}>{p.profile_code}</div>
+                    <div style={{ fontSize: 12, color: '#555', fontFamily: 'monospace', fontWeight: 600, background: '#f5f5f5', borderRadius: 6, padding: '1px 6px' }} title="Profile ID">{p.profile_code}</div>
                   </div>
                 </div>
 
-{/* Call/WhatsApp/Approve moved to expanded view only — collapsed rows stay clean */}
+                {/* Card action bar — visible WITHOUT expanding (Aryan,
+                    2026-10-11): share count, view count, Find Match, one
+                    Share button for every share type, and a ⋮ for the rest
+                    (external-bureau tag, save contact, verify/notify, edit…). */}
+                {!selectionMode && (() => {
+                  const c = cardCounts[p.id]
+                  const views = c ? c.memberViews + c.linkViews : null
+                  return (
+                    <div className="admin-card-actions" onClick={e => e.stopPropagation()}
+                      onTouchStart={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
+                      <div className="admin-card-stats">
+                        <span title={c ? `Shared ${c.shares} time${c.shares !== 1 ? 's' : ''} (links + bureau shares)` : 'Loading…'}><Share2 size={13} />{c ? c.shares : '–'}</span>
+                        <span title={c ? `${c.memberViews} member visit${c.memberViews !== 1 ? 's' : ''} · ${c.linkViews} share-link open${c.linkViews !== 1 ? 's' : ''}` : 'Loading…'}><Eye size={13} />{views ?? '–'}</span>
+                      </div>
+                      <button type="button" className="btn btn-outline btn-sm admin-card-btn" onClick={() => findMatchesForProfile(p)} title="Find matches for this profile">
+                        <Search size={13} /><span>Find Match</span>
+                      </button>
+                      <OverflowMenu title="Share" trigger={<span className="admin-card-btn-inner"><Share2 size={13} /><span>Share</span></span>} items={[
+                        { label: 'Share link', icon: Share2, onClick: () => shareProfileLink(p) },
+                        { label: 'Send link on WhatsApp', icon: MessageCircle, onClick: () => whatsappProfileLink(p) },
+                        { label: 'Copy link', icon: Copy, onClick: () => copyProfileLink(p) },
+                        { label: 'Send details (no link)', icon: Send, onClick: () => whatsappProfileText(p) },
+                        { label: 'Share with bureau', icon: Building2, onClick: () => setBureauShareFor(p) },
+                        { label: 'Shared matches log', icon: ListChecks, onClick: () => { setSharedLogCode(p.profile_code); setView('sharedMatchLog') } },
+                      ]} />
+                      <OverflowMenu items={[
+                        { label: 'View profile', icon: Eye, onClick: () => { setViewingProfile(p); setView('fullProfile') } },
+                        { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
+                        { label: 'Photos', icon: Camera, onClick: () => { setPhotosProfile(p); setView('editPhotos') } },
+                        { label: p.external_bureau_name ? `Bureau: ${p.external_bureau_name}` : 'Mark as external bureau', icon: Building2, onClick: () => markExternalBureau(p) },
+                        { label: 'Save contact', icon: UserPlus, onClick: () => saveProfileContact(p) },
+                        { label: 'Verify', icon: ShieldCheck, color: '#16a34a', onClick: () => setVerificationStatus(p.id, 'verified'), hidden: p.verification_status === 'verified' },
+                        { label: 'Request selfie', icon: Camera, onClick: () => setVerificationStatus(p.id, 'selfie_requested'),
+                          hidden: p.verification_status === 'verified' || ['selfie_requested', 'selfie_submitted'].includes(p.verification_status) || p.is_admin_managed },
+                        { label: 'Reject verification', icon: X, color: '#dc2626', onClick: () => setVerificationStatus(p.id, 'rejected'),
+                          hidden: !(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) },
+                        { label: 'Remind on WhatsApp', icon: MessageCircle, onClick: () => setNotifyFor({ profile: p, eventType: 'selfie_requested' }), hidden: p.verification_status !== 'selfie_requested' },
+                        { label: 'Notify on WhatsApp', icon: MessageCircle, onClick: () => setNotifyFor({ profile: p, eventType: 'profile_approved' }), hidden: p.verification_status !== 'verified' },
+                        { label: 'Approve', icon: CheckCircle2, onClick: () => updateStatus(p.id, 'active'), hidden: p.profile_status === 'active' },
+                        { label: 'Block', icon: ShieldX, color: '#dc2626', onClick: () => updateStatus(p.id, 'blocked'), hidden: p.profile_status === 'blocked' },
+                      ]} />
+                    </div>
+                  )
+                })()}
 
                 {selected?.id === p.id && (
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
@@ -1520,17 +1651,7 @@ export default function Admin({ staffUser }) {
                         Approve/Block (Aryan's audit, gap #10). */}
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }} onClick={e => e.stopPropagation()}>
                       <ContactButtons phone={p.client_phone} onAction={kind => startContactLog(p, kind)} externalBureauName={p.external_bureau_name} />
-                      <OverflowMenu items={[
-                        { label: 'View profile', icon: Eye, onClick: () => { setViewingProfile(p); setView('fullProfile') } },
-                        { label: 'Share link', icon: Link2, onClick: () => shareProfileLink(p) },
-                        { label: 'Share with bureau', icon: Building2, onClick: () => setBureauShareFor(p) },
-                        { label: 'Shared matches log', icon: ListChecks, onClick: () => { setSharedLogCode(p.profile_code); setView('sharedMatchLog') } },
-                        { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
-                        { label: 'Photos', icon: Camera, onClick: () => { setPhotosProfile(p); setView('editPhotos') } },
-                        { label: 'Find matches', icon: Search, onClick: () => findMatchesForProfile(p) },
-                        { label: 'Approve', icon: CheckCircle2, onClick: () => updateStatus(p.id, 'active'), hidden: p.profile_status === 'active' },
-                        { label: 'Block', icon: ShieldX, color: '#dc2626', onClick: () => updateStatus(p.id, 'blocked'), hidden: p.profile_status === 'blocked' },
-                      ]} />
+                      {/* View/Edit/Share/Verify etc. now live on the card's own action bar */}
                     </div>
 
 {/* Status legend removed — badge colors are self-explanatory */}
@@ -1573,34 +1694,17 @@ export default function Admin({ staffUser }) {
                       onSaved={phone => updateClientPhone(p.id, phone)}
                       onBureauSaved={name => updateExternalBureau(p.id, name)}
                       onBureauContactSaved={contact => updateExternalBureauContact(p.id, contact)}
-                      onAction={kind => startContactLog(p, kind)} showContactButtons={false} />
+                      onAction={kind => startContactLog(p, kind)} showContactButtons={false} showMarkBureau={false} />
 
-                    {/* Verification — compact: just icon + inline action buttons */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14, fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                    {/* Verification — status only; Verify / Request selfie / Reject /
+                        Notify moved into the card's ⋮ menu (Aryan, 2026-10-11). */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14, fontSize: 12 }}>
                       {p.verification_status === 'verified'
                         ? <ShieldCheck size={14} color="#16a34a" title="Verified" />
                         : <ShieldAlert size={14} color="#2563eb" title={VERIFICATION_LABELS[p.verification_status] || 'Not verified'} />}
                       <span style={{ color: '#8e8e8e' }}>
                         {p.verification_status === 'verified' ? 'Verified' : (VERIFICATION_LABELS[p.verification_status] || 'Not verified')}
                       </span>
-                      {p.verification_status !== 'verified' && !['selfie_requested', 'selfie_submitted'].includes(p.verification_status) && !p.is_admin_managed && (
-                        <button className="btn btn-outline btn-sm" style={{ padding: '4px 10px', fontSize: 12 }}
-                          onClick={() => setVerificationStatus(p.id, 'selfie_requested')}><Camera size={12} /></button>
-                      )}
-                      {p.verification_status !== 'verified' && (
-                        <button className="btn btn-outline btn-sm" style={{ padding: '4px 10px', fontSize: 12, color: '#16a34a', borderColor: '#16a34a' }}
-                          onClick={() => setVerificationStatus(p.id, 'verified')}><ShieldCheck size={12} /></button>
-                      )}
-                      {(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) && (
-                        <button className="btn btn-outline btn-sm" style={{ padding: '4px 10px', fontSize: 12, color: '#dc2626', borderColor: '#dc2626' }}
-                          onClick={() => setVerificationStatus(p.id, 'rejected')}><X size={12} /></button>
-                      )}
-                      {p.verification_status === 'selfie_requested' && (
-                        <WhatsAppReminderButton profile={p} eventType="selfie_requested" staffUserId={staffUser.user_id} label="Remind on WhatsApp" />
-                      )}
-                      {p.verification_status === 'verified' && (
-                        <WhatsAppReminderButton profile={p} eventType="profile_approved" staffUserId={staffUser.user_id} label="Notify on WhatsApp" />
-                      )}
                     </div>
                     {p.selfie_path && p.verification_status !== 'verified' && (
                       <SelfieCompare selfiePath={p.selfie_path} photoPath={photos[p.id]} />
@@ -1680,10 +1784,16 @@ export default function Admin({ staffUser }) {
                       )}
                     </div>
 
+                    {/* Just the ⓘ icon — "date · Added by staff" only shows
+                        when it's tapped (Aryan, 2026-10-11). */}
                     {idMetadata[p.id] && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#bbb', marginBottom: 10 }}>
-                        <Info size={11} />
-                        {new Date(idMetadata[p.id].created_at).toLocaleDateString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#bbb', marginBottom: 10 }} onClick={e => e.stopPropagation()}>
+                        <button type="button" title="Profile info" aria-expanded={infoOpenFor === p.id}
+                          style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: infoOpenFor === p.id ? 'var(--primary)' : '#bbb', display: 'inline-flex' }}
+                          onClick={() => setInfoOpenFor(infoOpenFor === p.id ? null : p.id)}><Info size={14} /></button>
+                        {infoOpenFor === p.id && <span>
+                          {new Date(idMetadata[p.id].created_at).toLocaleDateString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
+                        </span>}
                       </div>
                     )}
                     {/* View/Edit/Matches now in overflow menu at top */}

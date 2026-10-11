@@ -213,7 +213,7 @@ function QuickCallLog({ profile, kind, introductionId, onClose }) {
 // and shortens the "Clear" bureau-tag action to an icon (Aryan: "itne sare
 // button hai, itna jyada messy lag raha hai", 2026-10-11). Same fields,
 // same actions — nothing is removed, just laid out tighter.
-export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBureauContactSaved, logCalls = false, introductionId, staffUser, showContactButtons = true, compact = false, whatsappMenuExtra }) {
+export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBureauContactSaved, logCalls = false, introductionId, staffUser, showContactButtons = true, compact = false, whatsappMenuExtra, showMarkBureau = true }) {
   const [editing, setEditing] = useState(false)
   // compact mode: "Edit number" and the external-bureau controls are used
   // rarely — collapsed behind a single "more" toggle instead of always
@@ -353,10 +353,10 @@ export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBu
             <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px', fontSize: 11, color: '#8e8e8e' }}
               title="Not external — clear this tag" onClick={() => saveBureau('')}>Clear bureau tag</button>
           </>
-        ) : (
+        ) : showMarkBureau ? (
           <button className="btn btn-outline btn-sm" style={{ padding: '3px 8px', fontSize: 11, color: '#8e8e8e' }}
             onClick={() => setEditingBureau(true)}>+ Mark as external bureau profile</button>
-        )}
+        ) : null}
       </div>
       </>
       )}
