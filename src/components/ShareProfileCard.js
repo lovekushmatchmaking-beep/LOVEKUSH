@@ -147,9 +147,16 @@ export function BureauReplyBox({ state, draft, onDraftChange, onSubmit, errorHin
   }
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Found a match for this profile?</div>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Found a match for this profile?</div>
+      {/* Aryan, 2026-10-11 follow-up: the old placeholder didn't make it
+          clear the bureau should leave their OWN name + number — the whole
+          point is that their reply lands as a callback number we can ring
+          directly, not just a description of the match. */}
+      <div style={{ fontSize: 12, color: '#8e8e8e', marginBottom: 6 }}>
+        Add a short 2-3 word summary of your match, plus your name and contact number — so we can call you back directly.
+      </div>
       <textarea className="form-input" rows={3}
-        placeholder="e.g. We have a suitable match — M.K., 29, Pune. Please call us to discuss."
+        placeholder="e.g. M.K., 29, Pune — suitable match. — Rajesh, ABC Marriage Bureau, 98765 43210"
         value={draft} onChange={e => onDraftChange(e.target.value)}
         style={{ fontSize: 13, resize: 'vertical', width: '100%' }} />
       <button className="share-btn share-btn-primary" style={{ marginTop: 8, width: '100%' }}
