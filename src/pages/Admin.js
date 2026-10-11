@@ -274,6 +274,20 @@ const nowForDatetimeLocalMin = () => {
   return d.toISOString().slice(0, 16)
 }
 
+// Same tz-offset trick as above, but from a stored ISO timestamp — used to
+// prefill the Coordination Requests "Reschedule" field with the meeting's
+// current date/time instead of showing it blank (meeting audit, 2026-10-11:
+// an already-scheduled meeting looked un-scheduled in the editor, and
+// tapping Reschedule without retyping the whole date/time from scratch
+// silently left the time unchanged while only saving the location/mode).
+const toDatetimeLocalValue = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  d.setSeconds(0, 0)
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}
+
 export default function Admin({ staffUser }) {
   const navigate = useNavigate()
   // Toast replaces every browser alert() in this screen (Aryan's audit,
@@ -3838,10 +3852,15 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
     }
   }
 
-  const handleUnschedule = async (id) => {
+  const handleUnschedule = async (id, prevScheduledAt) => {
     try {
       const { error } = await supabase.from('introductions').update({ scheduled_at: null }).eq('id', id)
       if (error) throw error
+      // Every other coordination action here (schedule, status change,
+      // decision, feedback) writes an audit log entry — Clear silently
+      // didn't, so a cleared meeting vanished from the History/audit trail
+      // with no record of who cleared it or what time was lost (audit gap).
+      await writeAuditLog(staffUser, 'coordination_meeting_cleared', id, { previous: prevScheduledAt || null })
       setRequests(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: null } : r))
     } catch (err) {
       showToast(err.message)
@@ -4026,7 +4045,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                   <CalendarClock size={13} color="#8e8e8e" />
                   <input type="datetime-local" className="form-input" style={{fontSize:12,padding:'7px 12px',width:190}}
                     min={nowForDatetimeLocalMin()}
-                    value={scheduleDraft[r.id] ?? ''}
+                    value={scheduleDraft[r.id] ?? toDatetimeLocalValue(r.scheduled_at)}
                     onChange={e=>setScheduleDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
                   <MeetingModeToggle value={modeDraft[r.id] ?? r.meeting_mode} onChange={v=>setModeDraft(prev=>({ ...prev, [r.id]: v }))} size={12} />
                   <input type="text" className="form-input" placeholder={locationPlaceholder(modeDraft[r.id] ?? r.meeting_mode)}
@@ -4040,7 +4059,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                   </button>
                   {r.scheduled_at && (
                     <button className="btn btn-outline btn-sm" style={{padding:'7px 14px',fontSize:13,color:'#dc2626',borderColor:'#dc2626'}}
-                      onClick={()=>handleUnschedule(r.id)}>Clear</button>
+                      onClick={()=>handleUnschedule(r.id, r.scheduled_at)}>Clear</button>
                   )}
                 </div>
                 )}
