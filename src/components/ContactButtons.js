@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Phone, MessageCircle, Pencil, Building2 } from 'lucide-react'
+import { Phone, MessageCircle, Pencil, Building2, MoreHorizontal } from 'lucide-react'
 import { supabase } from '../supabase'
 import { buildTelLink, buildWaChatLink, normalizePhone } from '../utils/shareProfile'
 
@@ -47,8 +47,23 @@ export const contactLogPrefix = (kind) => (kind === 'call' ? '📞 Called: ' : k
 // aksar contact details nahi dete), yeh buttons silently gayab hone ke
 // jagah ek chhota "No contact — external bureau" note dikhate hain, taaki
 // koi socha na le ki number save karna bhool gaye (Aryan's ask, 2026-10-09).
-export function ContactButtons({ phone, onAction, logProfile, introductionId, size = 'sm', externalBureauName }) {
+// `menuExtra`: extra actions ([{label, icon, onClick}]) folded into the
+// WhatsApp button's own dropdown instead of their own standalone buttons —
+// e.g. Coordination Requests' "Send meeting details" used to be a big
+// separate green button; Aryan asked for it to live inside the WhatsApp
+// button itself ("whatsapp wale button me hi dropdown me add kardo",
+// 2026-10-11). With menuExtra, tapping WhatsApp opens a small menu ("Chat
+// on WhatsApp" + the extra actions) instead of opening the chat directly.
+export function ContactButtons({ phone, onAction, logProfile, introductionId, size = 'sm', externalBureauName, menuExtra }) {
   const [logKind, setLogKind] = useState(null)
+  const [waMenuOpen, setWaMenuOpen] = useState(false)
+  const waRef = useRef(null)
+  useEffect(() => {
+    if (!waMenuOpen) return
+    const close = (e) => { if (waRef.current && !waRef.current.contains(e.target)) setWaMenuOpen(false) }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [waMenuOpen])
   const tel = buildTelLink(phone)
   const wa = buildWaChatLink(phone)
   if (!tel) {
@@ -72,14 +87,42 @@ export function ContactButtons({ phone, onAction, logProfile, introductionId, si
         style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
         <Phone size={14} />
       </a>
-      <a href={wa} onClick={stop('whatsapp')} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" title={'WhatsApp ' + phone}
-        style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: WA_GREEN, borderColor: WA_GREEN }}>
-        <MessageCircle size={14} />
-      </a>
+      {menuExtra && menuExtra.length > 0 ? (
+        <span ref={waRef} style={{ position: 'relative', display: 'inline-block' }}>
+          <button type="button" onClick={e => { e.stopPropagation(); setWaMenuOpen(v => !v) }}
+            className="btn btn-outline btn-sm" title={'WhatsApp ' + phone}
+            style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: WA_GREEN, borderColor: WA_GREEN }}>
+            <MessageCircle size={14} />
+          </button>
+          {waMenuOpen && (
+            <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#fff', border: '1px solid #ededed',
+              borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.10)', zIndex: 50, minWidth: 180, overflow: 'hidden' }}
+              onClick={e => e.stopPropagation()}>
+              <button type="button" style={waMenuItemStyle}
+                onClick={() => { setWaMenuOpen(false); stop('whatsapp')({ stopPropagation: () => {} }); window.open(wa, '_blank', 'noopener,noreferrer') }}>
+                <MessageCircle size={14} /> Chat on WhatsApp
+              </button>
+              {menuExtra.map((item, i) => (
+                <button key={i} type="button" style={waMenuItemStyle} onClick={() => { setWaMenuOpen(false); item.onClick() }}>
+                  {item.icon && <item.icon size={14} />} {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </span>
+      ) : (
+        <a href={wa} onClick={stop('whatsapp')} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" title={'WhatsApp ' + phone}
+          style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: WA_GREEN, borderColor: WA_GREEN }}>
+          <MessageCircle size={14} />
+        </a>
+      )}
       {logKind && <QuickCallLog profile={logProfile} kind={logKind} introductionId={introductionId} onClose={() => setLogKind(null)} />}
     </span>
   )
 }
+
+const waMenuItemStyle = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px',
+  fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', color: '#333', textAlign: 'left' }
 
 // Freestanding "Add note" — same bottom sheet as the Call/WhatsApp log, for
 // logging something that wasn't a call/WhatsApp tap (a meeting outcome, a
@@ -170,8 +213,13 @@ function QuickCallLog({ profile, kind, introductionId, onClose }) {
 // and shortens the "Clear" bureau-tag action to an icon (Aryan: "itne sare
 // button hai, itna jyada messy lag raha hai", 2026-10-11). Same fields,
 // same actions — nothing is removed, just laid out tighter.
-export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBureauContactSaved, logCalls = false, introductionId, staffUser, showContactButtons = true, compact = false }) {
+export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBureauContactSaved, logCalls = false, introductionId, staffUser, showContactButtons = true, compact = false, whatsappMenuExtra }) {
   const [editing, setEditing] = useState(false)
+  // compact mode: "Edit number" and the external-bureau controls are used
+  // rarely — collapsed behind a single "more" toggle instead of always
+  // taking up their own rows (Aryan: fewer buttons/less repeated info on
+  // the Coordination card, 2026-10-11).
+  const [moreOpen, setMoreOpen] = useState(false)
   const [draft, setDraft] = useState(profile.client_phone || '')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -257,12 +305,32 @@ export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBu
             <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{phone}</span>
             {!valid && <span style={{ color: '#dc2626' }}>Number looks incomplete</span>}
             {valid && showContactButtons &&
-              <ContactButtons phone={phone} onAction={onAction} logProfile={logCalls ? profile : undefined} introductionId={introductionId} size="md" />}
-            <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="Edit number"
-              onClick={() => setEditing(true)}><Pencil size={12} /></button>
+              <ContactButtons phone={phone} onAction={onAction} logProfile={logCalls ? profile : undefined} introductionId={introductionId} size="md" menuExtra={whatsappMenuExtra} />}
+            {/* Bureau-sourced tag stays visible even collapsed (compact) —
+                only its edit/clear controls, and the number edit button,
+                are rarely tapped and fold behind "more" (Aryan, 2026-10-11). */}
+            {compact && bureau && (
+              <span className="badge" style={{ fontSize: 11, background: '#fff7ed', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                title="Sourced from another marriage bureau — their contact details are typically missing/restricted">
+                <Building2 size={11} /> {bureau}
+              </span>
+            )}
+            {compact ? (
+              <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="More options"
+                onClick={() => setMoreOpen(v => !v)}><MoreHorizontal size={12} /></button>
+            ) : (
+              <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="Edit number"
+                onClick={() => setEditing(true)}><Pencil size={12} /></button>
+            )}
           </>
         )}
       </div>
+      {(!compact || moreOpen) && (
+      <>
+      {compact && (
+        <button className="btn btn-outline btn-sm" style={{ padding: '3px 8px', fontSize: 11, marginBottom: 6 }}
+          onClick={() => setEditing(true)}><Pencil size={12} /> Edit number</button>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: compact ? 6 : 12, fontSize: 12 }}>
         {!compact && <Building2 size={13} color="#8e8e8e" />}
         {editingBureau ? (
@@ -274,26 +342,25 @@ export function ProfileContact({ profile, onSaved, onAction, onBureauSaved, onBu
           </>
         ) : bureau ? (
           <>
-            <span className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-              title="Sourced from another marriage bureau — their contact details are typically missing/restricted">
-              <Building2 size={11} /> {bureau}
-            </span>
-            <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="Edit bureau name"
-              onClick={() => setEditingBureau(true)}><Pencil size={12} /></button>
             {!compact && (
-              <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px', fontSize: 11, color: '#8e8e8e' }}
-                title="Not external — clear this tag" onClick={() => saveBureau('')}>Clear</button>
+              <span className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                title="Sourced from another marriage bureau — their contact details are typically missing/restricted">
+                <Building2 size={11} /> {bureau}
+              </span>
             )}
+            <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px', fontSize: compact ? 11 : 12 }} title="Edit bureau name"
+              onClick={() => setEditingBureau(true)}>{compact ? 'Edit bureau name' : <Pencil size={12} />}</button>
+            <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px', fontSize: 11, color: '#8e8e8e' }}
+              title="Not external — clear this tag" onClick={() => saveBureau('')}>Clear bureau tag</button>
           </>
-        ) : compact ? (
-          <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="Mark as external bureau profile"
-            onClick={() => setEditingBureau(true)}><Building2 size={12} /></button>
         ) : (
           <button className="btn btn-outline btn-sm" style={{ padding: '3px 8px', fontSize: 11, color: '#8e8e8e' }}
             onClick={() => setEditingBureau(true)}>+ Mark as external bureau profile</button>
         )}
       </div>
-      {bureau && (
+      </>
+      )}
+      {bureau && (!compact || moreOpen) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: compact ? 6 : 12, fontSize: 12 }}>
           {!compact && <Phone size={13} color="#8e8e8e" />}
           {editingBureauContact ? (

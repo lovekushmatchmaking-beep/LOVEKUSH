@@ -3363,6 +3363,11 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   const [searchResults, setSearchResults] = useState(null) // null = not searching, else rows from every status
   const [searching, setSearching] = useState(false)
   const [showScheduler, setShowScheduler] = useState(false)
+  // "Send meeting details" now lives inside each profile's WhatsApp button
+  // dropdown instead of its own standalone button (Aryan: "itna bada button
+  // bna diya hai ... whatsapp wale button me hi dropdown me add kardo",
+  // 2026-10-11) — one sheet, opened with whichever profile/vars were tapped.
+  const [meetingReminder, setMeetingReminder] = useState(null) // { profile, vars } | null
 
   const buildQuery = (forTab, from, to) => {
     let q = supabase.from('introductions').select('*').order('created_at', { ascending: false }).range(from, to)
@@ -3382,7 +3387,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
       // rashi/nakshatra/pada: Next round "Horoscope review" Guna Milan inhi
       // se nikalta hai — pehle yahan load hi nahi hote the, to har request
       // par "Horoscope data not available" dikhta tha.
-      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone, gender, rashi, nakshatra, nakshatra_pada').in('id', ids)
+      const { data: profs } = await supabase.from('profiles').select('id, full_name, profile_code, client_phone, gender, rashi, nakshatra, nakshatra_pada, age, city').in('id', ids)
       const map = {}
       ;(profs || []).forEach(p => { map[p.id] = p })
       setProfilesById(prev => ({ ...prev, ...map }))
@@ -3738,7 +3743,6 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                     <div style={{fontSize:12,color:'#8e8e8e',marginTop:2,textTransform:'capitalize'}}>
                       {r.request_type === 'meeting' ? 'Meeting request' : 'Talk request'}
                       {r.source === 'share_link' && <span style={{marginLeft:6,color:'#16a34a'}}>· forwarded from a shared link</span>}
-                      {r.source === 'admin' && <span style={{marginLeft:6,color:'#2563eb'}}>· created by admin</span>}
                     </div>
                     <div style={{fontSize:12,color:'#bbb',marginTop:2,display:'flex',alignItems:'center',gap:8}}>
                       {new Date(r.created_at).toLocaleDateString('en-IN')}
@@ -3751,35 +3755,34 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                         Call/WhatsApp yahan se log ki gayi note is request se bhi
                         link hoti hai (introductionId), + ek plain "Add note" bhi
                         (jab baat call/WhatsApp tap ke bina hui ho, jaise in-person
-                        meeting) — audit gap #4. */}
+                        meeting) — audit gap #4.
+                        Naam sirf header mein ek baar ("X → Y") — yahan dobara
+                        poora naam nahi, sirf Profile ID (Aryan: naam baar baar
+                        repeat ho raha tha — uper bhi, niche bhi, 2026-10-11). */}
                     {[from, to].filter(Boolean).map((x, idx) => {
                       const other = x.id === from?.id ? to : from
                       return (
                       <div key={x.id} style={idx > 0 ? {marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)'} : {marginTop:6}}>
-                        {/* Both profiles' IDs always visible here — pehle sirf
-                            History ke kisi note mein ek profile ka code dikhta
-                            tha, dusre ka kahin nahi (Aryan: "profile ki 1 hi id
-                            show ho rhi hai niche", 2026-10-11). */}
-                        <div style={{fontSize:13,marginBottom:2,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
-                          <span style={{fontWeight:600}}>{x.full_name}</span>
-                          {x.profile_code && <span style={{fontFamily:'monospace',fontSize:11,color:'#8e8e8e'}}>{x.profile_code}</span>}
-                          <AddNoteButton profile={x} introductionId={r.id} />
-                        </div>
-                        <ProfileContact profile={x} compact logCalls introductionId={r.id} staffUser={staffUser}
-                          onSaved={(phone)=>setProfilesById(prev=>({ ...prev, [x.id]: { ...prev[x.id], client_phone: phone } }))} />
-                        {/* No automated reminder yet (no WhatsApp vendor
-                            chosen — see docs/product/future-whatsapp-plan.md);
-                            one-tap confirm until that's decided. Label now
-                            visible (size="md") — icon-only left admin unsure
-                            what this button even did (Aryan, 2026-10-11). */}
-                        {r.scheduled_at && (
-                          <div style={{marginTop:4}}>
-                            <WhatsAppReminderButton profile={x} eventType="meeting_scheduled" label="Send meeting details" size="md"
-                              vars={{ otherName: other?.full_name || 'the other member',
-                                when: new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
-                                  + (r.location ? ` at ${r.location}` : '') }} />
+                        {x.profile_code && (
+                          <div style={{fontSize:11,fontFamily:'monospace',color:'#8e8e8e',marginBottom:2,display:'flex',alignItems:'center',gap:6}}>
+                            {x.profile_code}
+                            <AddNoteButton profile={x} introductionId={r.id} />
                           </div>
                         )}
+                        <ProfileContact profile={x} compact logCalls introductionId={r.id} staffUser={staffUser}
+                          onSaved={(phone)=>setProfilesById(prev=>({ ...prev, [x.id]: { ...prev[x.id], client_phone: phone } }))}
+                          whatsappMenuExtra={r.scheduled_at ? [{
+                            label: 'Send meeting details', icon: CalendarClock,
+                            // "profile ki details ke saath ek bhadiya sa card" —
+                            // the other member's age/city now ride along with
+                            // their name so the message reads like a short
+                            // profile card, not just a bare name (2026-10-11).
+                            onClick: () => setMeetingReminder({ profile: x, vars: {
+                              otherName: (other?.full_name || 'the other member')
+                                + (other?.age || other?.city ? ` (${[other?.age && `${other.age} yrs`, other?.city].filter(Boolean).join(', ')})` : ''),
+                              when: new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+                                + (r.location ? ` at ${r.location}` : '') } }),
+                          }] : undefined} />
                       </div>
                       )
                     })}
@@ -3929,6 +3932,14 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
             </button>
           )}
         </div>
+      )}
+      {/* "Send meeting details" — opened from the WhatsApp button's own
+          dropdown per profile (see whatsappMenuExtra above) instead of a
+          standalone button on every card (Aryan, 2026-10-11). One shared
+          sheet, since only one can be open at a time. */}
+      {meetingReminder && (
+        <ReminderSheet profile={meetingReminder.profile} eventType="meeting_scheduled" vars={meetingReminder.vars}
+          staffUserId={staffUser?.user_id} onClose={() => setMeetingReminder(null)} />
       )}
     </div>
   )
