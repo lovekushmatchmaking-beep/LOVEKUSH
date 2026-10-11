@@ -11,6 +11,13 @@ import { PROFILE_FILTER_GROUPS, fieldsForScope, activeFilterKeys, recencyLabel, 
 // in its own (older) filter rows, so nothing appears twice. `optionRows`
 // (loaded profiles) adds values that exist in real data but not in the
 // fixed option lists.
+// `isolation`/`transform`/`contain` hints below: Aryan reported overlapping
+// text and static-noise banding on this panel on mobile (2026-10-11) — a
+// known Android Chrome compositing glitch where an abruptly mounted/
+// unmounted subtree (a group's fields grid appearing on tap) tears against
+// concurrent scroll. No React logic/data bug found; these hints force each
+// group and its fields grid onto their own paint layer so a stale layer
+// can't bleed into the next one.
 export default function ProfileFilterGroups({ values, onChange, scope = 'admin', exclude = [], optionRows }) {
   const allowed = new Set(fieldsForScope(scope, exclude).map(f => f.key))
   const active = new Set(activeFilterKeys(values))
@@ -30,7 +37,7 @@ export default function ProfileFilterGroups({ values, onChange, scope = 'admin',
         const activeCount = fields.filter(f => active.has(f.key)).length
         const isOpen = open.has(g.title) || false
         return (
-          <div key={g.title} style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, background: '#fff' }}>
+          <div key={g.title} style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, background: '#fff', isolation: 'isolate', transform: 'translateZ(0)' }}>
             <button type="button" onClick={() => toggle(g.title)}
               style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
                 padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'inherit' }}>
@@ -42,7 +49,7 @@ export default function ProfileFilterGroups({ values, onChange, scope = 'admin',
               <ChevronDown size={15} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: '#8e8e8e' }} />
             </button>
             {isOpen && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, padding: '0 12px 12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, padding: '0 12px 12px', contain: 'content' }}>
                 {fields.map(f => (
                   <div key={f.key} style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 11, color: '#8e8e8e', marginBottom: 3 }}>{f.label}</div>
