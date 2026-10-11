@@ -3800,7 +3800,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   // meeting_mode — only send it when it's virtual or changing, so in-person
   // scheduling keeps working before the migration is run.
   const migrationHint = (err) => /meeting_mode/.test(err.message) ? 'Run the 20261011_virtual_meetings.sql migration in Supabase first.' : err.message
-  const handleSchedule = async (id, datetimeLocal, prevScheduledAt, fromProfileId, location, mode, prevMode, prevStatus) => {
+  const handleSchedule = async (id, datetimeLocal, prevScheduledAt, fromProfileId, location, mode, prevMode, prevStatus, prevDecision) => {
     const modePatch = (mode || 'in_person') !== (prevMode || 'in_person') ? { meeting_mode: mode || 'in_person' } : {}
     // admin_schedule_meeting (the "Schedule a meeting" panel's RPC) already
     // promotes pending/declined -> accepted the moment a time is fixed —
@@ -3809,7 +3809,15 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
     // the badge reading "Awaiting response"/"Declined" while a meeting was
     // now on the calendar for it (workflow audit, 2026-10-11). Only applies
     // when an actual new time is being set below, same as the RPC.
-    const statusPatch = ['pending', 'declined'].includes(prevStatus) ? { status: 'accepted' } : {}
+    // Same rule for a "Met" request with no decision recorded yet (round 3
+    // of the audit, 2026-10-11): a brand-new future time fixed for it left
+    // it reading "Meeting done" with an upcoming date and a stale 48h
+    // decision countdown still running — reopen it the same way
+    // admin_schedule_meeting's SQL now does. Once a decision IS recorded
+    // the pipeline has moved on, so status is left untouched either way.
+    const statusPatch = ['pending', 'declined'].includes(prevStatus) ? { status: 'accepted' }
+      : (prevStatus === 'meeting_done' && !prevDecision) ? { status: 'accepted', decision_deadline: null }
+      : {}
     // Editing only the location of an already-scheduled meeting used to do
     // nothing (no new date picked → silent return) — keep the existing
     // time and save the location. With nothing scheduled yet, say so
@@ -4063,7 +4071,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                     onChange={e=>setLocationDraft(prev=>({ ...prev, [r.id]: e.target.value }))} />
                   {(modeDraft[r.id] ?? r.meeting_mode) === 'virtual' && <ContactDetailWarning text={locationDraft[r.id] ?? r.location} />}
                   <button className="btn btn-outline btn-sm" style={{padding:'7px 14px',fontSize:13}}
-                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id], r.scheduled_at, r.from_profile, locationDraft[r.id] ?? r.location, modeDraft[r.id] ?? r.meeting_mode, r.meeting_mode, r.status)}>
+                    onClick={()=>handleSchedule(r.id, scheduleDraft[r.id], r.scheduled_at, r.from_profile, locationDraft[r.id] ?? r.location, modeDraft[r.id] ?? r.meeting_mode, r.meeting_mode, r.status, r.decision)}>
                     {r.scheduled_at ? 'Reschedule' : 'Schedule'}
                   </button>
                   {r.scheduled_at && (
