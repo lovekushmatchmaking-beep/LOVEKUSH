@@ -58,7 +58,7 @@ export async function markShareLinkInterest(token) {
   if (error) throw new Error(error.message)
 }
 
-// Client ne "Not for me" tap kiya — sirf admin ko pata chalta hai,
+// Client ne "Not Interested" tap kiya — sirf admin ko pata chalta hai,
 // client ko koi negative message nahi dikhta (Aryan, 2026-10-10).
 // mark_share_link_interest ka sibling RPC, same pattern.
 export async function markShareLinkNotInterested(token) {
@@ -84,7 +84,7 @@ export async function markInterestSent(linkId) {
   if (error) throw new Error('Could not update: ' + error.message)
 }
 
-// Admin ne "Not for me" signal dekh/action le liya — permanent badge se hata
+// Admin ne "Not Interested" signal dekh/action le liya — permanent badge se hata
 // deta hai. Requires not_interest_acknowledged_at column (migration
 // 20261010_admin_gaps.sql in supabase/migrations).
 export async function acknowledgeShareLinkNotInterested(linkId) {
