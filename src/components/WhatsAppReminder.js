@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Share2, ChevronDown, ChevronUp } from 'lucide-react'
 import { EVENT_LABELS, DEFAULT_MESSAGES, fillTemplate, fetchTemplates, logNotification, waLinkFor } from '../utils/notifications'
+import MeetingCard from './MeetingCard'
+import { generateMeetingCardImage } from '../utils/generateMeetingCardImage'
 
 // One-tap WhatsApp reminder for a trigger event — selfie requested, profile
 // approved, match shared, meeting scheduled. Opens a small template picker
@@ -43,11 +45,23 @@ export function WhatsAppReminderButton({ profile, eventType, vars, appendText, s
 
 // Exported so a caller that has to do async work first (e.g. create the
 // share link that goes in appendText) can open the same sheet itself.
-export function ReminderSheet({ profile, eventType, vars, appendText, staffUserId, onClose, onSent }) {
+// `card`: optional meeting-card fields ({name, otherName, otherAge,
+// otherCity, date, time, location, requestId}) — when given (only the
+// meeting_scheduled caller passes this), the sheet leads with a real
+// visual card (MeetingCard, captured to a PNG) and a generic "Share" button
+// instead of a bare WhatsApp text message. Aryan: the plain-text template
+// looked "ganda" (ugly), and sharing shouldn't be locked to one specific
+// WhatsApp number — any app, any chat (2026-10-11). The text-template send
+// still exists underneath for when a plain message is what's wanted.
+export function ReminderSheet({ profile, eventType, vars, appendText, staffUserId, onClose, onSent, card }) {
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [templateId, setTemplateId] = useState('default')
   const [text, setText] = useState('')
+  const [textOpen, setTextOpen] = useState(!card)
+  const [cardBusy, setCardBusy] = useState(false)
+  const [cardError, setCardError] = useState('')
+  const cardRef = useRef(null)
   const phone = profile?.client_phone
   const fullVars = { name: profile?.full_name || 'there', ...vars }
   const withAppend = (body) => appendText ? body + '\n\n' + appendText : body
@@ -86,28 +100,78 @@ export function ReminderSheet({ profile, eventType, vars, appendText, staffUserI
     onClose()
   }
 
+  // Generic share — native share sheet (any app, any chat), not a direct
+  // wa.me link to one number. Falls back to downloading the PNG when the
+  // browser can't share files (desktop Chrome, older browsers).
+  const shareCard = async () => {
+    setCardBusy(true); setCardError('')
+    try {
+      const blob = await generateMeetingCardImage(cardRef.current)
+      const file = new File([blob], `Meeting_${card.requestId || profile.id}.png`, { type: 'image/png' })
+      await logNotification({ profileId: profile.id, eventType, staffUserId, messagePreview: 'Meeting details card shared' })
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Meeting Confirmed — LOVEKUSH' })
+      } else {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = file.name; a.click()
+        URL.revokeObjectURL(url)
+        setCardError('Sharing is not supported here, so the card was downloaded instead.')
+      }
+      if (onSent) {
+        try { await onSent() } catch (e) { console.warn('onSent failed (non-critical):', e.message) }
+      }
+    } catch (e) {
+      if (e?.name !== 'AbortError') setCardError('Could not create the card, please try again.')
+    } finally {
+      setCardBusy(false)
+    }
+  }
+
   return createPortal(
     <div onClick={e => { e.stopPropagation(); onClose() }}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div onClick={e => e.stopPropagation()}
-        style={{ background: '#fff', width: '100%', maxWidth: 520, borderRadius: '14px 14px 0 0', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        style={{ background: '#fff', width: '100%', maxWidth: 520, maxHeight: '88vh', overflowY: 'auto', borderRadius: '14px 14px 0 0', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 600 }}>
           {EVENT_LABELS[eventType] || 'Reminder'} — {profile.full_name || 'profile'}
         </div>
         {!phone && (
           <div style={{ fontSize: 12, color: '#dc2626' }}>No phone number saved — WhatsApp will ask which chat to open.</div>
         )}
-        {!loading && templates.length > 0 && (
-          <select className="form-select" value={templateId} onChange={e => pickTemplate(e.target.value)} style={{ fontSize: 12 }}>
-            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
+        {card && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>
+              <MeetingCard ref={cardRef} {...card} />
+            </div>
+            {cardError && <div style={{ fontSize: 12, color: '#dc2626' }}>{cardError}</div>}
+            <button className="btn btn-black btn-sm" onClick={shareCard} disabled={cardBusy}>
+              <Share2 size={14} /> {cardBusy ? 'Preparing…' : 'Share meeting card'}
+            </button>
+            <button type="button" className="btn btn-outline btn-sm" style={{ color: '#8e8e8e', alignSelf: 'flex-start' }}
+              onClick={() => setTextOpen(v => !v)}>
+              {textOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} Or send as plain text instead
+            </button>
+          </>
         )}
-        <textarea className="form-input" value={text} onChange={e => setText(e.target.value)}
-          rows={4} style={{ fontSize: 13, resize: 'vertical' }} autoFocus />
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="btn btn-outline btn-sm" onClick={onClose}>Cancel</button>
-          <button className="btn btn-black btn-sm" onClick={send}>📱 Send via WhatsApp</button>
-        </div>
+        {textOpen && (
+          <>
+            {!loading && templates.length > 0 && (
+              <select className="form-select" value={templateId} onChange={e => pickTemplate(e.target.value)} style={{ fontSize: 12 }}>
+                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            )}
+            <textarea className="form-input" value={text} onChange={e => setText(e.target.value)}
+              rows={4} style={{ fontSize: 13, resize: 'vertical' }} autoFocus={!card} />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-outline btn-sm" onClick={onClose}>Cancel</button>
+              <button className="btn btn-black btn-sm" onClick={send}>📱 Send via WhatsApp</button>
+            </div>
+          </>
+        )}
+        {!textOpen && (
+          <button className="btn btn-outline btn-sm" onClick={onClose}>Close</button>
+        )}
       </div>
     </div>,
     document.body
