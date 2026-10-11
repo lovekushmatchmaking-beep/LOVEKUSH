@@ -1076,14 +1076,25 @@ export default function Admin({ staffUser }) {
   // contacts (named with the profile ID, easy to find on WhatsApp later).
   const saveProfileContact = (p) => {
     const phone = p.client_phone || p.external_bureau_contact
-    if (!phone) { setSelected(p); showToast('No number saved yet — add it in the Contact section'); return }
+    if (!phone) { showToast('No number saved yet for this profile'); return }
     const label = `${p.full_name || 'Client'} (${p.profile_code})${!p.client_phone && p.external_bureau_name ? ' via ' + p.external_bureau_name : ''}`
     const vcf = ['BEGIN:VCARD', 'VERSION:3.0', `FN:${label}`, `TEL;TYPE=CELL:${phone}`, `NOTE:LOVEKUSH ${p.profile_code}`, 'END:VCARD'].join('\r\n')
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([vcf], { type: 'text/vcard' }))
-    a.download = `${p.profile_code || 'contact'}.vcf`
-    document.body.appendChild(a); a.click(); a.remove()
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    const blob = new Blob([vcf], { type: 'text/vcard' })
+    const url = URL.createObjectURL(blob)
+    // iOS Safari ignores the `download` attribute on a blob URL and silently
+    // does nothing on a.click() — Aryan's "button se kuch nahi ho raha"
+    // (2026-10-11). Opening the blob URL instead makes iOS show its own
+    // "Add to Contacts" card; Android/desktop browsers still download the
+    // file since it's served with vcard content-type either way.
+    const opened = window.open(url, '_blank')
+    if (!opened) {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${p.profile_code || 'contact'}.vcf`
+      document.body.appendChild(a); a.click(); a.remove()
+    }
+    showToast(`Contact file ready for ${p.profile_code || label} — check your downloads/share sheet`)
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
   }
 
   // Share a client's profile with an EXTERNAL bureau, with a manual note,
