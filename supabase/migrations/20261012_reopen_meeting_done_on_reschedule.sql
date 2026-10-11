@@ -1,3 +1,6 @@
+-- Renamed from 20261011_reopen_... (2026-10-11): it must run AFTER
+-- 20261011_virtual_meetings.sql, which replaces the same function without
+-- the reopen branch. Already applied live; only the replay order changed.
 -- Coordination/meeting workflow audit, round 3 (Aryan, 2026-10-11): a pair
 -- whose meeting was marked "Met" (status = 'meeting_done') but has no
 -- decision recorded yet could get a brand-new future meeting time fixed

@@ -1159,3 +1159,69 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   .share-card-top { flex-direction: row; align-items: center; }
   .share-rows { grid-template-columns: 1fr 1fr; }
 }
+
+/* ===== Share-link responses (Aryan, 2026-10-11): "Interested" in light
+   green on light green was hard to see. Solid, high-contrast pills now —
+   brand magenta for Interested, slate for Not interested, blue for a
+   bureau reply. White text on each passes WCAG AA. */
+.resp-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 50px;
+  font-size: 12px; font-weight: 600; color: #fff; line-height: 1.2;
+}
+.resp-interested { background: #C2185B; }
+.resp-not { background: #475569; }
+.resp-bureau { background: #1D4ED8; }
+.resp-row-interested { border-left: 4px solid #C2185B !important; }
+.resp-row-not { border-left: 4px solid #475569 !important; }
+.resp-row-bureau { border-left: 4px solid #1D4ED8 !important; }
+
+/* ===== My Queue tabs — one section on screen at a time instead of nine
+   stacked lists (Aryan, 2026-10-11). Tiles double as the tab bar. */
+.queue-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin-bottom: 18px; }
+.queue-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  padding: 10px 12px; border-radius: 12px; border: 1.5px solid transparent;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.06); cursor: pointer; text-align: left;
+  font: inherit; color: #333; min-height: 72px;
+}
+.queue-tile .qt-count { font-size: 20px; font-weight: 700; line-height: 1; }
+.queue-tile .qt-label { font-size: 11.5px; color: #6b6b6b; line-height: 1.25; }
+.queue-tile.active { border-color: var(--primary); background: var(--primary-soft); }
+.queue-tile.zero .qt-count { color: #c4c4c4 !important; }
+.queue-section-title { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+
+/* ===== Dashboard tabs + cards (Aryan, 2026-10-11) */
+.dash-tabs { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 16px; scrollbar-width: none; }
+.dash-tabs::-webkit-scrollbar { display: none; }
+.dash-tab {
+  flex: 0 0 auto; padding: 8px 14px; border-radius: 50px; border: 1px solid #e5e5e5;
+  background: #fff; font: inherit; font-size: 13px; font-weight: 500; color: #555; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.dash-tab.active { background: #111; color: #fff; border-color: #111; }
+.dash-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 900px) { .dash-grid { grid-template-columns: 1fr 1fr; } .dash-grid .span-2 { grid-column: span 2; } }
+.dash-card { background: #fff; border: 1px solid #eee; border-radius: var(--radius); padding: 16px; min-width: 0; }
+.dash-card-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 12px; }
+.dash-card-title .muted { font-weight: 400; color: #8e8e8e; margin-left: auto; font-size: 12px; }
+.kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (min-width: 600px) { .kpi-grid { grid-template-columns: repeat(4, 1fr); } }
+.kpi { border-radius: 12px; padding: 12px; background: #fafafa; }
+.kpi .kpi-val { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.kpi .kpi-label { font-size: 11.5px; color: #6b6b6b; margin-top: 4px; }
+.kpi .kpi-sub { font-size: 11px; color: #9a9a9a; margin-top: 2px; }
+.action-list { display: grid; grid-template-columns: 1fr; gap: 6px; }
+@media (min-width: 900px) { .action-list { grid-template-columns: 1fr 1fr; } }
+.action-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none;
+  border-radius: 10px; padding: 10px 12px; cursor: pointer; font: inherit;
+}
+.action-item .ai-label { flex: 1; font-size: 13px; font-weight: 500; color: #333; }
+.action-item .ai-hint { display: block; font-size: 11.5px; font-weight: 400; color: #777; margin-top: 1px; }
+.action-item .ai-count { font-size: 15px; font-weight: 700; }
+.chart-legend { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; min-width: 0; flex: 1; }
+.chart-legend-row { display: flex; align-items: center; gap: 8px; }
+.chart-legend-row .swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.chart-legend-row .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-legend-row .val { color: #555; font-variant-numeric: tabular-nums; }
