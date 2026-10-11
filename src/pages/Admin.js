@@ -3367,7 +3367,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   // dropdown instead of its own standalone button (Aryan: "itna bada button
   // bna diya hai ... whatsapp wale button me hi dropdown me add kardo",
   // 2026-10-11) — one sheet, opened with whichever profile/vars were tapped.
-  const [meetingReminder, setMeetingReminder] = useState(null) // { profile, vars } | null
+  const [meetingReminder, setMeetingReminder] = useState(null) // { profile, vars, card } | null
 
   const buildQuery = (forTab, from, to) => {
     let q = supabase.from('introductions').select('*').order('created_at', { ascending: false }).range(from, to)
@@ -3773,15 +3773,28 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                           onSaved={(phone)=>setProfilesById(prev=>({ ...prev, [x.id]: { ...prev[x.id], client_phone: phone } }))}
                           whatsappMenuExtra={r.scheduled_at ? [{
                             label: 'Send meeting details', icon: CalendarClock,
-                            // "profile ki details ke saath ek bhadiya sa card" —
-                            // the other member's age/city now ride along with
-                            // their name so the message reads like a short
-                            // profile card, not just a bare name (2026-10-11).
+                            // A real visual card (MeetingCard, shared via the
+                            // native share sheet) instead of a plain-text
+                            // WhatsApp message locked to one number — Aryan:
+                            // "esa ganda sa template... accha sa card ban kar
+                            // ... jaruri nhi ki usi ke whatsapp number par jaye"
+                            // (2026-10-11). The plain-text send still exists
+                            // underneath (ReminderSheet's `card` prop just
+                            // adds the card on top, see WhatsAppReminder.js).
                             onClick: () => setMeetingReminder({ profile: x, vars: {
                               otherName: (other?.full_name || 'the other member')
                                 + (other?.age || other?.city ? ` (${[other?.age && `${other.age} yrs`, other?.city].filter(Boolean).join(', ')})` : ''),
                               when: new Date(r.scheduled_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
-                                + (r.location ? ` at ${r.location}` : '') } }),
+                                + (r.location ? ` at ${r.location}` : '') },
+                              card: {
+                                name: x.full_name,
+                                otherName: other?.full_name || 'the other member',
+                                otherAge: other?.age, otherCity: other?.city,
+                                date: new Date(r.scheduled_at).toLocaleDateString('en-IN', { dateStyle: 'medium' }),
+                                time: new Date(r.scheduled_at).toLocaleTimeString('en-IN', { timeStyle: 'short' }),
+                                location: r.location || '',
+                                requestId: r.request_id,
+                              } }),
                           }] : undefined} />
                       </div>
                       )
@@ -3938,7 +3951,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
           standalone button on every card (Aryan, 2026-10-11). One shared
           sheet, since only one can be open at a time. */}
       {meetingReminder && (
-        <ReminderSheet profile={meetingReminder.profile} eventType="meeting_scheduled" vars={meetingReminder.vars}
+        <ReminderSheet profile={meetingReminder.profile} eventType="meeting_scheduled" vars={meetingReminder.vars} card={meetingReminder.card}
           staffUserId={staffUser?.user_id} onClose={() => setMeetingReminder(null)} />
       )}
     </div>
