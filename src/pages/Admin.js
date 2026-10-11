@@ -535,7 +535,7 @@ export default function Admin({ staffUser }) {
       // acknowledged yet (audit gap, 2026-10-05) — previously this signal
       // didn't exist at all.
       supabase.from('share_links').select('*', { count: 'exact', head: true }).not('interested_at', 'is', null).is('interest_acknowledged_at', null),
-      // Share-link clients who tapped "Not for me" — only unacknowledged ones
+      // Share-link clients who tapped "Not Interested" — only unacknowledged ones
       // (audit gap, 2026-10-10: was a permanent badge because nothing cleared it).
       supabase.from('share_links').select('*', { count: 'exact', head: true }).not('not_interested_at', 'is', null).is('not_interest_acknowledged_at', null),
       // Today's scheduled calls/meetings — the single most time-sensitive
@@ -1100,6 +1100,8 @@ export default function Admin({ staffUser }) {
       <aside className="admin-sidebar">
         <div className="admin-sidebar-brand">
           <span className="gradient-text" style={{ fontFamily:'var(--font-display)', fontSize: 13, fontWeight:600, letterSpacing:'0.3em' }}>ADMIN</span>
+          {/* Bell sits next to the brand (was a lone icon under Account). */}
+          <NotificationBell userId={staffUser.user_id} onNavigate={handleNotifNavigate} align="left" />
         </div>
         {sidebarItems.map((it, i) => (
           'section' in it ? (
@@ -1113,9 +1115,6 @@ export default function Admin({ staffUser }) {
             </button>
           )
         ))}
-        <div style={{ padding: '0 14px 10px' }}>
-          <NotificationBell userId={staffUser.user_id} onNavigate={handleNotifNavigate} align="left" />
-        </div>
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: 12, color: 'var(--gray3)', padding: '8px 14px' }}>
           {staffUser.role === 'admin' ? 'Administrator' : 'Relationship Manager'}
@@ -1136,10 +1135,10 @@ export default function Admin({ staffUser }) {
           </div>
         </nav>
 
-        <div className="admin-page">
+        <div className={'admin-page' + (view === 'findMatches' ? ' admin-page-wide' : '')}>
       {view === 'createClient' && (
         <div>
-          <div style={{maxWidth:800,margin:'0 auto',padding:'20px 20px 0'}}>
+          <div style={{maxWidth:800,margin:'0 auto',padding:'0 0 12px'}}>
             <button className="btn btn-outline btn-sm" onClick={()=>{setView('list'); runQuery(0)}}>← Back to list</button>
           </div>
           <CreateProfile
@@ -1155,7 +1154,7 @@ export default function Admin({ staffUser }) {
       )}
 
       {view === 'editProfile' && editingProfile && (
-        <div style={{maxWidth:800,margin:'0 auto',padding:'20px'}}>
+        <div className="admin-view" style={{maxWidth:800}}>
           <EditProfileForm
             profile={editingProfile}
             user={{ id: staffUser.user_id }}
@@ -1179,7 +1178,7 @@ export default function Admin({ staffUser }) {
           component users see for themselves), so "View" can never
           accidentally change a field the way opening Edit-mode could. */}
       {view === 'fullProfile' && viewingProfile && (
-        <div style={{maxWidth:800,margin:'0 auto',padding:'20px'}}>
+        <div className="admin-view" style={{maxWidth:800}}>
           <BiodataView
             profile={viewingProfile}
             photo={photos[viewingProfile.id] ? { storage_path: photos[viewingProfile.id] } : null}
@@ -1409,7 +1408,7 @@ export default function Admin({ staffUser }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {profiles.map(p => (
-              <div key={p.id} className="list-row clickable"
+              <div key={p.id} className="list-row clickable admin-profile-row"
                 onClick={() => {
                   if (longPressFired.current) { longPressFired.current = false; return } // long-press already handled this tap
                   if (selectionMode) toggleSelect(p.id)
@@ -1421,11 +1420,11 @@ export default function Admin({ staffUser }) {
                 onMouseDown={() => startLongPress(p.id)}
                 onMouseUp={cancelLongPress}
                 onMouseLeave={cancelLongPress}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   {selectionMode && (
                     <input type="checkbox" checked={selectedIds.has(p.id)} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(p.id)} />
                   )}
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#f0f0f0', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f0f0f0', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {photos[p.id]
                       ? <SignedImage path={photos[p.id]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : <UserRound size={18} color="#bbb" />
@@ -1449,19 +1448,24 @@ export default function Admin({ staffUser }) {
                       na karna pade (Aryan's audit, 2026-10-04, gap #2). */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 4 }}>
-                      <div className={"badge badge-" + p.profile_status} style={{ fontSize: 12 }} title={'Profile status: ' + p.profile_status}>{p.profile_status}</div>
-                      {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 12, background: '#eff6ff', color: '#2563eb' }} title="Member sent a selfie — needs comparing to their photo">Selfie received</div>}
+                      {/* Compact (Aryan, 2026-10-11 — "dot ke form mein"): "active"
+                          is the normal state for almost every row, so it's now a
+                          small green dot; only pending/blocked keep a word pill. */}
+                      {p.profile_status === 'active'
+                        ? <span className="status-dot status-dot-active" title="Profile status: active" />
+                        : <div className={"badge badge-" + p.profile_status} style={{ fontSize: 12 }} title={'Profile status: ' + p.profile_status}>{p.profile_status}</div>}
+                      {p.verification_status === 'selfie_submitted' && <div className="badge" style={{ fontSize: 12, background: '#eff6ff', color: '#2563eb', padding: '3px 7px' }} title="Selfie received — member sent a selfie, needs comparing to their photo"><Camera size={12} /></div>}
                       {SHOW_PREMIUM_TOGGLE && p.is_premium && <div className="badge" style={{ fontSize: 12, background: '#fef3c7', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }} title="Marked Premium"><Crown size={10} />Premium</div>}
                       {/* Profile sourced from another marriage bureau — contact
                           details are usually missing/withheld (Aryan's ask,
                           2026-10-09). profiles.external_bureau_name set below
                           in the expanded Contact section. */}
-                      {p.external_bureau_name && <div className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }} title={p.external_bureau_contact ? `Sourced from ${p.external_bureau_name} — coordinate on ${p.external_bureau_contact}` : `Sourced from ${p.external_bureau_name} — their contact details are typically missing/restricted`}><Building2 size={10} />External — {p.external_bureau_name}</div>}
+                      {p.external_bureau_name && <div className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 3 }} title={p.external_bureau_contact ? `Sourced from ${p.external_bureau_name} — coordinate on ${p.external_bureau_contact}` : `Sourced from ${p.external_bureau_name} — their contact details are typically missing/restricted`}><Building2 size={11} /><span className="hide-narrow">{p.external_bureau_name}</span></div>}
                       {/* Note draft keyed per-profile now (Aryan's audit, 2026-10-05) so it
                           survives switching to another client — this badge just surfaces
                           that an unsaved draft is still sitting here, waiting to be finished. */}
                       {selected?.id !== p.id && (getNoteDraft(p.id).note.trim() || getNoteDraft(p.id).outcome) &&
-                        <div className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#c2410c' }} title="You have an unsaved note draft for this profile">✎ Draft note</div>}
+                        <div className="badge" style={{ fontSize: 12, background: '#fff7ed', color: '#c2410c' }} title="You have an unsaved note draft for this profile">✎</div>}
                     </div>
                     <div style={{ fontSize: 12, color: '#8e8e8e', fontFamily: 'monospace' }}>{p.profile_code}</div>
                   </div>
@@ -1672,7 +1676,7 @@ export default function Admin({ staffUser }) {
             items should show first, fewer clicks, less wasted time). */}
         <PriorityActions stats={stats} onOpen={(v) => setView(v)} />
         {/* Stat tiles */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(90px,1fr))', gap: 6, marginBottom: 16 }}>
+        <div className="admin-stats">
           {[
             { label: 'Total', val: stats.total, bg: '#f5f5f5', fg: '#555' },
             { label: 'Male', val: stats.male, bg: '#eef2ff', fg: '#4f46e5' },
@@ -1684,7 +1688,7 @@ export default function Admin({ staffUser }) {
             { label: 'Verify', val: stats.needsVerification, bg: '#eff6ff', fg: '#2563eb' },
             { label: 'Reports', val: stats.openReports, bg: '#fdf4ff', fg: '#9333ea' },
           ].map(s => (
-            <div key={s.label} style={{ background: s.bg, borderRadius: 10, padding: '10px 10px', textAlign: 'center', cursor: 'default' }}>
+            <div key={s.label} className="admin-stat" style={{ background: s.bg }}>
               <div style={{ fontFamily:'var(--font-display)', fontSize: 20, fontWeight:600, color: s.fg }}>{s.val}</div>
               <div style={{ fontSize: 11, color: '#8e8e8e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
             </div>
@@ -1802,7 +1806,7 @@ function PriorityActions({ stats, onOpen }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+    <div className="admin-priority">
       {items.map(i => (
         <button key={i.key} type="button" onClick={() => onOpen(i.view)}
           style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', border: 'none',
@@ -2015,7 +2019,7 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 800 }}>
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Duplicate Leads</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles sharing the same phone number or email — same person registered twice?</div>
@@ -2179,7 +2183,9 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
   // matching for while scrolling/expanding the match list below, instead
   // of only a name + code header. Defaults open since that's the whole
   // point of the ask; collapsible so it doesn't eat the screen on mobile.
-  const [mainExpanded, setMainExpanded] = useState(true)
+  // Laptop opens it in the left column; on a phone it starts collapsed
+  // (one tap to open) so the match list isn't pushed below the fold.
+  const [mainExpanded, setMainExpanded] = useState(() => typeof window === 'undefined' || !window.matchMedia || window.matchMedia('(min-width: 1024px)').matches)
   const [mainPhotoPath, setMainPhotoPath] = useState(null)
   useEffect(() => {
     supabase.from('photos').select('storage_path').eq('profile_id', profile.id).eq('is_primary', true).maybeSingle()
@@ -2397,14 +2403,19 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+    <div className={'fm-view' + (mainExpanded ? ' fm-split' : '')}>
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
 
+      {/* Laptop: main profile LEFT, matches RIGHT (Aryan, 2026-10-11 —
+          "left mein main profile, right mein saari matching profiles").
+          Phone keeps the stacked layout (pinned card on top, matches
+          below). Collapsing the main card frees the full width for
+          matches on laptop too. Layout lives in App.css (.fm-*). */}
+      <div className="fm-layout">
+      <aside className="fm-main">
       {/* Pinned main profile — sticky so it stays visible while scrolling/
-          expanding the match list below (the "two partition" screen ask:
-          main profile on one side/top, matches to expand on the other/
-          below, without navigating away). */}
-      <div style={{position:'sticky',top:0,zIndex:6,background:'#fff',borderBottom:'1px solid #ededed',marginBottom:16,paddingBottom:12,marginLeft:-20,marginRight:-20,paddingLeft:20,paddingRight:20}}>
+          expanding the match list (the "two partition" screen ask). */}
+      <div className="fm-main-card">
         <div style={{display:'flex',alignItems:'center',gap:12,cursor:'pointer'}} onClick={()=>setMainExpanded(v=>!v)}>
           <div style={{width:44,height:44,borderRadius:'50%',background:'#f0f0f0',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
             {mainPhotoPath ? <SignedImage path={mainPhotoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} /> : <UserRound size={18} color="#bbb" />}
@@ -2417,14 +2428,14 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
         </div>
 
         {mainExpanded && (
-          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(0,0,0,0.06)',maxHeight:'46vh',overflowY:'auto'}}>
+          <div className="fm-main-details">
             <FullProfileDetails profile={profile} />
           </div>
         )}
       </div>
 
       {clientPhone && (
-        <div style={{display:'flex',alignItems:'center',gap:8,marginTop:-12,marginBottom:16,fontSize:12}}>
+        <div className="fm-client-phone">
           <span style={{color:'#8e8e8e',fontFamily:'monospace'}}>{clientPhone}</span>
           <ContactButtons phone={clientPhone} logProfile={profile} size="md" />
         </div>
@@ -2445,7 +2456,9 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
           {phoneError && <div style={{fontSize:13,color:'#dc2626',marginTop:6}}>{phoneError}</div>}
         </div>
       )}
+      </aside>
 
+      <section className="fm-results">
       {picked.length > 0 && (
         <div style={{background:'#fff8e1',borderRadius:12,padding:14,marginBottom:14}}>
           <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>
@@ -2613,15 +2626,15 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                 <div style={{display:'flex',gap:12,alignItems:'center'}}>
                   <input type="checkbox" checked={picked.includes(other.id)} onChange={()=>togglePicked(other.id)}
                     title="Select to share several matches in one link" style={{width:18,height:18,flexShrink:0}} />
-                  <div style={{width:48,height:48,borderRadius:'50%',background:'#f0f0f0',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <div className="fm-match-avatar">
                     {r.photoPath
                       ? <SignedImage path={r.photoPath} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
                       : <UserRound size={18} color="#bbb" />}
                   </div>
-                  <div style={{flex:1,cursor:'pointer'}} onClick={()=>setExpandedId(isExpanded?null:other.id)}>
+                  <div style={{flex:1,minWidth:0,cursor:'pointer'}} onClick={()=>setExpandedId(isExpanded?null:other.id)}>
                     <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
                       <span style={{fontWeight:600,fontSize:14}}>{other.full_name}</span>
-                      <span style={{fontSize:12,fontWeight:600,padding:'6px 12px',borderRadius:20,
+                      <span style={{fontSize:12,fontWeight:600,padding:'2px 8px',borderRadius:20,
                         background: r.score>=70?'#f0fdf4':r.score>=40?'#fff8e1':'#f5f5f5',
                         color: r.score>=70?'#16a34a':r.score>=40?'#b45309':'#8e8e8e'}}>
                         {r.score}% match
@@ -2650,7 +2663,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                       </div>
                     )}
                     {/* Full profile, so the admin can manually compare this match
-                        against the pinned main profile above before deciding
+                        against the pinned main profile (left on laptop, above on phone) before deciding
                         which one to send (Aryan's ask, 2026-10-10). */}
                     <div style={{paddingTop:8,borderTop:'1px solid rgba(0,0,0,0.06)'}}>
                       <FullProfileDetails profile={other} />
@@ -2658,7 +2671,9 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                   </div>
                 )}
 
-                <div style={{marginTop:10}}>
+                {/* Share link + Start Coordination on one row (2026-10-11 compaction). */}
+                <div style={{marginTop:10,display:'flex',flexWrap:'wrap',gap:8,alignItems:'flex-start'}}>
+                <div style={{flex: linkState?.url || linkState?.error ? '1 1 100%' : '0 0 auto'}}>
                   {!linkState?.url ? (
                     <button className="btn btn-black btn-sm" disabled={linkState?.generating}
                       onClick={()=>handleGenerateLink(other.id)}>
@@ -2688,7 +2703,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                 {/* Admin-initiated Talk/Meeting request — previously the only
                     way to start coordination was via a share-link interest
                     forward (audit gap, 2026-10-10). */}
-                <div style={{marginTop:8}}>
+                <div>
                   {introFor[other.id]?.done ? (
                     <span style={{fontSize:12,color:'#16a34a',display:'flex',alignItems:'center',gap:5}}>
                       <Handshake size={13} /> {introFor[other.id].existing
@@ -2704,11 +2719,14 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
                   )}
                   {introFor[other.id]?.error && <div style={{fontSize:12,color:'#dc2626',marginTop:4}}>{introFor[other.id].error}</div>}
                 </div>
+                </div>
               </div>
             )
           })}
         </div>
       )}
+      </section>
+      </div>
     </div>
   )
 }
@@ -2774,7 +2792,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
     }
   }
 
-  // "Not for me" signal ko dismiss karta hai — permanent red badge hata
+  // "Not Interested" signal ko dismiss karta hai — permanent red badge hata
   // deta hai (audit gap, 2026-10-10). Requires migration 20261010_admin_gaps.sql.
   const handleNoteNotInterested = async (linkId) => {
     try {
@@ -2879,7 +2897,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
   }, [links, profilesById, shareSearch])
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 800 }}>
       <ToastView />
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to list</button>
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:12}}>My Share Links</h2>
@@ -3037,7 +3055,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                         {bundleSiblings.map(s => {
                           const sp = profilesById[s.profile_id]
                           const sStatus = s.revoked ? 'Revoked' : new Date(s.expires_at) < new Date() ? 'Expired'
-                            : s.interested_at ? '👍 Interested' : s.not_interested_at ? '👎 Passed' : 'Awaiting response'
+                            : s.interested_at ? '👍 Interested' : s.not_interested_at ? '👎 Not Interested' : 'Awaiting response'
                           return (
                             <div key={s.id} style={{fontSize:12,color:'#555',display:'flex',justifyContent:'space-between',gap:8}}>
                               <span>{sp ? sp.full_name : 'Profile'}</span>
@@ -3049,13 +3067,13 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                     )}
                   </div>
                 )}
-                {/* Client tapped "👍 Interested" or "Not for me" on this profile
+                {/* Client tapped "👍 Interested" or "Not Interested" on this profile
                     (Aryan, 2026-10-10: not_interested_at also shown here,
                     sirf admin ke liye — client ko pata nahi chalta). */}
                 {l.not_interested_at && !l.interested_at && (
                   <div style={{marginTop:8,fontSize:12,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
                     <span style={{color: l.not_interest_acknowledged_at ? '#8e8e8e' : '#b45309', display:'flex',alignItems:'center',gap:5}}
-                      title={l.not_interest_acknowledged_at ? `Noted ${new Date(l.not_interest_acknowledged_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}` : 'Client passed on this profile'}>
+                      title={l.not_interest_acknowledged_at ? `Noted ${new Date(l.not_interest_acknowledged_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}` : 'Client tapped Not Interested on this profile'}>
                       <ThumbsDown size={12} /> {new Date(l.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                     </span>
                     {l.not_interest_acknowledged_at
@@ -3072,7 +3090,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                         <ThumbsUp size={12} /> {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                       </div>
                       {l.not_interested_at && (
-                        <div style={{fontSize:11,color:'#8e8e8e',display:'flex',alignItems:'center',gap:3}} title="Client later passed on this profile">
+                        <div style={{fontSize:11,color:'#8e8e8e',display:'flex',alignItems:'center',gap:3}} title="Client later tapped Not Interested">
                           <ThumbsDown size={11} /> {new Date(l.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                         </div>
                       )}
@@ -3159,7 +3177,7 @@ function CasteSuggestionsView({ onBack, staffUser }) {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 800 }}>
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>Caste Suggestions</h2>
@@ -3651,7 +3669,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
   })
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 800 }}>
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} label={backLabel} />
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:14,flexWrap:'wrap'}}>
@@ -4123,7 +4141,7 @@ function VerificationQueueView({ staffUser, onBack }) {
   ]
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 800 }}>
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Verification Queue</h2>
@@ -4259,7 +4277,7 @@ function ReportsQueueView({ staffUser, onBack }) {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 800 }}>
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Reports Queue</h2>
@@ -4380,7 +4398,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   // hasn't acted on yet — audit gap, 2026-10-05: this signal didn't exist
   // before, and there was no way to tell which client a link was even for.
   const [shareInterest, setShareInterest] = useState([])
-  // Share-link clients who tapped "Not for me" (Aryan, 2026-10-10).
+  // Share-link clients who tapped "Not Interested" (Aryan, 2026-10-10).
   // Informational only — no dedicated ack column; admin sees it here and in Share Links.
   const [shareNotInterested, setShareNotInterested] = useState([])
   // Admin-only: how much pending work each staff member is carrying, so a
@@ -4421,7 +4439,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       supabase.from('introductions').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
       // Share-link clients who tapped "👍 Interested" — audit gap, 2026-10-05.
       supabase.from('share_links').select('*').not('interested_at', 'is', null).is('interest_acknowledged_at', null).order('interested_at', { ascending: false }).limit(20),
-      // Share-link clients who tapped "Not for me" — only unacknowledged (audit gap, 2026-10-10).
+      // Share-link clients who tapped "Not Interested" — only unacknowledged (audit gap, 2026-10-10).
       supabase.from('share_links').select('*').not('not_interested_at', 'is', null).is('not_interest_acknowledged_at', null).order('not_interested_at', { ascending: false }).limit(20),
       // Meeting ho gayi ("Met"), 48 ghante mein Positive/Negative decision
       // chahiye — yeh list pehle sirf Coordination card par dikhti thi.
@@ -4509,7 +4527,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   )
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 800 }}>
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>My Queue</h2>
@@ -4561,7 +4579,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
                     )}
                   </div>
                   <div style={{fontSize:12,color:'#8e8e8e',marginTop:2}}>
-                    Passed {new Date(s.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                    Not Interested · {new Date(s.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                   </div>
                 </div>
               )} />
@@ -4810,7 +4828,7 @@ function SharedMatchLogView({ staffUser, onBack, initialCode, onOpenProfile }) {
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 640 }}>
       <ToastView />
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back</button>
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Shared Matches</h2>
@@ -4960,7 +4978,7 @@ function ShareLinkContactView({ staffUser, onBack }) {
   }
 
   return (
-    <div style={{ maxWidth: 500, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 500 }}>
       <ToastView />
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to Account</button>
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Share Link Contact</h2>
@@ -5066,7 +5084,7 @@ function StaffManagementView({ staffUser, onBack }) {
   }
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 700 }}>
       <ToastView />
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back to Account</button>
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Manage Staff</h2>
@@ -5193,7 +5211,7 @@ function WhatsAppTemplatesView({ staffUser, onBack }) {
   }
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '20px' }}>
+    <div className="admin-view" style={{ maxWidth: 700 }}>
       <ToastView />
       <button className="btn btn-outline btn-sm" style={{marginBottom:16}} onClick={onBack}>← Back</button>
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Template Editor</h2>

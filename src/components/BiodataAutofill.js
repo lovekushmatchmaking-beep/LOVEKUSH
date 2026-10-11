@@ -68,14 +68,16 @@ export default function BiodataAutofill({ onApply, includeContact }) {
         onChange={e => handleFile(e.target.files[0])} />
 
       {(state === 'idle' || state === 'error') && (
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <FileText size={22} style={{ flexShrink: 0, color: 'var(--primary)' }} />
-          <div style={{ flex: 1 }}>
+          {/* flex-basis so the text keeps a readable width on a phone and
+              the buttons drop to their own line instead of squeezing it. */}
+          <div style={{ flex: '1 1 200px', minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Have a biodata already?</div>
             <div style={{ fontSize: 12, color: 'var(--gray3)' }}>Upload the PDF or a photo, or paste the biodata text, and we'll fill in what we can. Nothing is uploaded, it's read on this device.</div>
             {state === 'error' && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 6 }}>{error}</div>}
           </div>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', marginLeft: 'auto' }}>
             <button className="btn btn-outline btn-sm" onClick={() => fileRef.current?.click()}>Upload</button>
             <button className="btn btn-outline btn-sm" onClick={() => { setError(''); setState('paste') }}><ClipboardPaste size={14} /> Paste text</button>
           </div>

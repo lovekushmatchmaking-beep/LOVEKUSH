@@ -359,6 +359,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
+      selfLabelled: true, // render() has its own matching label
       title: 'Denomination / Sect',
       skip: () => form.religion !== 'Muslim',
       render: () => (
@@ -383,6 +384,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
+      selfLabelled: true, // render() has its own matching label
       title: 'Denomination',
       skip: () => form.religion !== 'Christian',
       render: () => (
@@ -403,6 +405,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
+      selfLabelled: true, // render() has its own matching label
       title: (RELIGION_HIERARCHY[form.religion] && RELIGION_HIERARCHY[form.religion].denomination)
         ? RELIGION_HIERARCHY[form.religion].denomination.label : 'Denomination',
       skip: () => !RELIGION_HIERARCHY[form.religion],
@@ -432,6 +435,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
+      selfLabelled: true, // render() has its own matching label
       title: 'Community / Caste',
       skip: () => NO_RELIGION_VALUES.includes(form.religion) || form.religion === 'Zoroastrian',
       render: () => (
@@ -649,6 +653,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
+      selfLabelled: true, // render() has its own matching label
       title: 'Brothers',
       render: () => (
         <div className="form-row">
@@ -670,6 +675,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
       ),
     },
     {
+      selfLabelled: true, // render() has its own matching label
       title: 'Sisters',
       render: () => (
         <div className="form-row">
@@ -1048,7 +1054,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   }
 
   const renderCompactAdminForm = () => (
-    <div style={{maxWidth:800,margin:'0 auto',padding:'0 20px 40px'}}>
+    <div style={{maxWidth:800,margin:'0 auto',padding:'0 0 40px'}}>
       <div className={'toast ' + (toast?'show':'')}>{toast}</div>
 
       <div className="card" style={{marginBottom:16}}>
@@ -1088,7 +1094,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         <SectionLabel style={{marginBottom:14}}>Religion & Community</SectionLabel>
         {religionBlocks().filter(b => !(b.skip && b.skip())).map((b,i) => (
           <div key={i} className="form-group">
-            <FormLabel>{b.title}</FormLabel>
+            {!b.selfLabelled && <FormLabel>{b.title}</FormLabel>}
             {b.render()}
           </div>
         ))}
@@ -1098,7 +1104,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         <SectionLabel style={{marginBottom:14}}>Education & Career</SectionLabel>
         {educationBlocks().filter(b => !(b.skip && b.skip())).map((b,i) => (
           <div key={i} className="form-group">
-            <FormLabel>{b.title}</FormLabel>
+            {!b.selfLabelled && <FormLabel>{b.title}</FormLabel>}
             {b.render()}
           </div>
         ))}
@@ -1115,7 +1121,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         <SectionLabel style={{marginBottom:14}}>Family Background</SectionLabel>
         {familyBlocks().filter(b => !(b.skip && b.skip())).map((b,i) => (
           <div key={i} className="form-group">
-            <FormLabel>{b.title}</FormLabel>
+            {!b.selfLabelled && <FormLabel>{b.title}</FormLabel>}
             {b.render()}
           </div>
         ))}
