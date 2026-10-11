@@ -3070,6 +3070,23 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
             // only ever returns their own interaction, untouched here).
             const bundleSiblings = l.bundle_token ? links.filter(x => x.bundle_token === l.bundle_token && x.id !== l.id) : []
             const isBundleExpanded = expandedBundles.has(l.bundle_token)
+            // Two-way interest, same pattern as handleSendInterest's
+            // "existing" lookup: when A's share link (showing B) got a
+            // 👍, admin sends a REVERSE link (showing A to B) via "Send
+            // interest" — a separate share_links row. If B also likes it,
+            // that's two rows, each with its own "→ Tell this profile"
+            // button, and forwarding either one creates/reuses the SAME
+            // introduction (20261011_workflow_audit_fixes.sql). The admin
+            // was still having to click it twice because each row only
+            // showed ITS OWN forwarded_at (Aryan, 2026-10-11: "dono par
+            // tell this profile dabana padta hai"). Now every row looks at
+            // its reverse sibling too, so clicking either one marks both
+            // as forwarded immediately — one click is enough.
+            const reverseLink = l.client_profile_id ? links.find(x => x.profile_id === l.client_profile_id
+              && x.client_profile_id === l.profile_id && !x.revoked && !x.bundle_token) : null
+            const mutualInterest = !!(l.interested_at && reverseLink?.interested_at)
+            const effectiveForwardedAt = l.forwarded_at || reverseLink?.forwarded_at
+            const effectiveIntroId = l.forwarded_introduction_id || reverseLink?.forwarded_introduction_id
             return (
               <div key={l.id} className="list-row" style={(interestPending || bureauReplyPending) ? { borderColor: '#16a34a', background: '#f0fdf4' } : {}}>
                 {/* Share ID — moved to the top corner, prominent, since
@@ -3232,17 +3249,34 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                   </div>
                 )}
                 {l.interested_at && (
-                  <div style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
+                  <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:8}}>
+                    {/* Was a faint 12px icon + timestamp — easy to miss
+                        entirely next to the bold black "Tell this profile"
+                        pill (Aryan, 2026-10-11: "like ka logo aur button
+                        gayab jesa feel hota hai, dikhta hi nahi"). Now a
+                        proper solid green badge, same visual weight as any
+                        other status pill on this page. */}
                     <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                      <div style={{fontSize:12,color:'#16a34a',fontWeight:600,display:'flex',alignItems:'center',gap:5}} title="Interested">
-                        <ThumbsUp size={12} /> {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
-                      </div>
+                      <span className="badge badge-active" title={`Liked ${new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}`}>
+                        <ThumbsUp size={12} style={{marginRight:5}} /> Liked · {new Date(l.interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
+                      </span>
                       {l.not_interested_at && (
                         <div style={{fontSize:11,color:'#8e8e8e',display:'flex',alignItems:'center',gap:3}} title="Client later tapped Not Interested">
                           <ThumbsDown size={11} /> {new Date(l.not_interested_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}
                         </div>
                       )}
                     </div>
+                    {/* Both sides of this pair have liked each other — the
+                        two halves (this link + its reverse "Send interest"
+                        link) are really one cycle, so say so plainly
+                        instead of leaving the admin to notice two separate
+                        green cards on their own (Aryan, 2026-10-11). */}
+                    {mutualInterest && !effectiveForwardedAt && (
+                      <div style={{fontSize:12,fontWeight:600,color:'#16a34a',background:'#ecfdf5',border:'1px solid #bbf7d0',
+                        borderRadius:8,padding:'6px 10px',display:'flex',alignItems:'center',gap:6}}>
+                        <ThumbsUp size={13} /> Both profiles liked each other — ready for a meeting
+                      </div>
+                    )}
                     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                       {client && (
                         l.interest_sent_at ? (
@@ -3259,17 +3293,18 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
                           </button>
                         )
                       )}
-                      {l.forwarded_at ? (
-                        l.forwarded_introduction_id && onManageCoordination ? (
+                      {effectiveForwardedAt ? (
+                        effectiveIntroId && onManageCoordination ? (
                           <button className="btn btn-outline btn-sm" style={{padding:'5px 10px',fontSize:12,color:'#16a34a',borderColor:'#16a34a'}}
-                            onClick={()=>onManageCoordination(l.forwarded_introduction_id)}>✓ Forwarded — Manage</button>
+                            onClick={()=>onManageCoordination(effectiveIntroId)}>✓ Connected — Manage meeting</button>
                         ) : (
                           <span style={{fontSize:12,color:'#16a34a',fontWeight:600}}>✓ Profile notified</span>
                         )
                       ) : (
                         <button className="btn btn-black btn-sm" style={{padding:'5px 10px',fontSize:12}}
-                          disabled={forwarding[l.id]} onClick={()=>handleForward(l.id)}>
-                          {forwarding[l.id] ? 'Forwarding...' : '→ Tell this profile'}
+                          disabled={forwarding[l.id]} onClick={()=>handleForward(l.id)}
+                          title={mutualInterest ? 'Both sides liked each other — this creates the one meeting request for the pair' : 'Let this profile know they were liked'}>
+                          {forwarding[l.id] ? 'Connecting...' : mutualInterest ? '→ Connect for a meeting' : '→ Tell this profile'}
                         </button>
                       )}
                     </div>
