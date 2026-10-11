@@ -3463,7 +3463,9 @@ function ScheduleMeetingPanel({ staffUser, onDone, onCancel, showToast }) {
       p_others: otherRows.map(o => o.id),
       p_scheduled_at: scheduledAt,
       p_location: location.trim() || null,
-      p_meeting_mode: mode,
+      // Only sent for virtual, so in-person keeps working on a DB that
+      // hasn't run 20261011_virtual_meetings.sql yet.
+      ...(mode === 'virtual' ? { p_meeting_mode: 'virtual' } : {}),
     })
     setSaving(false)
     if (error) {
