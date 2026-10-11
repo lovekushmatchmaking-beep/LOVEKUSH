@@ -228,11 +228,16 @@ function ViewTopBar({ onBack, onRefresh, loading, label = '← Back to list' }) 
   )
 }
 
-// Simple client-side search box for the smaller queue lists.
+// Simple client-side search box for the smaller queue lists. Gave it the
+// same magnifying-glass icon as the other search bars in the app, so every
+// search box in the admin panel looks consistent (Aryan, 2026-10-11).
 function ListSearch({ value, onChange, placeholder }) {
   return (
-    <input type="text" className="form-input" value={value} onChange={e => onChange(e.target.value)}
-      placeholder={placeholder} style={{ width: '100%', fontSize: 13, marginBottom: 14 }} />
+    <div style={{ position: 'relative', marginBottom: 14 }}>
+      <Search size={14} color="#8e8e8e" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+      <input type="text" className="form-input" value={value} onChange={e => onChange(e.target.value)}
+        placeholder={placeholder} style={{ width: '100%', fontSize: 13, paddingLeft: 34, boxSizing: 'border-box' }} />
+    </div>
   )
 }
 
