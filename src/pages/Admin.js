@@ -1278,7 +1278,7 @@ export default function Admin({ staffUser }) {
             <Search size={14} color="#8e8e8e" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             <input
               type="text"
-              placeholder="Search ID, name, phone, city, caste, job..."
+              placeholder="Search"
               title="Har word match hota hai — e.g. 'kushwaha delhi engineer'. Profile ID, name, phone, email, city, state, caste, gotra, profession, employer, college, family, bureau, about me — sab mein dhoondta hai."
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
@@ -2034,7 +2034,7 @@ function DuplicateLeadsView({ onBack, onOpenProfile }) {
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Duplicate Leads</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles sharing the same phone number or email — same person registered twice?</div>
-      {groups.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search name, Profile ID, phone, email, city..." />}
+      {groups.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search" />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Checking...</div>
@@ -2506,7 +2506,7 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
           <div style={{position:'relative',marginBottom:8}}>
             <Search size={14} color="#8e8e8e" style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}} />
             <input type="text" className="form-input" value={matchQuery} onChange={e=>setMatchQuery(e.target.value)}
-              placeholder="Search matches — ID, city, caste, gotra, education, job..."
+              placeholder="Search"
               style={{paddingLeft:34,fontSize:13}} />
           </div>
           <button className="btn btn-outline btn-sm" onClick={()=>setShowFilters(v=>!v)}>
@@ -2918,7 +2918,7 @@ function ShareLinksView({ staffUserId, onBack, onManageCoordination, onOpenProfi
         <div style={{position:'relative',marginBottom:18}}>
           <Search size={15} style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'#aaa'}} />
           <input type="text" value={shareSearch} onChange={e=>setShareSearch(e.target.value)}
-            placeholder="Search by Share ID, profile ID or name..."
+            placeholder="Search"
             style={{width:'100%',padding:'10px 12px 10px 36px',fontSize:13,borderRadius:10,border:'1px solid #ededed',background:'#fafafa'}} />
           {shareSearch && (
             <button className="btn btn-outline btn-sm" style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',padding:'3px 6px'}}
@@ -3192,7 +3192,7 @@ function CasteSuggestionsView({ onBack, staffUser }) {
       <ToastView />
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:20}}>Caste Suggestions</h2>
-      {suggestions.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by name, religion or type..." />}
+      {suggestions.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search" />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
@@ -3701,7 +3701,7 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
           onCancel={()=>setShowScheduler(false)}
           onDone={()=>{ setShowScheduler(false); setQuery(''); if (tab === 'open') load(); else setTab('open') }} />
       )}
-      {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search name, Profile ID, mobile, city, Request ID, status..." />}
+      {requests.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search" />}
 
       {/* Tab labels spelled out (audit 2026-10-08, P0 #9: "Open" and
           "Pending" read as contradictory statuses when both are just
@@ -4195,7 +4195,7 @@ function VerificationQueueView({ staffUser, onBack }) {
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Verification Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Self-signup profiles go live only after their selfie is matched with their photo and verified</div>
-      {profiles.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search name, Profile ID, phone, city..." />}
+      {profiles.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search" />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
@@ -4331,7 +4331,7 @@ function ReportsQueueView({ staffUser, onBack }) {
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>Reports Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Profiles reported by other members, awaiting review</div>
-      {reports.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search by name, Profile ID or reason..." />}
+      {reports.length > 0 && <ListSearch value={query} onChange={setQuery} placeholder="Search" />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
@@ -4581,7 +4581,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       <ViewTopBar onBack={onBack} onRefresh={load} loading={loading} />
       <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,marginBottom:4}}>My Queue</h2>
       <div style={{fontSize:12,color:'#8e8e8e',marginBottom:20}}>Coordination requests, today's follow-ups, your assigned profiles, and new submissions</div>
-      {!loading && <ListSearch value={query} onChange={setQuery} placeholder="Search across My Queue — name, Profile ID, phone, city, note..." />}
+      {!loading && <ListSearch value={query} onChange={setQuery} placeholder="Search" />}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'40px 0',color:'#8e8e8e',fontSize:13}}>Loading...</div>
