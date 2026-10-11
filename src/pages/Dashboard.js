@@ -1673,12 +1673,13 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     if (!profile.is_admin_managed && form.client_phone && !normalizePhone(form.client_phone)) {
       showToast('Please enter a valid phone number'); return
     }
-    if (form.date_of_birth) {
-      const ageCheck = validateAge(form.date_of_birth, form.gender)
-      if (!ageCheck.valid) {
-        showToast(ageCheck.message)
-        return
-      }
+    // ageCheck bahar declare hota hai — pehle yeh if-block ke andar tha aur
+    // neeche `age: ageCheck.age` par ReferenceError aata tha, jisse har
+    // Edit Profile save "Error: ageCheck is not defined" par fail hota tha.
+    const ageCheck = form.date_of_birth ? validateAge(form.date_of_birth, form.gender) : null
+    if (ageCheck && !ageCheck.valid) {
+      showToast(ageCheck.message)
+      return
     }
     setSaving(true)
     try {
@@ -1748,7 +1749,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           degree: finalDegree,
           father_profession: finalFatherProfession,
           mother_profession: finalMotherProfession,
-          age: ageCheck.age,
+          age: ageCheck ? ageCheck.age : null,
           partner_age_min: parseInt(form.partner_age_min) || null,
           partner_age_max: parseInt(form.partner_age_max) || null,
           partner_height_min: parseInt(form.partner_height_min) || null,

@@ -44,6 +44,23 @@ export function sameCasteOrCommunity(a, b) {
 // wale profiles nahi dikhte (traditional minimum).
 export const MIN_GUNA_WHEN_REQUIRED = 18
 
+// Saved `age` column signup ke din ka hota hai, birthday ke baad purana
+// ho jaata hai — DOB available ho (staff ke paas full profile) to wahi se
+// aaj ki age nikaalte hain.
+export function ageOf(p) {
+  if (p && p.date_of_birth) {
+    const dob = new Date(p.date_of_birth)
+    if (!isNaN(dob)) {
+      const now = new Date()
+      let a = now.getFullYear() - dob.getFullYear()
+      const m = now.getMonth() - dob.getMonth()
+      if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) a--
+      return a
+    }
+  }
+  return p && p.age != null ? Number(p.age) : null
+}
+
 // ===================== HARD REQUIREMENTS =====================
 // "me" = jo dekh raha hai, "other" = jo dikh raha hai. Dono taraf ki
 // preferences check hoti hain — sirf ek taraf se nahi.
@@ -51,11 +68,14 @@ export function passesHardFilters(me, other) {
   // Gender — opposite hona zaroori hai
   if (me.gender === other.gender) return false
 
-  // Age preference — dono taraf se
-  if (me.partner_age_min && other.age < Number(me.partner_age_min)) return false
-  if (me.partner_age_max && other.age > Number(me.partner_age_max)) return false
-  if (other.partner_age_min && me.age < Number(other.partner_age_min)) return false
-  if (other.partner_age_max && me.age > Number(other.partner_age_max)) return false
+  // Age preference — dono taraf se. Age pata na ho (DOB missing) to
+  // exclude nahi karte — pehle `null < 18` true hota tha (null = 0), to
+  // bina age wali profile kisi bhi match list mein kabhi nahi aati thi.
+  const meAge = ageOf(me), otherAge = ageOf(other)
+  if (otherAge != null && me.partner_age_min && otherAge < Number(me.partner_age_min)) return false
+  if (otherAge != null && me.partner_age_max && otherAge > Number(me.partner_age_max)) return false
+  if (meAge != null && other.partner_age_min && meAge < Number(other.partner_age_min)) return false
+  if (meAge != null && other.partner_age_max && meAge > Number(other.partner_age_max)) return false
 
   // Height preference — dono taraf se, jaisa Age preference upar hai.
   // Height string se parse hoti hai (missing/unparseable height wale
@@ -278,12 +298,13 @@ export function computeMatchScore(me, other) {
   // filter nahi hai) par ranking mein zyada neeche jaata hai, taaki
   // (e.g.) 30-saal ke ladke ko 32-saal ki ladki 28-saal wali se upar
   // rank na ho.
-  if (me.age && other.age) {
+  const meAge = ageOf(me), otherAge = ageOf(other)
+  if (meAge && otherAge) {
     possible += WEIGHTS.age
-    const gap = Math.abs(me.age - other.age)
+    const gap = Math.abs(meAge - otherAge)
     const male = me.gender === 'Male' ? me : other
     const female = me.gender === 'Male' ? other : me
-    const brideOlderBy = (male.gender === 'Male' && female.gender === 'Female') ? female.age - male.age : null
+    const brideOlderBy = (male.gender === 'Male' && female.gender === 'Female') ? ageOf(female) - ageOf(male) : null
     let ageScore
     if (brideOlderBy != null && brideOlderBy > 0) {
       ageScore = Math.max(0, WEIGHTS.age - 2 - brideOlderBy * 2.5)
