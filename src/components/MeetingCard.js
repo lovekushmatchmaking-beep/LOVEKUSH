@@ -1,5 +1,6 @@
 import React from 'react'
 import { CalendarClock, MapPin } from 'lucide-react'
+import { TrinityLogo } from './BrandLogo'
 
 const BRAND_GRADIENT = 'linear-gradient(135deg, #6A1B9A 0%, #D81B60 42%, #E1306C 58%, #F56040 82%, #F6C177 100%)'
 
@@ -9,20 +10,28 @@ const BRAND_GRADIENT = 'linear-gradient(135deg, #6A1B9A 0%, #D81B60 42%, #E1306C
 // be shareable anywhere, not locked to one specific WhatsApp chat
 // (2026-10-11). Hardcoded hex colors, not CSS variables — html2canvas
 // doesn't reliably resolve custom properties from a stylesheet.
+// `otherCode`/`rmName`/`rmPhone`/`rmEmail`: Aryan's follow-up (2026-10-11)
+// — the card looked "achha" but wanted the actual LOVEKUSH logo (not just
+// the wordmark text), the meeting-with profile's ID, and the same RM
+// contact box the share-link pages already show (ShareProfileCard.js) so
+// recipients know who to reach even once this image leaves the app.
 const MeetingCard = React.forwardRef(function MeetingCard(
-  { name, otherName, otherAge, otherCity, date, time, location, requestId }, ref
+  { name, otherName, otherAge, otherCity, otherCode, date, time, location, requestId, rmName, rmPhone, rmEmail }, ref
 ) {
   return (
     <div ref={ref} style={{ width: 360, fontFamily: "'Inter', system-ui, sans-serif", background: '#fff', borderRadius: 20, overflow: 'hidden', border: '1px solid #ededed' }}>
-      <div style={{ background: BRAND_GRADIENT, padding: '22px 24px', color: '#fff' }}>
-        <div style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', opacity: 0.9 }}>LOVEKUSH Matchmaking</div>
-        <div style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 22, fontWeight: 600, marginTop: 6 }}>Meeting Confirmed</div>
+      <div style={{ background: BRAND_GRADIENT, padding: '22px 24px', color: '#fff', position: 'relative' }}>
+        <div style={{ position: 'absolute', top: 16, right: 16, width: 38, height: 38, borderRadius: 11, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <TrinityLogo size={24} />
+        </div>
+        <div style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', opacity: 0.9, maxWidth: 260 }}>LOVEKUSH Matchmaking</div>
+        <div style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 22, fontWeight: 600, marginTop: 6, maxWidth: 260 }}>Meeting Confirmed</div>
       </div>
       <div style={{ padding: '22px 24px' }}>
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8e8e8e', marginBottom: 4 }}>For</div>
         <div style={{ fontSize: 17, fontWeight: 600, color: '#1F1720', marginBottom: 16 }}>{name}</div>
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8e8e8e', marginBottom: 4 }}>Meeting with</div>
-        <div style={{ fontSize: 17, fontWeight: 600, color: '#1F1720', marginBottom: 18 }}>
+        <div style={{ fontSize: 17, fontWeight: 600, color: '#1F1720', marginBottom: otherCode ? 2 : 18 }}>
           {otherName}
           {(otherAge || otherCity) && (
             <span style={{ fontWeight: 400, fontSize: 14, color: '#8e8e8e' }}>
@@ -30,6 +39,9 @@ const MeetingCard = React.forwardRef(function MeetingCard(
             </span>
           )}
         </div>
+        {otherCode && (
+          <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#8e8e8e', marginBottom: 18 }}>Profile ID: {otherCode}</div>
+        )}
         <div style={{ height: 1, background: '#ededed', margin: '4px 0 16px' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: location ? 12 : 0 }}>
           <div style={{ width: 32, height: 32, borderRadius: 10, background: '#FDEEF3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -46,6 +58,14 @@ const MeetingCard = React.forwardRef(function MeetingCard(
               <MapPin size={16} color="#D81B60" />
             </div>
             <div style={{ fontSize: 15, fontWeight: 600, color: '#1F1720' }}>{location}</div>
+          </div>
+        )}
+        {(rmName || rmPhone || rmEmail) && (
+          <div style={{ marginTop: 20, padding: '14px 16px', background: '#FBF6FB', border: '1px solid #F0E3F4', borderRadius: 14, textAlign: 'center' }}>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8e8e8e', marginBottom: 4 }}>Your Relationship Manager</div>
+            {rmName && <div style={{ fontSize: 14, fontWeight: 600, color: '#1F1720' }}>{rmName}</div>}
+            {rmPhone && <div style={{ fontSize: 13, color: '#555' }}>{rmPhone}</div>}
+            {rmEmail && <div style={{ fontSize: 12, color: '#8e8e8e' }}>{rmEmail}</div>}
           </div>
         )}
       </div>
