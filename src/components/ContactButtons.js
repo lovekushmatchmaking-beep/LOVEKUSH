@@ -54,7 +54,7 @@ export const contactLogPrefix = (kind) => (kind === 'call' ? '📞 Called: ' : k
 // button itself ("whatsapp wale button me hi dropdown me add kardo",
 // 2026-10-11). With menuExtra, tapping WhatsApp opens a small menu ("Chat
 // on WhatsApp" + the extra actions) instead of opening the chat directly.
-export function ContactButtons({ phone, onAction, logProfile, introductionId, size = 'sm', externalBureauName, menuExtra }) {
+export function ContactButtons({ phone, onAction, logProfile, introductionId, size = 'sm', externalBureauName, menuExtra, showNumber = false }) {
   const [logKind, setLogKind] = useState(null)
   const [waMenuOpen, setWaMenuOpen] = useState(false)
   const waRef = useRef(null)
@@ -82,10 +82,10 @@ export function ContactButtons({ phone, onAction, logProfile, introductionId, si
     else if (logProfile?.id) setLogKind(kind)
   }
   return (
-    <span style={{ display: 'inline-flex', gap: 6 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <a href={tel} onClick={stop('call')} className="btn btn-outline btn-sm" title={'Call ' + phone}
         style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-        <Phone size={14} />
+        <Phone size={14} />{showNumber && <span style={{ fontFamily: 'monospace' }}>{phone}</span>}
       </a>
       {menuExtra && menuExtra.length > 0 ? (
         <span ref={waRef} style={{ position: 'relative', display: 'inline-block' }}>
