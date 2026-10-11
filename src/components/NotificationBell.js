@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Bell, CheckCheck, CircleCheck, Ban, Camera, Handshake, CalendarClock, Flag,
   Tag, ThumbsUp, ThumbsDown, Heart, HeartHandshake, PenLine, Telescope, Gem, IdCard, Building2,
@@ -49,7 +50,9 @@ const TYPE_ICON = {
 export default function NotificationBell({ userId, onNavigate, align = 'right' }) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
+  const [pos, setPos] = useState(null)
   const boxRef = useRef(null)
+  const dropdownRef = useRef(null)
 
   const load = useCallback(async () => {
     if (!userId) return
@@ -66,10 +69,40 @@ export default function NotificationBell({ userId, onNavigate, align = 'right' }
 
   useEffect(() => {
     if (!open) return
-    const onDocClick = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false) }
+    const onDocClick = (e) => {
+      if (boxRef.current && boxRef.current.contains(e.target)) return
+      if (dropdownRef.current && dropdownRef.current.contains(e.target)) return
+      setOpen(false)
+    }
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [open])
+
+  // Dropdown is portaled to <body> and positioned with fixed coords computed
+  // from the bell button, instead of being an absolutely-positioned child of
+  // the button. That child approach broke on the admin desktop sidebar: the
+  // sidebar scrolls (overflow-y: auto), which per the CSS spec also clips
+  // overflow-x, so the 320px-wide dropdown got cut off inside the 220px
+  // sidebar and its text appeared to vanish. Fixed-position + portal avoids
+  // any ancestor's overflow/clipping entirely.
+  const DROPDOWN_WIDTH = 320
+  useLayoutEffect(() => {
+    if (!open || !boxRef.current) { setPos(null); return }
+    const recalc = () => {
+      const r = boxRef.current.getBoundingClientRect()
+      const margin = 8
+      let left = align === 'left' ? r.left : r.right - DROPDOWN_WIDTH
+      left = Math.min(Math.max(left, margin), window.innerWidth - DROPDOWN_WIDTH - margin)
+      setPos({ top: r.bottom + 8, left })
+    }
+    recalc()
+    window.addEventListener('resize', recalc)
+    window.addEventListener('scroll', recalc, true)
+    return () => {
+      window.removeEventListener('resize', recalc)
+      window.removeEventListener('scroll', recalc, true)
+    }
+  }, [open, align])
 
   const unreadCount = items.filter(n => !n.is_read).length
 
@@ -96,10 +129,10 @@ export default function NotificationBell({ userId, onNavigate, align = 'right' }
         <Bell size={22} />
         {unreadCount > 0 && <span className="nav-dot" style={{ top: 8, right: 9 }} />}
       </button>
-      {open && (
-        <div className="card" style={{
-          position: 'absolute', top: '120%', [align]: 0, width: 320, maxWidth: '90vw',
-          maxHeight: 420, overflowY: 'auto', padding: 0, zIndex: 80,
+      {open && pos && createPortal(
+        <div ref={dropdownRef} className="card" style={{
+          position: 'fixed', top: pos.top, left: pos.left, width: DROPDOWN_WIDTH, maxWidth: '90vw',
+          maxHeight: 420, overflowY: 'auto', padding: 0, zIndex: 1000,
           boxShadow: '0 8px 30px rgba(0,0,0,0.18)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '1px solid #ededed', position: 'sticky', top: 0, background: 'var(--white, #fff)' }}>
@@ -132,7 +165,8 @@ export default function NotificationBell({ userId, onNavigate, align = 'right' }
             </button>
             )
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -1120,10 +1120,12 @@ export default function Admin({ staffUser }) {
       <ToastView />
       {/* ===== DESKTOP SIDEBAR ===== */}
       <aside className="admin-sidebar">
-        <div className="admin-sidebar-brand">
+        <div className="admin-sidebar-brand" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
           <BrandLockup size={26} />
-          {/* Bell sits next to the brand (was a lone icon under Account). */}
-          <NotificationBell userId={staffUser.user_id} onNavigate={handleNotifNavigate} align="left" />
+          {/* Bell moved to its own row so it doesn't crowd the logo. */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <NotificationBell userId={staffUser.user_id} onNavigate={handleNotifNavigate} align="left" />
+          </div>
         </div>
         {sidebarItems.map((it, i) => (
           'section' in it ? (
@@ -1744,11 +1746,11 @@ export default function Admin({ staffUser }) {
       <div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500, marginBottom: 20 }}>Tools</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
-          <AdminNavCard icon={ClipboardList} label="Caste Suggestions" subtitle="New castes/gotras members typed in" onClick={()=>setView('casteSuggestions')} />
-          <AdminNavCard icon={Handshake} label="Coordination" subtitle="Talk/meeting requests between members" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
-          <AdminNavCard icon={Link2} label="Share Links" subtitle="Profile/match links sent to clients" badge={(stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0) + (stats.pendingBureauReply || 0)} onClick={()=>setView('shareLinks')} />
-          <AdminNavCard icon={ListChecks} label="Shared Matches" subtitle="How many matches each client has been sent" onClick={()=>setView('sharedMatchLog')} />
-          <AdminNavCard icon={MessageCircle} label="Template Editor" subtitle="Saved messages — WhatsApp, SMS, email or anywhere" onClick={()=>setView('whatsappTemplates')} />
+          <AdminNavCard icon={ClipboardList} label="Caste Suggestions" onClick={()=>setView('casteSuggestions')} />
+          <AdminNavCard icon={Handshake} label="Coordination" badge={stats.pendingCoordination} onClick={()=>setView('coordinationRequests')} />
+          <AdminNavCard icon={Link2} label="Share Links" badge={(stats.pendingShareInterest || 0) + (stats.pendingShareNotInterested || 0) + (stats.pendingBureauReply || 0)} onClick={()=>setView('shareLinks')} />
+          <AdminNavCard icon={ListChecks} label="Shared Matches" onClick={()=>setView('sharedMatchLog')} />
+          <AdminNavCard icon={MessageCircle} label="Template Editor" onClick={()=>setView('whatsappTemplates')} />
         </div>
       </div>
       )}
