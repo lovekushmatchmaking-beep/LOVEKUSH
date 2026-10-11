@@ -3789,11 +3789,17 @@ function CoordinationRequestsView({ onBack, backLabel, focusId, onConsumeFocus, 
                               card: {
                                 name: x.full_name,
                                 otherName: other?.full_name || 'the other member',
-                                otherAge: other?.age, otherCity: other?.city,
+                                otherAge: other?.age, otherCity: other?.city, otherCode: other?.profile_code,
                                 date: new Date(r.scheduled_at).toLocaleDateString('en-IN', { dateStyle: 'medium' }),
                                 time: new Date(r.scheduled_at).toLocaleTimeString('en-IN', { timeStyle: 'short' }),
                                 location: r.location || '',
                                 requestId: r.request_id,
+                                // Same editable RM contact the share-link pages show
+                                // (ShareProfileCard.js's RM box, staff_users.rm_*) —
+                                // Aryan asked for the meeting card to carry it too,
+                                // with WhatsApp opening a pre-filled message instead
+                                // of a blank chat (2026-10-11).
+                                rmName: staffUser?.rm_name, rmPhone: staffUser?.rm_phone, rmEmail: staffUser?.rm_email,
                               } }),
                           }] : undefined} />
                       </div>

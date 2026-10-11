@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { MessageCircle, Share2, ChevronDown, ChevronUp } from 'lucide-react'
+import { MessageCircle, Share2, ChevronDown, ChevronUp, Phone } from 'lucide-react'
 import { EVENT_LABELS, DEFAULT_MESSAGES, fillTemplate, fetchTemplates, logNotification, waLinkFor } from '../utils/notifications'
+import { buildTelLink, buildWaMeLink } from '../utils/shareProfile'
 import MeetingCard from './MeetingCard'
 import { generateMeetingCardImage } from '../utils/generateMeetingCardImage'
+
+const WA_GREEN = '#16a34a'
 
 // One-tap WhatsApp reminder for a trigger event — selfie requested, profile
 // approved, match shared, meeting scheduled. Opens a small template picker
@@ -144,6 +147,25 @@ export function ReminderSheet({ profile, eventType, vars, appendText, staffUserI
             <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>
               <MeetingCard ref={cardRef} {...card} />
             </div>
+            {/* Actionable RM contact — same Call/WhatsApp pattern as the
+                share-link RM box (ShareProfileCard.js), but WhatsApp opens
+                with a pre-filled message naming the profile ID instead of a
+                blank chat (Aryan, 2026-10-11: "what's app dabane par kuch
+                khaas comment open ho sake"). Lives outside the captured card
+                node — buttons can't be "actionable" inside a shared PNG. */}
+            {card.rmPhone && (
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <a className="btn btn-outline btn-sm" href={buildTelLink(card.rmPhone)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <Phone size={13} /> Call {card.rmName || 'RM'}
+                </a>
+                <a className="btn btn-outline btn-sm" target="_blank" rel="noreferrer"
+                  href={buildWaMeLink(card.rmPhone, `Hi, I'd like to know more about profile ID ${card.otherCode || card.requestId || ''}.`)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: WA_GREEN, borderColor: WA_GREEN }}>
+                  <MessageCircle size={13} /> Ask on WhatsApp
+                </a>
+              </div>
+            )}
             {cardError && <div style={{ fontSize: 12, color: '#dc2626' }}>{cardError}</div>}
             <button className="btn btn-black btn-sm" onClick={shareCard} disabled={cardBusy}>
               <Share2 size={14} /> {cardBusy ? 'Preparing…' : 'Share meeting card'}
