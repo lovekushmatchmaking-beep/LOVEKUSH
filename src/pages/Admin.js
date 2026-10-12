@@ -1168,7 +1168,21 @@ export default function Admin({ staffUser }) {
     const phone = p.client_phone || p.external_bureau_contact
     if (!phone) { showToast('No number saved yet for this profile'); return }
     const label = `${p.full_name || 'Client'} (${p.profile_code})${!p.client_phone && p.external_bureau_name ? ' via ' + p.external_bureau_name : ''}`
-    const vcf = ['BEGIN:VCARD', 'VERSION:3.0', `FN:${label}`, `TEL;TYPE=CELL:${phone}`, `NOTE:LOVEKUSH ${p.profile_code}`, 'END:VCARD'].join('\r\n')
+    // N is mandatory in vCard 3.0 — without it many Android contact apps
+    // import only the number with no name (Aryan, 2026-10-12: "sirf number
+    // save ho raha hai"). Whole label goes in the given-name slot so the
+    // contact shows exactly "Name (LK123)" everywhere, including WhatsApp.
+    const esc = (v) => String(v).replace(/([\\;,])/g, '\\$1').replace(/\n/g, ' ')
+    const email = p.client_phone ? p.client_email : null
+    const vcf = [
+      'BEGIN:VCARD', 'VERSION:3.0',
+      `N:;${esc(label)};;;`, `FN:${esc(label)}`,
+      `TEL;TYPE=CELL:${phone}`,
+      ...(email ? [`EMAIL;TYPE=INTERNET:${esc(email)}`] : []),
+      'ORG:LOVEKUSH Client',
+      `NOTE:${esc(`LOVEKUSH ${p.profile_code}`)}`,
+      'END:VCARD',
+    ].join('\r\n')
     const blob = new Blob([vcf], { type: 'text/vcard' })
     const url = URL.createObjectURL(blob)
     // iOS Safari ignores the `download` attribute on a blob URL and silently
