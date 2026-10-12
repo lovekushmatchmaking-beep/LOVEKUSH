@@ -1739,11 +1739,23 @@ export default function Admin({ staffUser }) {
                   return (
                     <div className="admin-card-actions" onClick={e => e.stopPropagation()}
                       onTouchStart={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
+                      {/* Simplified to 3 labelled stats (Aryan, 2026-10-12 — the
+                          4th "shares" count overlapped with Sent and the bare
+                          icons were confusing with no label). "Viewed" is how
+                          much interest this profile itself got; Sent/Received
+                          track matchmaking activity — how many matches went
+                          out from this profile vs. came in for this client. */}
                       <div className="admin-card-stats">
-                        <span title={c ? `Shared ${c.shares} time${c.shares !== 1 ? 's' : ''} (links + bureau shares)` : 'Loading…'}><Share2 size={13} />{c ? c.shares : '–'}</span>
-                        <span title={c ? `${c.memberViews} member visit${c.memberViews !== 1 ? 's' : ''} · ${c.linkViews} share-link open${c.linkViews !== 1 ? 's' : ''}` : 'Loading…'}><Eye size={13} />{views ?? '–'}</span>
-                        <span title={c ? `This profile was sent to ${c.sent} client${c.sent !== 1 ? 's' : ''} as a match` : 'Loading…'}><ArrowUp size={13} />{c ? c.sent : '–'}</span>
-                        <span title={c ? `${c.received} match${c.received !== 1 ? 'es' : ''} sent to this client` : 'Loading…'}><ArrowDown size={13} />{c ? c.received : '–'}</span>
+                        <span className="admin-stat" title={c ? `${c.memberViews} member visit${c.memberViews !== 1 ? 's' : ''} · ${c.linkViews} share-link open${c.linkViews !== 1 ? 's' : ''}` : 'Loading…'}>
+                          <Eye size={13} /> Viewed {c ? views : '–'}
+                        </span>
+                        <span className="admin-stat-divider" />
+                        <span className="admin-stat admin-stat-up" title={c ? `This profile was sent to ${c.sent} client${c.sent !== 1 ? 's' : ''} as a match` : 'Loading…'}>
+                          <ArrowUp size={13} /> Sent {c ? c.sent : '–'}
+                        </span>
+                        <span className="admin-stat admin-stat-down" title={c ? `${c.received} match${c.received !== 1 ? 'es' : ''} sent to this client` : 'Loading…'}>
+                          <ArrowDown size={13} /> Received {c ? c.received : '–'}
+                        </span>
                       </div>
                       <div className="admin-card-buttons">
                       <button type="button" className="btn btn-outline btn-sm admin-card-btn" title="View full profile"
@@ -1760,10 +1772,10 @@ export default function Admin({ staffUser }) {
                         { label: 'Copy link', icon: Copy, onClick: () => copyProfileLink(p) },
                         { label: 'Send details (no link)', icon: Send, onClick: () => whatsappProfileText(p) },
                         { label: 'Share with bureau', icon: Building2, onClick: () => setBureauShareFor(p) },
-                        { label: 'Shared matches log', icon: ListChecks, onClick: () => { setSharedLogCode(p.profile_code); setView('sharedMatchLog') } },
                       ]} />
                       <OverflowMenu items={[
                         // Frequent first; rarely-used (once per profile) at the bottom
+                        { label: 'Shared matches log', icon: ListChecks, onClick: () => { setSharedLogCode(p.profile_code); setView('sharedMatchLog') } },
                         { label: 'Edit profile', icon: Pencil, onClick: () => { setEditingProfile(p); setView('editProfile') } },
                         { label: 'Photos', icon: Camera, onClick: () => { setPhotosProfile(p); setView('editPhotos') } },
                         { label: 'Notify on WhatsApp', icon: MessageCircle, onClick: () => setNotifyFor({ profile: p, eventType: 'profile_approved' }), hidden: p.verification_status !== 'verified' },

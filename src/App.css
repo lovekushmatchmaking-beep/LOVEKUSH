@@ -1058,8 +1058,11 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px 6px; margin-top: 10px; padding-top: 8px;
   border-top: 1px solid rgba(0,0,0,0.05); cursor: default;
 }
-.admin-card-stats { display: flex; align-items: center; gap: 12px; margin-right: auto; font-size: 12px; color: #8e8e8e; }
-.admin-card-stats span { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.admin-card-stats { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-right: auto; font-size: 12px; color: #8e8e8e; }
+.admin-stat { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.admin-stat-divider { width: 1px; height: 12px; background: var(--border); }
+.admin-stat-up { color: #2563eb; }
+.admin-stat-down { color: #16a34a; }
 .admin-card-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .admin-card-spacer { flex: 1 1 0; min-width: 0; }
 .admin-card-btn, .admin-card-actions .btn { padding: 5px 10px; font-size: 12px; border-radius: 999px; }
