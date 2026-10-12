@@ -56,6 +56,7 @@ import { calculateSectionCompleteness } from '../utils/completeness'
 import SignupComplete from './SignupComplete'
 import BiodataAutofill from '../components/BiodataAutofill'
 import { APPLY_ORDER } from '../utils/biodataParser'
+import { provisionClientLogin } from '../utils/clientLogin'
 import { BrandLockup } from '../components/BrandLogo'
 import { TermsGate } from '../components/TermsAndConditions'
 
@@ -954,18 +955,32 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
         }
       }
 
+      // Admin ne client ki email daali hai to user-site login bhi abhi bana
+      // dete hain — pehle sirf profile row banti thi, auth account nahi, to
+      // client na login kar pata tha na Forgot Password kaam karta tha.
+      // Fail hone par profile save rehti hai; ⋮ → "Create login" se dobara.
+      let loginNote = ''
+      if (adminMode && form.client_email?.trim()) {
+        try {
+          const res = await provisionClientLogin(profile.id)
+          loginNote = ` · Login created for ${res.email} (⋮ → Send login link)`
+        } catch (e) {
+          loginNote = ` · Login not created: ${e.message}`
+        }
+      }
+
       const finish = () => {
         if (adminMode && onComplete) onComplete(profile)
         else navigate('/dashboard')
       }
 
       if (photoErrors.length > 0) {
-        showToast('Profile created, but ' + photoErrors.length + ' photo(s) failed: ' + photoErrors.join(' | '))
+        showToast('Profile created' + loginNote + ', but ' + photoErrors.length + ' photo(s) failed: ' + photoErrors.join(' | '))
         if (adminMode) setTimeout(finish, 3500)
         else { setCreatedProfile(profile); setCelebrating(true) }
       } else {
-        showToast('Profile created! Code: ' + code)
-        if (adminMode) setTimeout(finish, 1500)
+        showToast('Profile created! Code: ' + code + loginNote)
+        if (adminMode) setTimeout(finish, loginNote ? 3500 : 1500)
         else { setCreatedProfile(profile); setCelebrating(true) }
       }
     } catch(err) {

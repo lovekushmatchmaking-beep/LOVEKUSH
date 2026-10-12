@@ -10,7 +10,7 @@ import {
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
   ThumbsUp, ThumbsDown, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2, Video,
-  Share2, UserPlus, Send, ArrowUp, ArrowDown, NotebookPen, Heart, HeartHandshake,
+  Share2, UserPlus, Send, ArrowUp, ArrowDown, NotebookPen, Heart, HeartHandshake, KeyRound,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -34,7 +34,8 @@ import { DonutChart, StackedColumns, FunnelChart, HBarChart, topSlices, GENDER_C
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { fieldSuggestionLabel, loadApprovedFieldOptions } from '../utils/fieldSuggestions'
 import { shareRegion } from '../utils/shareRegion'
-import { buildMailtoLink, buildWaChooserLink, buildMaskedShareText, normalizePhone } from '../utils/shareProfile'
+import { buildMailtoLink, buildWaChooserLink, buildWaMeLink, buildMaskedShareText, normalizePhone } from '../utils/shareProfile'
+import { provisionClientLogin, loginLinkMessage } from '../utils/clientLogin'
 import { MEETING_MODES, isVirtualMeeting, locationPlaceholder, meetingLinkHref, looksLikeContactDetail } from '../utils/meetingMode'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, generateBureauShareLink, acknowledgeBureauReply, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, acknowledgeShareLinkNotInterested, forwardShareLinkInterest, markInterestSent } from '../utils/shareLinks'
@@ -1201,6 +1202,32 @@ export default function Admin({ staffUser }) {
     setTimeout(() => URL.revokeObjectURL(url), 30000)
   }
 
+  // Admin ki banayi profile ka user-site login (Aryan, 2026-10-12: client
+  // us email se na login kar pata tha na Forgot Password chalta tha, kyunki
+  // auth account bana hi nahi tha). Account bana/jod ke "set password" link
+  // client ke WhatsApp par bhejte hain.
+  const sendClientLoginLink = async (p) => {
+    if (!p.user_id && !p.client_email) { showToast('Add the client\'s email first (Edit profile), then try again'); return }
+    // Tab pehle hi khol lete hain (await se pehle) taaki mobile popup block na kare.
+    const win = window.open('', '_blank')
+    try {
+      const res = await provisionClientLogin(p.id)
+      if (!p.user_id) {
+        const { data: row } = await supabase.from('profiles').select('user_id').eq('id', p.id).maybeSingle()
+        if (row?.user_id) setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, user_id: row.user_id } : x))
+      }
+      if (!res.link) { if (win) win.close(); showToast(`Login created for ${res.email}. Client can use "Forgot password" to set a password.`); return }
+      const msg = loginLinkMessage(p.full_name, res.email, res.link)
+      const waUrl = buildWaMeLink(p.client_phone, msg) || buildWaChooserLink(msg)
+      if (win) win.location.href = waUrl; else window.location.href = waUrl
+      navigator.clipboard?.writeText(res.link).catch(() => {})
+      showToast(res.created ? `Login created for ${res.email} — set-password link ready to send` : `Set-password link ready for ${res.email}`)
+    } catch (e) {
+      if (win) win.close()
+      showToast(e.message || 'Could not create login')
+    }
+  }
+
   // Share a client's profile with an EXTERNAL bureau, with a manual note,
   // so they can search their own database for a match (Aryan, 2026-10-11).
   // Opens BureauShareSheet below; same generateShareLink pipeline, just
@@ -1895,6 +1922,7 @@ export default function Admin({ staffUser }) {
                         { label: 'Reject verification', icon: X, color: '#dc2626', onClick: () => setVerificationStatus(p.id, 'rejected'),
                           hidden: !(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) },
                         { label: 'Save contact', icon: UserPlus, onClick: () => saveProfileContact(p) },
+                        { label: p.user_id ? 'Send login link' : 'Create login & send link', icon: KeyRound, onClick: () => sendClientLoginLink(p), hidden: !p.is_admin_managed && !!p.user_id },
                         { label: p.external_bureau_name ? `Bureau: ${p.external_bureau_name}` : 'Mark as external bureau', icon: Building2, onClick: () => markExternalBureau(p) },
                         { label: p.external_bureau_contact ? 'Bureau contact number' : 'Add bureau contact number', icon: Phone, onClick: () => editBureauContact(p), hidden: !p.external_bureau_name },
                         { label: 'Block', icon: ShieldX, color: '#dc2626', onClick: () => updateStatus(p.id, 'blocked'), hidden: p.profile_status === 'blocked' },
