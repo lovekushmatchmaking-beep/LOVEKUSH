@@ -10,7 +10,7 @@ import {
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
   ThumbsUp, ThumbsDown, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2, Video,
-  Share2, UserPlus, Send, ArrowUp, ArrowDown, NotebookPen, Heart, HeartHandshake,
+  Share2, UserPlus, Send, ArrowUp, ArrowDown, NotebookPen, Heart, HeartHandshake, KeyRound,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -34,7 +34,8 @@ import { DonutChart, StackedColumns, FunnelChart, HBarChart, topSlices, GENDER_C
 import { findDuplicateLeads } from '../utils/duplicateLeads'
 import { fieldSuggestionLabel, loadApprovedFieldOptions } from '../utils/fieldSuggestions'
 import { shareRegion } from '../utils/shareRegion'
-import { buildMailtoLink, buildWaChooserLink, buildMaskedShareText, normalizePhone } from '../utils/shareProfile'
+import { buildMailtoLink, buildWaChooserLink, buildWaMeLink, buildMaskedShareText, normalizePhone } from '../utils/shareProfile'
+import { provisionClientLogin, loginLinkMessage } from '../utils/clientLogin'
 import { MEETING_MODES, isVirtualMeeting, locationPlaceholder, meetingLinkHref, looksLikeContactDetail } from '../utils/meetingMode'
 import { ContactButtons, ProfileContact, AddNoteButton, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS, contactLogPrefix } from '../components/ContactButtons'
 import { generateShareLink, generateShareBundle, generateBureauShareLink, acknowledgeBureauReply, nativeShare, revokeShareLink, getMyShareLinks, acknowledgeShareLinkInterest, acknowledgeShareLinkNotInterested, forwardShareLinkInterest, markInterestSent } from '../utils/shareLinks'
@@ -1162,29 +1163,46 @@ export default function Admin({ staffUser }) {
     showToast(value ? 'Bureau number saved' : 'Bureau number removed')
   }
 
-  // Downloads a .vcf so the number can be saved straight into the phone's
-  // contacts (named with the profile ID, easy to find on WhatsApp later).
-  const saveProfileContact = (p) => {
-    const phone = p.client_phone || p.external_bureau_contact
-    if (!phone) { showToast('No number saved yet for this profile'); return }
-    const label = `${p.full_name || 'Client'} (${p.profile_code})${!p.client_phone && p.external_bureau_name ? ' via ' + p.external_bureau_name : ''}`
-    const vcf = ['BEGIN:VCARD', 'VERSION:3.0', `FN:${label}`, `TEL;TYPE=CELL:${phone}`, `NOTE:LOVEKUSH ${p.profile_code}`, 'END:VCARD'].join('\r\n')
-    const blob = new Blob([vcf], { type: 'text/vcard' })
-    const url = URL.createObjectURL(blob)
-    // iOS Safari ignores the `download` attribute on a blob URL and silently
-    // does nothing on a.click() — Aryan's "button se kuch nahi ho raha"
-    // (2026-10-11). Opening the blob URL instead makes iOS show its own
-    // "Add to Contacts" card; Android/desktop browsers still download the
-    // file since it's served with vcard content-type either way.
-    const opened = window.open(url, '_blank')
-    if (!opened) {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${p.profile_code || 'contact'}.vcf`
-      document.body.appendChild(a); a.click(); a.remove()
+  const editProfileContact = async (p) => {
+    const rawPhone = window.prompt(`Mobile number for ${p.full_name || p.profile_code} (leave empty to remove):`, p.client_phone || '')
+    if (rawPhone === null) return
+    const phone = rawPhone.trim() || null
+    if (phone && !normalizePhone(phone)) { showToast('Enter a valid number (10 digits, or with country code)'); return }
+    const rawEmail = window.prompt(`Email for ${p.full_name || p.profile_code} (leave empty to remove):`, p.client_email || '')
+    if (rawEmail === null) return
+    const email = rawEmail.trim().toLowerCase() || null
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Enter a valid email address'); return }
+    const { error } = await supabase.from('profiles').update({ client_phone: phone, client_email: email }).eq('id', p.id)
+    if (error) { showToast('Could not save: ' + error.message); return }
+    setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, client_phone: phone, client_email: email } : x))
+    if (selected?.id === p.id) setSelected(prev => ({ ...prev, client_phone: phone, client_email: email }))
+    showToast('Contact details saved')
+  }
+
+  // Admin ki banayi profile ka user-site login (Aryan, 2026-10-12: client
+  // us email se na login kar pata tha na Forgot Password chalta tha, kyunki
+  // auth account bana hi nahi tha). Account bana/jod ke "set password" link
+  // client ke WhatsApp par bhejte hain.
+  const sendClientLoginLink = async (p) => {
+    if (!p.user_id && !p.client_email) { showToast('Add the client\'s email first (Edit profile), then try again'); return }
+    // Tab pehle hi khol lete hain (await se pehle) taaki mobile popup block na kare.
+    const win = window.open('', '_blank')
+    try {
+      const res = await provisionClientLogin(p.id)
+      if (!p.user_id) {
+        const { data: row } = await supabase.from('profiles').select('user_id').eq('id', p.id).maybeSingle()
+        if (row?.user_id) setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, user_id: row.user_id } : x))
+      }
+      if (!res.link) { if (win) win.close(); showToast(`Login created for ${res.email}. Client can use "Forgot password" to set a password.`); return }
+      const msg = loginLinkMessage(p.full_name, res.email, res.link)
+      const waUrl = buildWaMeLink(p.client_phone, msg) || buildWaChooserLink(msg)
+      if (win) win.location.href = waUrl; else window.location.href = waUrl
+      navigator.clipboard?.writeText(res.link).catch(() => {})
+      showToast(res.created ? `Login created for ${res.email} — set-password link ready to send` : `Set-password link ready for ${res.email}`)
+    } catch (e) {
+      if (win) win.close()
+      showToast(e.message || 'Could not create login')
     }
-    showToast(`Contact file ready for ${p.profile_code || label} — check your downloads/share sheet`)
-    setTimeout(() => URL.revokeObjectURL(url), 30000)
   }
 
   // Share a client's profile with an EXTERNAL bureau, with a manual note,
@@ -1880,7 +1898,8 @@ export default function Admin({ staffUser }) {
                           hidden: p.verification_status === 'verified' || ['selfie_requested', 'selfie_submitted'].includes(p.verification_status) || p.is_admin_managed },
                         { label: 'Reject verification', icon: X, color: '#dc2626', onClick: () => setVerificationStatus(p.id, 'rejected'),
                           hidden: !(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) },
-                        { label: 'Save contact', icon: UserPlus, onClick: () => saveProfileContact(p) },
+                        { label: 'Edit contact', icon: Pencil, onClick: () => editProfileContact(p) },
+                        { label: p.user_id ? 'Send login link' : 'Create login & send link', icon: KeyRound, onClick: () => sendClientLoginLink(p), hidden: !p.is_admin_managed && !!p.user_id },
                         { label: p.external_bureau_name ? `Bureau: ${p.external_bureau_name}` : 'Mark as external bureau', icon: Building2, onClick: () => markExternalBureau(p) },
                         { label: p.external_bureau_contact ? 'Bureau contact number' : 'Add bureau contact number', icon: Phone, onClick: () => editBureauContact(p), hidden: !p.external_bureau_name },
                         { label: 'Block', icon: ShieldX, color: '#dc2626', onClick: () => updateStatus(p.id, 'blocked'), hidden: p.profile_status === 'blocked' },

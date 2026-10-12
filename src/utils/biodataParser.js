@@ -11,12 +11,28 @@ import {
   INCOME_RANGES, MARITAL_STATUSES, MANGLIK_OPTIONS, COMPLEXIONS, DIETS, BLOOD_GROUPS,
   PROFESSION_CATEGORIES, COUNTRIES, FAMILY_TYPES, EMPLOYMENT_TYPES, BODY_TYPES,
   CHILDREN_LIVING_WITH_OPTIONS, RELOCATION_PREFERENCES, RESIDENCY_STATUSES,
+  SIKH_COMMUNITIES, ISLAMIC_COMMUNITIES, CHRISTIAN_COMMUNITIES, RELIGION_HIERARCHY,
+  PARTNER_INCOME_STEPS, PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES,
+  PARTNER_MARITAL_STATUS_PREFERENCES, PARTNER_COMMUNITY_NO_BAR,
 } from '../constants/profileOptions'
 import { RASHIS, NAKSHATRAS } from './astrology'
 
 // label key -> regex (line ke shuru mein). Order matters: zyada specific
 // labels (Father's Occupation) generic (Occupation) se pehle.
 const LABELS = [
+  // Partner preferences pehle — "Partner Height" ko generic "Height" na pakad le.
+  ['partner_age', /((partner'?s?|preferred)\s*age(\s*range)?|age\s*(preference|range|expected)|जीवनसाथी\s*(की)?\s*(आयु|उम्र))/i],
+  ['partner_height', /((partner'?s?|preferred)\s*height|height\s*(preference|expected)|जीवनसाथी\s*(की)?\s*(लंबाई|कद))/i],
+  ['partner_income', /((partner'?s?|preferred|expected)\s*(annual\s*)?(income|salary|package)|income\s*(preference|expected))/i],
+  ['partner_religion', /((partner'?s?|preferred)\s*religion|religion\s*preference)/i],
+  ['partner_caste', /((partner'?s?|preferred)\s*(caste|community)|(caste|community)\s*preference)/i],
+  ['partner_education', /((partner'?s?|preferred)\s*(education|qualification)|education\s*preference)/i],
+  ['partner_occupation', /((partner'?s?|preferred)\s*(occupation|profession|job|employment|work)|(occupation|profession)\s*preference)/i],
+  ['partner_marital_status', /((partner'?s?|preferred)\s*marital\s*status|marital\s*status\s*preference)/i],
+  ['partner_complexion', /((partner'?s?|preferred)\s*(complexion|colou?r)|complexion\s*preference)/i],
+  ['partner_city', /((partner'?s?|preferred)\s*city|city\s*preference)/i],
+  ['partner_state', /((partner'?s?|preferred)\s*state|state\s*preference)/i],
+  ['partner_country', /((partner'?s?|preferred)\s*country|country\s*preference)/i],
   ['mother_tongue', /(mother\s*tongue|मातृभाषा)/i],
   ['father_profession', /(father'?s?\s*(occupation|profession|job|work|business)|पिता\s*(जी)?\s*(का|की)?\s*(व्यवसाय|पेशा|नौकरी|कार्य))/i],
   ['mother_profession', /(mother'?s?\s*(occupation|profession|job|work)|माता\s*(जी)?\s*(का|की)?\s*(व्यवसाय|पेशा|नौकरी|कार्य))/i],
@@ -88,6 +104,11 @@ const HUMAN_LABELS = {
   languages_spoken: 'Languages Known', employment_type: 'Employment Type', body_type: 'Body Type',
   have_children: 'Have Children', children_living_with: 'Children Living With', kundli_available: 'Kundli Available',
   caste_no_bar: 'Caste No Bar', relocation_preference: 'Relocation Preference', residency_status: 'Residency Status',
+  partner_age: 'Partner Age', partner_height: 'Partner Height', partner_income: 'Partner Income',
+  partner_religion: 'Partner Religion', partner_caste: 'Partner Community', partner_education: 'Partner Education',
+  partner_occupation: 'Partner Occupation', partner_marital_status: 'Partner Marital Status',
+  partner_complexion: 'Partner Complexion', partner_city: 'Partner City', partner_state: 'Partner State',
+  partner_country: 'Partner Country',
 }
 
 const DEVANAGARI_DIGITS = '०१२३४५६७८९'
@@ -185,8 +206,8 @@ const heightOptionInches = (opt) => {
   return m ? (+m[1]) * 12 + (+m[2]) : null
 }
 
-export function parseHeight(raw) {
-  const s = String(raw || '').toLowerCase()
+function heightToInches(raw) {
+  const s = String(raw || '').toLowerCase().trim()
   let inches = null
   let m = s.match(/(\d{3})\s*cm/)
   if (m) inches = Math.round(+m[1] / 2.54)
@@ -198,6 +219,11 @@ export function parseHeight(raw) {
     m = s.match(/^(\d)\.(\d{1,2})$/) // "5.4" = 5 ft 4 in (biodata convention)
     if (m) inches = (+m[1]) * 12 + (+m[2])
   }
+  return inches
+}
+
+export function parseHeight(raw) {
+  const inches = heightToInches(raw)
   if (inches == null) return null
   let best = null
   for (const opt of HEIGHT_RANGES) {
@@ -262,6 +288,21 @@ export function parseCommunity(raw) {
   const head = CASTES.find(c => c.split(/\s+[/-]\s+/).some(part => squash(part) === v))
   if (head) return { community: head }
   return { community: 'Other', community_other: String(raw).trim() }
+}
+
+// Sikh community list ke against. "Jat Sikh" jaisa value jiske kai
+// sub-group hain (Jat - Achara, Jat - Bhakar…) kisi ek par chupke se nahi
+// daalte — "Others / Not in list" + likha hua text, admin khud chunega.
+// "Punjabi" Sikh community nahi hai (bhasha/region hai), use chhod dete hain.
+export function parseSikhCommunity(raw) {
+  const text = String(raw || '').replace(/\b(sikh|sikkh)\b|सिख/gi, ' ').replace(/\s+/g, ' ').trim()
+  const v = squash(text)
+  if (!v || /^(punjabi|panjabi)$/.test(v)) return null
+  const exact = SIKH_COMMUNITIES.find(c => squash(c) === v)
+  if (exact) return { community: exact }
+  const parts = SIKH_COMMUNITIES.filter(c => c.split(/\s+[/-]\s+/).some(part => squash(part) === v))
+  if (parts.length === 1) return { community: parts[0] }
+  return { community: 'Others / Not in list', custom_caste_text: String(raw).trim() }
 }
 
 export function parseGotra(raw) {
@@ -565,6 +606,124 @@ export function parseLanguages(raw) {
   return matched.length ? matched : null
 }
 
+// ---- Partner preferences (biodata ki "Expectations" lines) ----
+const RANGE_SPLIT = /\s*(?:-|–|—|\bto\b|से)\s*/i
+const listParts = (raw) => String(raw || '').split(/[,/&]|\bor\b|\band\b|या|और/i).map(p => p.trim()).filter(Boolean)
+const isNoPref = (raw) => /^(any|anyone|no\s*(bar|preference|pref)|open|doesn'?t\s*matter|not\s*important|कोई\s*भी)\b/i.test(String(raw || '').trim())
+
+export function parsePartnerAge(raw) {
+  const s = String(raw || '').toLowerCase()
+  const nums = (s.match(/\d{2}/g) || []).map(Number).filter(n => n >= 18 && n <= 70)
+  if (!nums.length) return null
+  if (nums.length >= 2) return { partner_age_min: Math.min(nums[0], nums[1]), partner_age_max: Math.max(nums[0], nums[1]) }
+  if (/below|under|upto|up\s*to|max|less|तक/.test(s)) return { partner_age_max: nums[0] }
+  return { partner_age_min: nums[0], ...(/\+|above|plus|min|more/.test(s) ? {} : { partner_age_max: nums[0] }) }
+}
+
+export function parsePartnerHeight(raw) {
+  const clamp = (v) => Math.max(PARTNER_HEIGHT_MIN_INCHES, Math.min(PARTNER_HEIGHT_MAX_INCHES, v))
+  const s = String(raw || '')
+  const parts = s.split(RANGE_SPLIT).map(heightToInches).filter(v => v != null)
+  if (parts.length >= 2) {
+    const [a, b] = parts
+    return { partner_height_min: clamp(Math.min(a, b)), partner_height_max: clamp(Math.max(a, b)) }
+  }
+  const one = heightToInches(s.replace(/\+|above|plus|below|under|upto|up\s*to|max|min/gi, ' '))
+  if (one == null) return null
+  if (/below|under|upto|up\s*to|max/i.test(s)) return { partner_height_max: clamp(one) }
+  return { partner_height_min: clamp(one) }
+}
+
+// INR mein: "10 LPA+", "10-20 lakh", "1 crore". Values PARTNER_INCOME_STEPS
+// ke slider stops par snap hote hain (min neeche, max upar).
+export function parsePartnerIncome(raw) {
+  const s = String(raw || '').toLowerCase().replace(/,/g, '')
+  const crore = /cr|crore|करोड़/.test(s)
+  const nums = (s.match(/\d+(?:\.\d+)?/g) || []).map(Number).filter(n => n > 0)
+  if (!nums.length) return null
+  const toRs = (n) => n >= 1000 ? n : n * (crore ? 10000000 : 100000)
+  const steps = PARTNER_INCOME_STEPS.INR
+  const floor = (v) => [...steps].reverse().find(x => x <= v) ?? steps[0]
+  const ceil = (v) => steps.find(x => x >= v) ?? steps[steps.length - 1]
+  if (nums.length >= 2) {
+    const a = toRs(nums[0]), b = toRs(nums[1])
+    return { partner_income_min: floor(Math.min(a, b)), partner_income_max: ceil(Math.max(a, b)) }
+  }
+  if (/below|under|upto|up\s*to|max|less/.test(s)) return { partner_income_max: ceil(toRs(nums[0])) }
+  return { partner_income_min: floor(toRs(nums[0])) }
+}
+
+const parseReligionWord = (v) => {
+  const s = String(v || '').toLowerCase()
+  return /hindu|हिन्दू|हिंदू|sanatan/.test(s) ? 'Hindu' : /muslim|islam|मुस्लिम/.test(s) ? 'Muslim'
+    : /sikh|सिख/.test(s) ? 'Sikh' : /christian|ईसाई/.test(s) ? 'Christian' : /jain|जैन/.test(s) ? 'Jain'
+    : /buddh|बौद्ध/.test(s) ? 'Buddhist' : matchOption(v, RELIGIONS)
+}
+
+export function parsePartnerReligion(raw) {
+  if (isNoPref(raw)) return 'Any'
+  const found = [...new Set(listParts(raw).map(parseReligionWord).filter(Boolean))]
+  // Form mein ek hi religion chuni ja sakti hai — do-teen likhi hon to admin chunega
+  return found.length === 1 ? found[0] : null
+}
+
+const communityOptionsFor = (religion) => religion === 'Muslim' ? ISLAMIC_COMMUNITIES
+  : religion === 'Christian' ? CHRISTIAN_COMMUNITIES
+  : RELIGION_HIERARCHY[religion]?.community.options || CASTES
+
+export function parsePartnerCommunities(raw, religion) {
+  if (isNoPref(raw) || /caste\s*no\s*bar|no\s*caste/i.test(String(raw))) return [PARTNER_COMMUNITY_NO_BAR]
+  const opts = communityOptionsFor(religion).filter(c => !/^(other|others|don'?t)/i.test(c))
+  const found = [...new Set(listParts(raw).map(p => {
+    const v = squash(p.replace(/\b(sikh|hindu|muslim)\b/gi, ''))
+    return opts.find(c => squash(c) === v) || null
+  }).filter(Boolean))]
+  return found.length ? found : null
+}
+
+export function parsePartnerEducation(raw) {
+  const found = [...new Set(listParts(raw).map(p => parseEducation(p)?.education).filter(Boolean))]
+  return found.length ? found : null
+}
+
+export function parsePartnerOccupation(raw) {
+  const found = [...new Set(listParts(raw).map(p => {
+    const s = p.toLowerCase()
+    if (/govt|government|सरकारी/.test(s)) return 'Government'
+    if (/private|mnc|corporate|प्राइवेट/.test(s)) return 'Private Sector'
+    if (/business|self[\s-]*employ|entrepreneur|व्यवसाय/.test(s)) return 'Business / Self-Employed'
+    return null
+  }).filter(Boolean))]
+  return found.length ? found : null
+}
+
+export function parsePartnerMaritalStatus(raw) {
+  if (isNoPref(raw)) return 'No preference'
+  const s = String(raw || '').toLowerCase()
+  const hits = [/never|unmarried|single|अविवाहित/.test(s) && 'Never married', /divorc/.test(s) && 'Divorced', /widow/.test(s) && 'Widowed'].filter(Boolean)
+  if (hits.length === 1) return hits[0]
+  return hits.length > 1 ? 'No preference' : matchOption(raw, PARTNER_MARITAL_STATUS_PREFERENCES)
+}
+
+// ---- Religion cues (Punjabi ≠ Hindu by default) ----
+// "Punjabi" bhasha/region hai, religion nahi — Punjabi Hindu bhi hote hain
+// (Khatri, Arora…) aur Sikh bhi. Isliye sirf "Punjabi" dekh ke kuch nahi
+// bharte. Sikh tabhi jab saaf cue ho: Sikh/Gursikh/Amritdhari/Sardar/
+// Gurdwara jaise shabd, "Kaur" naam mein, ya "Singh" + Punjabi saath mein.
+const SIKH_WORDS = /\b(sikh|sikkh|gursikh|amritdhari|keshdhari|kesadhari|sardar|sardarni|gurdwara|gurudwara|khalsa)\b|सिख|सरदार|गुरुद्वारा/i
+const PUNJABI_WORDS = /\b(punjabi|panjabi|punjab)\b|पंजाबी|पंजाब/i
+const nameWords = (v) => [v.first_name, v.middle_name, v.last_name].filter(Boolean).join(' ').toLowerCase().split(/\s+/)
+
+export function inferReligionFromText(text, values) {
+  const words = nameWords(values)
+  // Partner preference lines ("Partner Religion: Sikh") apni religion ka cue nahi hain
+  const t = String(text || '').split('\n')
+    .filter(l => !/partner|expect|preference|looking\s*for|अपेक्षा|जीवनसाथी/i.test(l)).join('\n')
+  if (SIKH_WORDS.test(t) || words.includes('kaur') || (words.includes('singh') && PUNJABI_WORDS.test(t))) return 'Sikh'
+  if (PUNJABI_WORDS.test(t)) return 'ambiguous-punjabi'
+  return null
+}
+
 export function parseBiodataText(text, { includeContact = false } = {}) {
   const raw = extractLabeledValues(text)
   const values = {}
@@ -604,20 +763,34 @@ export function parseBiodataText(text, { includeContact = false } = {}) {
     const c = /indian|india|भारतीय/i.test(v) ? 'India' : matchOption(v, COUNTRIES.filter(x => x !== 'Open to All'))
     return c ? { fields: { nationality: c }, shown: c } : null
   })
-  tryField('religion', v => {
-    const s = v.toLowerCase()
-    const r = /hindu|हिन्दू|हिंदू|sanatan/.test(s) ? 'Hindu' : /muslim|islam|मुस्लिम/.test(s) ? 'Muslim'
-      : /sikh|सिख/.test(s) ? 'Sikh' : /christian|ईसाई/.test(s) ? 'Christian' : /jain|जैन/.test(s) ? 'Jain'
-      : /buddh|बौद्ध/.test(s) ? 'Buddhist' : matchOption(v, RELIGIONS)
-    return r ? { fields: { religion: r }, shown: r } : null
-  })
-  // Caste list sirf Hindu (ya religion na mila ho) ke liye — baaki religions
-  // ki apni community lists hain, wahan user khud chunega.
-  if (!values.religion || values.religion === 'Hindu') {
+  tryField('religion', single('religion', parseReligionWord))
+  // Religion label na ho (ya "Religion: Punjabi" jaisa ho) to form ka default
+  // "Hindu" chupchaap reh jaata tha — Punjabi Sikh profiles Hindu ban jaati
+  // thin. Ab saaf Sikh cue ho to Sikh, sirf "Punjabi" ho to admin se puchte hain.
+  let askReligion = false
+  if (!values.religion) {
+    const inferred = inferReligionFromText(text, values)
+    const pending = unmatched.findIndex(u => u.key === 'religion')
+    if (inferred === 'Sikh') {
+      if (pending >= 0) unmatched.splice(pending, 1)
+      add('religion', { religion: 'Sikh' }, 'Sikh (from Sikh/Kaur/Singh cues)')
+    } else if (inferred === 'ambiguous-punjabi') {
+      askReligion = true
+      if (pending >= 0) unmatched.splice(pending, 1)
+      unmatched.push({ key: 'religion', label: 'Religion', raw: 'Punjabi — choose Hindu or Sikh, form default is Hindu' })
+    }
+  }
+  // Caste list religion ke hisaab se: Hindu (ya religion na mila ho) → CASTES,
+  // Sikh → Sikh communities; baaki religions ki apni lists hain, wahan user
+  // khud chunega. Religion pooch rahe hain to caste bhi wahi chunega.
+  if (askReligion) { if (raw.caste) miss('caste') }
+  else if (values.religion === 'Sikh') {
+    tryField('caste', v => { const c = parseSikhCommunity(v); return c ? { fields: c, shown: c.custom_caste_text || c.community } : null })
+  } else if (!values.religion || values.religion === 'Hindu') {
     tryField('caste', v => { const c = parseCommunity(v); return c ? { fields: c, shown: c.community_other || c.community } : null })
   } else if (raw.caste) miss('caste')
   tryField('sub_caste', v => ({ fields: { sub_caste: v.slice(0, 60) }, shown: v.slice(0, 60) }))
-  if (!values.religion || values.religion === 'Hindu') {
+  if (!askReligion && (!values.religion || values.religion === 'Hindu')) {
     tryField('gotra', v => { const g = parseGotra(v); return g ? { fields: g, shown: g.gotra_other || g.gotra } : null })
   } else if (raw.gotra) miss('gotra')
   tryField('manglik', v => { const r = parseManglik(v); return r && MANGLIK_OPTIONS.includes(r) ? { fields: { manglik: r }, shown: r } : null })
@@ -671,6 +844,39 @@ export function parseBiodataText(text, { includeContact = false } = {}) {
   tryField('college', freeText('college_name', 100))
   tryField('hobbies', freeText('hobbies', 300))
   tryField('partner_notes', freeText('partner_notes', 1000))
+  // Partner preferences
+  const range = (fields, fmt) => {
+    const lo = Object.entries(fields).find(([k]) => k.endsWith('_min'))?.[1]
+    const hi = Object.entries(fields).find(([k]) => k.endsWith('_max'))?.[1]
+    return lo != null && hi != null ? (lo === hi ? fmt(lo) : `${fmt(lo)} – ${fmt(hi)}`) : lo != null ? `${fmt(lo)}+` : `up to ${fmt(hi)}`
+  }
+  const inch = (n) => `${Math.floor(n / 12)}'${n % 12}"`
+  const lakh = (n) => n >= 10000000 ? `₹${+(n / 10000000).toFixed(1)} Cr` : `₹${+(n / 100000).toFixed(1)}L`
+  tryField('partner_age', v => { const r = parsePartnerAge(v); return r ? { fields: r, shown: range(r, n => `${n}`) + ' yrs' } : null })
+  tryField('partner_height', v => { const r = parsePartnerHeight(v); return r ? { fields: r, shown: range(r, inch) } : null })
+  // Slider INR mein hai — non-India nationality par admin khud set karega
+  if (!values.nationality || values.nationality === 'India') {
+    tryField('partner_income', v => { const r = parsePartnerIncome(v); return r ? { fields: r, shown: range(r, lakh) } : null })
+  } else if (raw.partner_income) miss('partner_income')
+  tryField('partner_religion', single('partner_religion', parsePartnerReligion))
+  // Community preference ka dropdown tabhi dikhta hai jab partner religion
+  // "Any" na ho — religion na likhi ho to apni religion maan lete hain
+  // (caste preference lagbhag hamesha apne hi dharm mein hoti hai).
+  if (raw.partner_caste) {
+    const prefReligion = values.partner_religion && values.partner_religion !== 'Any' ? values.partner_religion : values.religion
+    const ids = prefReligion ? parsePartnerCommunities(raw.partner_caste, prefReligion) : null
+    if (ids && ids[0] === PARTNER_COMMUNITY_NO_BAR) add('partner_caste', { partner_community_ids: ids }, ids[0])
+    else if (ids) add('partner_caste', { partner_community_ids: ids, ...(values.partner_religion && values.partner_religion !== 'Any' ? {} : { partner_religion: prefReligion }) }, ids.join(', '))
+    else miss('partner_caste')
+  }
+  tryField('partner_education', v => { const r = parsePartnerEducation(v); return r ? { fields: { partner_education_level_preferences: r }, shown: r.join(', ') } : null })
+  tryField('partner_occupation', v => { const r = parsePartnerOccupation(v); return r ? { fields: { partner_employment_type_preferences: r }, shown: r.join(', ') } : null })
+  tryField('partner_marital_status', single('partner_marital_status_preference', parsePartnerMaritalStatus))
+  tryField('partner_complexion', single('partner_complexion_preference', v => isNoPref(v) ? null : parseComplexion(v)))
+  tryField('partner_city', freeText('partner_city_preference', 60))
+  tryField('partner_state', freeText('partner_state_preference', 60))
+  tryField('partner_country', single('partner_country_preference', v => isNoPref(v) ? 'Open to All'
+    : /indian?|भारत/i.test(v) ? 'India' : matchOption(v, COUNTRIES)))
   tryField('about_me', v => ({ fields: { about_me: v.slice(0, 1000) }, shown: v.length > 80 ? v.slice(0, 80) + '…' : v }))
   if (includeContact) {
     tryField('phone', v => {
@@ -708,8 +914,8 @@ Height: (e.g. 5'6")
 Weight: (in kg)
 Marital Status:
 Have Children: (Yes/No, only if married)
-Religion:
-Caste:
+Religion: (exactly as written; if not written, write Sikh only when there are clear Sikh signs such as Kaur, Singh with Punjabi, Sikh, Gursikh, Amritdhari, Gurdwara; Punjabi is a language/region, not a religion, so never write Hindu just because the person is Punjabi; otherwise skip this line)
+Caste: (community/caste only, e.g. Khatri, Arora, Jat Sikh, Ramgarhia; not the language)
 Sub Caste:
 Caste No Bar: (Yes/No)
 Gotra:
@@ -749,7 +955,21 @@ Nationality:
 Mobile:
 Email:
 About Me: (one line)
-Partner Expectations: (one line)
+
+(Only if the biodata says what they want in a partner, also add these lines)
+Partner Age: (e.g. 25-30)
+Partner Height: (e.g. 5'2" - 5'8")
+Partner Income: (e.g. 10 LPA+ or 10-20 LPA)
+Partner Religion: (one religion, or Any)
+Partner Caste: (comma separated, or No Bar)
+Partner Education: (e.g. Graduation, Post Graduation)
+Partner Occupation: (Government/Private Sector/Business)
+Partner Marital Status: (Never married/Divorced/Widowed/No preference)
+Partner Complexion:
+Partner City:
+Partner State:
+Partner Country:
+Partner Expectations: (anything else they want, one line)
 
 Biodata:
 `
