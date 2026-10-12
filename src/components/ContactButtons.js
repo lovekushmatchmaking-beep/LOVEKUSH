@@ -85,7 +85,7 @@ export function ContactButtons({ phone, onAction, logProfile, introductionId, si
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <a href={tel} onClick={stop('call')} className="btn btn-outline btn-sm" title={'Call ' + phone}
         style={{ padding: pad, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-        <Phone size={14} />{showNumber && <span style={{ fontFamily: 'monospace' }}>{phone}</span>}
+        <Phone size={14} />{showNumber && <span className="admin-contact-number" style={{ fontFamily: 'monospace' }}>{phone}</span>}
       </a>
       {menuExtra && menuExtra.length > 0 ? (
         <span ref={waRef} style={{ position: 'relative', display: 'inline-block' }}>

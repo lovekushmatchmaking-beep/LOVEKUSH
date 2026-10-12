@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 // A few of these were imported but never actually used anywhere in this
@@ -185,24 +185,57 @@ async function writeAuditLog(staffUser, action, entityId, metadata) {
 // ===== OVERFLOW MENU — three-dot (⋮) menu for condensing action buttons
 // `trigger` (optional) swaps the ⋮ icon for custom button content — the
 // profile card's Share button reuses this same dropdown (2026-10-11).
+//
+// The dropdown used to be `position: absolute; right: 0` inside its own
+// button wrapper, which assumed the button sat at the right edge of the
+// screen. On the Profiles list the ⋮ button often sits mid-row instead
+// (after Find Match/Share on a wrapped line), so the menu's wide,
+// nowrap content opened mostly off the LEFT edge of the phone — Aryan's
+// "three dot kholne par screen cut rahi hai" (2026-10-12, screenshots).
+// Fixed by measuring the button's actual position and rendering the menu
+// through a portal with `position: fixed`, clamped to stay on-screen
+// regardless of where the button is or what scrolls/clips around it.
+const OVERFLOW_MENU_WIDTH = 220
 function OverflowMenu({ items, trigger, title = 'More actions' }) {
   const [open, setOpen] = useState(false)
-  const ref = React.useRef(null)
+  const [pos, setPos] = useState(null)
+  const btnRef = React.useRef(null)
+  const menuRef = React.useRef(null)
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return
+    const r = btnRef.current.getBoundingClientRect()
+    const left = Math.min(Math.max(8, r.right - OVERFLOW_MENU_WIDTH), window.innerWidth - OVERFLOW_MENU_WIDTH - 8)
+    setPos({ top: r.bottom + 4, left })
+  }, [open])
   useEffect(() => {
     if (!open) return
-    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const close = (e) => {
+      if (btnRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    // Scroll/resize can move the button out from under a fixed-position
+    // menu — simplest correct behaviour is to close it rather than chase
+    // a moving target.
+    const dismiss = () => setOpen(false)
     document.addEventListener('pointerdown', close)
-    return () => document.removeEventListener('pointerdown', close)
+    window.addEventListener('scroll', dismiss, true)
+    window.addEventListener('resize', dismiss)
+    return () => {
+      document.removeEventListener('pointerdown', close)
+      window.removeEventListener('scroll', dismiss, true)
+      window.removeEventListener('resize', dismiss)
+    }
   }, [open])
   const visible = items.filter(i => !i.hidden)
   if (visible.length === 0) return null
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button type="button" className="btn btn-outline btn-sm" style={{ padding: '5px 6px', lineHeight: 1 }}
+    <>
+      <button ref={btnRef} type="button" className="btn btn-outline btn-sm" style={{ padding: '5px 6px', lineHeight: 1 }}
         onClick={e => { e.stopPropagation(); setOpen(v => !v) }} title={title}>{trigger || <MoreVertical size={14} />}</button>
-      {open && (
-        <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#fff', border: '1px solid #ededed',
-          borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.10)', zIndex: 50, minWidth: 150, overflow: 'hidden', whiteSpace: 'nowrap' }}
+      {open && pos && createPortal(
+        <div ref={menuRef} style={{ position: 'fixed', top: pos.top, left: pos.left, width: OVERFLOW_MENU_WIDTH,
+          background: '#fff', border: '1px solid #ededed', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+          zIndex: 1000, overflow: 'hidden' }}
           onClick={e => e.stopPropagation()}>
           {visible.map((item, i) => (
             <button key={i} type="button" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px',
@@ -214,9 +247,9 @@ function OverflowMenu({ items, trigger, title = 'More actions' }) {
               {item.label}
             </button>
           ))}
-        </div>
+        </div>, document.body
       )}
-    </div>
+    </>
   )
 }
 
@@ -1887,21 +1920,19 @@ export default function Admin({ staffUser }) {
                           </div>
                         </div>
                       ))}
-                      {/* Outcome chips se text/date box ke beech thoda zyada gap
-                          (10px, pehle 6px) — galti se paas wale control pe tap
-                          lagne ka risk kam karta hai (Aryan's audit, gap #9). */}
+                      {/* Outcome was 4 always-visible chip buttons — folded into
+                          one dropdown (Aryan, 2026-10-12: too much space for
+                          something tapped once per note). */}
                       <div className="admin-tight-controls" style={{ marginTop: 10 }}>
-                        {Object.entries(CALL_OUTCOME_LABELS).map(([key, label]) => (
-                          <button key={key} type="button"
-                            className="btn btn-outline btn-sm"
-                            style={{ padding: '6px 12px', fontSize: 13,
-                              ...(getNoteDraft(p.id).outcome === key ? { background: CALL_OUTCOME_COLORS[key].bg, color: CALL_OUTCOME_COLORS[key].fg, borderColor: CALL_OUTCOME_COLORS[key].fg } : {}) }}
-                            onClick={() => setNoteDraft(p.id, { outcome: getNoteDraft(p.id).outcome === key ? '' : key })}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="admin-tight-controls" style={{ marginTop: 10 }}>
+                        <select className="form-select admin-outcome-select" value={getNoteDraft(p.id).outcome}
+                          style={getNoteDraft(p.id).outcome ? { background: CALL_OUTCOME_COLORS[getNoteDraft(p.id).outcome].bg,
+                            color: CALL_OUTCOME_COLORS[getNoteDraft(p.id).outcome].fg, borderColor: CALL_OUTCOME_COLORS[getNoteDraft(p.id).outcome].fg } : undefined}
+                          onChange={e => setNoteDraft(p.id, { outcome: e.target.value })}>
+                          <option value="">Call outcome (optional)</option>
+                          {Object.entries(CALL_OUTCOME_LABELS).map(([key, label]) => (
+                            <option key={key} value={key}>{label}</option>
+                          ))}
+                        </select>
                         <input className="form-input" placeholder="Add a note (call log, decision, etc.)" value={getNoteDraft(p.id).note}
                           onChange={e => setNoteDraft(p.id, { note: e.target.value })} style={{ flex: '1 1 200px', fontSize: 12 }} />
                         <input className="form-input" type="date" value={getNoteDraft(p.id).followUp}
@@ -1913,7 +1944,18 @@ export default function Admin({ staffUser }) {
                     {/* Coordination requests involving this client — so admin doesn't
                         have to jump to the separate Coordination Requests screen and
                         search for them (Aryan's 2026-10-04 audit, gap #5). */}
-                    <div className="admin-section-header"><Handshake size={13} />Coordination Requests</div>
+                    {/* ⓘ info toggle folded into this header's own row
+                        instead of a dedicated line at the bottom with empty
+                        space next to it (Aryan, 2026-10-12). */}
+                    <div className="admin-section-header" style={{ justifyContent: 'space-between' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Handshake size={13} />Coordination Requests</span>
+                      {idMetadata[p.id] && (
+                        <button type="button" title="Profile info" aria-expanded={infoOpenFor === p.id} onClick={e => { e.stopPropagation(); setInfoOpenFor(infoOpenFor === p.id ? null : p.id) }}
+                          style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: infoOpenFor === p.id ? 'var(--primary)' : '#bbb', display: 'inline-flex', textTransform: 'none' }}>
+                          <Info size={13} />
+                        </button>
+                      )}
+                    </div>
                     <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
                       {(coordByProfile[p.id] || []).length === 0 ? (
                         <div style={{ fontSize: 12, color: '#bbb' }}>No Talk/Meeting requests involving this profile.</div>
@@ -1936,16 +1978,9 @@ export default function Admin({ staffUser }) {
                       )}
                     </div>
 
-                    {/* Just the ⓘ icon — "date · Added by staff" only shows
-                        when it's tapped (Aryan, 2026-10-11). */}
-                    {idMetadata[p.id] && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#bbb', marginBottom: 10 }} onClick={e => e.stopPropagation()}>
-                        <button type="button" title="Profile info" aria-expanded={infoOpenFor === p.id}
-                          style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: infoOpenFor === p.id ? 'var(--primary)' : '#bbb', display: 'inline-flex' }}
-                          onClick={() => setInfoOpenFor(infoOpenFor === p.id ? null : p.id)}><Info size={14} /></button>
-                        {infoOpenFor === p.id && <span>
-                          {new Date(idMetadata[p.id].created_at).toLocaleDateString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
-                        </span>}
+                    {idMetadata[p.id] && infoOpenFor === p.id && (
+                      <div style={{ fontSize: 11, color: '#bbb', marginTop: 2 }} onClick={e => e.stopPropagation()}>
+                        {new Date(idMetadata[p.id].created_at).toLocaleDateString('en-IN')} · {idMetadata[p.id].source === 'admin-added' ? 'Added by staff' : 'Self-registered'}
                       </div>
                     )}
                     {/* View/Edit/Matches now in overflow menu at top */}
