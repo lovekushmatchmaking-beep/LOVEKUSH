@@ -945,6 +945,9 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
    neighboring control by mistake. */
 .admin-tight-controls { display: flex; gap: 10px; flex-wrap: wrap; }
 .admin-tight-controls > * { margin: 2px; }
+/* Call-outcome dropdown replacing 4 always-visible chip buttons
+   (Aryan, 2026-10-12). Compact to match the note input beside it. */
+.admin-outcome-select { width: auto; flex: 0 0 auto; padding: 8px 10px; font-size: 12px; }
 
 @media (min-width: 768px) {
   .admin-sidebar { display: flex; }
@@ -1071,6 +1074,7 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 @media (max-width: 380px) {
   .admin-card-btn span, .admin-card-btn-inner span { display: none; }
   .admin-card-spacer { display: none; }
+  .admin-card-buttons .admin-contact-number { display: none; }
 }
 .admin-priority { display: grid; grid-template-columns: 1fr; gap: 6px; margin-bottom: 16px; }
 .fm-match-avatar {
