@@ -196,6 +196,7 @@ async function writeAuditLog(staffUser, action, entityId, metadata) {
 // through a portal with `position: fixed`, clamped to stay on-screen
 // regardless of where the button is or what scrolls/clips around it.
 const OVERFLOW_MENU_WIDTH = 220
+const NOTE_TIME_FMT = { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }
 function OverflowMenu({ items, trigger, title = 'More actions' }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState(null)
@@ -1836,26 +1837,29 @@ export default function Admin({ staffUser }) {
                           out from this profile vs. came in for this client. */}
                       <div className="admin-card-stats">
                         <span className="admin-stat" title={c ? `${c.memberViews} member visit${c.memberViews !== 1 ? 's' : ''} · ${c.linkViews} share-link open${c.linkViews !== 1 ? 's' : ''}` : 'Loading…'}>
-                          <Eye size={13} /> Viewed {c ? views : '–'}
+                          <Eye size={12} />{c ? views : '–'} viewed
                         </span>
-                        <span className="admin-stat-divider" />
                         <span className="admin-stat admin-stat-up" title={c ? `This profile was sent to ${c.sent} client${c.sent !== 1 ? 's' : ''} as a match` : 'Loading…'}>
-                          <ArrowUp size={13} /> Sent {c ? c.sent : '–'}
+                          <ArrowUp size={12} />{c ? c.sent : '–'} sent
                         </span>
                         <span className="admin-stat admin-stat-down" title={c ? `${c.received} match${c.received !== 1 ? 'es' : ''} sent to this client` : 'Loading…'}>
-                          <ArrowDown size={13} /> Received {c ? c.received : '–'}
+                          <ArrowDown size={12} />{c ? c.received : '–'} received
                         </span>
                       </div>
+                      {/* One row (Aryan, 2026-10-12 — "aur compact"): contact
+                          + view on the left, Match/Share/⋮ on the right. Share
+                          is icon-only (universal icon); Find Match is the one
+                          tinted button since it's the main job of this screen. */}
                       <div className="admin-card-buttons">
-                      <button type="button" className="btn btn-outline btn-sm admin-card-btn" title="View full profile"
-                        onClick={() => { setViewingProfile(p); setView('fullProfile') }}><Eye size={13} /></button>
                       <ContactButtons phone={p.client_phone || p.external_bureau_contact} showNumber
                         onAction={kind => startContactLog(p, kind)} externalBureauName={p.external_bureau_name} />
+                      <button type="button" className="btn btn-outline btn-sm admin-card-btn" title="View full profile"
+                        onClick={() => { setViewingProfile(p); setView('fullProfile') }}><Eye size={14} /></button>
                       <span className="admin-card-spacer" />
-                      <button type="button" className="btn btn-outline btn-sm admin-card-btn" onClick={() => findMatchesForProfile(p)} title="Find matches for this profile">
-                        <Search size={13} /><span>Find Match</span>
+                      <button type="button" className="btn btn-sm admin-card-btn admin-card-btn-primary" onClick={() => findMatchesForProfile(p)} title="Find matches for this profile">
+                        <Search size={14} /><span>Match</span>
                       </button>
-                      <OverflowMenu title="Share" trigger={<span className="admin-card-btn-inner"><Share2 size={13} /><span>Share</span></span>} items={[
+                      <OverflowMenu title="Share" trigger={<Share2 size={14} />} items={[
                         { label: 'Share link', icon: Share2, onClick: () => shareProfileLink(p) },
                         { label: 'Send link on WhatsApp', icon: MessageCircle, onClick: () => whatsappProfileLink(p) },
                         { label: 'Copy link', icon: Copy, onClick: () => copyProfileLink(p) },
@@ -1899,21 +1903,21 @@ export default function Admin({ staffUser }) {
                     <div className="admin-section-header"><StickyNote size={13} />Notes &amp; Follow-ups</div>
                     <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
                       {(notesByProfile[p.id] || []).map(n => (
-                        <div key={n.id} style={{ fontSize: 12, background: '#f9f9f9', padding: '8px 10px', borderRadius: 8, marginBottom: 6 }}>
+                        <div key={n.id} className="admin-note-item">
                           {n.introduction_id && (
-                            <span style={{ fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 20, marginRight: 6, background: '#eff6ff', color: '#2563eb' }}>
+                            <span className="admin-note-chip" style={{ background: '#eff6ff', color: '#2563eb' }}>
                               🤝 Coordination
                             </span>
                           )}
                           {n.call_outcome && (
-                            <span style={{ fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 20, marginRight: 6,
+                            <span className="admin-note-chip" style={{
                               background: CALL_OUTCOME_COLORS[n.call_outcome]?.bg, color: CALL_OUTCOME_COLORS[n.call_outcome]?.fg }}>
                               {CALL_OUTCOME_LABELS[n.call_outcome]}
                             </span>
                           )}
                           {n.note && n.note !== (CALL_OUTCOME_LABELS[n.call_outcome] || '') && <div style={{ display: 'inline' }}>{n.note}</div>}
-                          <div style={{ fontSize: 12, color: '#bbb', marginTop: 4 }}>
-                            {new Date(n.created_at).toLocaleString('en-IN')}
+                          <div className="admin-note-meta">
+                            {new Date(n.created_at).toLocaleString('en-IN', NOTE_TIME_FMT)}
                             {n.follow_up_at && <> · Follow up: {new Date(n.follow_up_at).toLocaleDateString('en-IN')}
                               <button type="button" className="btn btn-outline btn-sm" style={{ padding: '2px 8px', fontSize: 11, marginLeft: 6, color: '#16a34a', borderColor: '#16a34a' }}
                                 onClick={() => markFollowUpDone(p.id, n)}>✓ Done</button></>}
@@ -1923,21 +1927,29 @@ export default function Admin({ staffUser }) {
                       {/* Outcome was 4 always-visible chip buttons — folded into
                           one dropdown (Aryan, 2026-10-12: too much space for
                           something tapped once per note). */}
-                      <div className="admin-tight-controls" style={{ marginTop: 10 }}>
-                        <select className="form-select admin-outcome-select" value={getNoteDraft(p.id).outcome}
-                          style={getNoteDraft(p.id).outcome ? { background: CALL_OUTCOME_COLORS[getNoteDraft(p.id).outcome].bg,
-                            color: CALL_OUTCOME_COLORS[getNoteDraft(p.id).outcome].fg, borderColor: CALL_OUTCOME_COLORS[getNoteDraft(p.id).outcome].fg } : undefined}
-                          onChange={e => setNoteDraft(p.id, { outcome: e.target.value })}>
-                          <option value="">Call outcome (optional)</option>
-                          {Object.entries(CALL_OUTCOME_LABELS).map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
-                        </select>
-                        <input className="form-input" placeholder="Add a note (call log, decision, etc.)" value={getNoteDraft(p.id).note}
-                          onChange={e => setNoteDraft(p.id, { note: e.target.value })} style={{ flex: '1 1 200px', fontSize: 12 }} />
-                        <input className="form-input" type="date" value={getNoteDraft(p.id).followUp}
-                          onChange={e => setNoteDraft(p.id, { followUp: e.target.value })} style={{ fontSize: 12, width: 140 }} />
-                        <button className="btn btn-outline btn-sm" onClick={() => addNote(p.id)}>+ Add</button>
+                      <div className="admin-note-form">
+                        <div className="admin-note-row">
+                          <input className="form-input" placeholder="Add a note…" value={getNoteDraft(p.id).note}
+                            onChange={e => setNoteDraft(p.id, { note: e.target.value })}
+                            onKeyDown={e => { if (e.key === 'Enter') addNote(p.id) }} style={{ flex: '1 1 auto', minWidth: 0 }} />
+                          <button type="button" className="btn btn-primary btn-sm admin-note-add" onClick={() => addNote(p.id)}>Add</button>
+                        </div>
+                        <div className="admin-note-row">
+                          <select className="form-select admin-outcome-select" value={getNoteDraft(p.id).outcome}
+                            style={getNoteDraft(p.id).outcome ? { backgroundColor: CALL_OUTCOME_COLORS[getNoteDraft(p.id).outcome].bg,
+                              color: CALL_OUTCOME_COLORS[getNoteDraft(p.id).outcome].fg, borderColor: CALL_OUTCOME_COLORS[getNoteDraft(p.id).outcome].fg } : undefined}
+                            onChange={e => setNoteDraft(p.id, { outcome: e.target.value })}>
+                            <option value="">Call outcome</option>
+                            {Object.entries(CALL_OUTCOME_LABELS).map(([key, label]) => (
+                              <option key={key} value={key}>{label}</option>
+                            ))}
+                          </select>
+                          <label className="admin-note-date" title="Follow-up date (optional)">
+                            <CalendarClock size={13} />
+                            <input type="date" value={getNoteDraft(p.id).followUp}
+                              onChange={e => setNoteDraft(p.id, { followUp: e.target.value })} />
+                          </label>
+                        </div>
                       </div>
                     </div>
 

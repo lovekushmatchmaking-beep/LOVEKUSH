@@ -947,7 +947,6 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 .admin-tight-controls > * { margin: 2px; }
 /* Call-outcome dropdown replacing 4 always-visible chip buttons
    (Aryan, 2026-10-12). Compact to match the note input beside it. */
-.admin-outcome-select { width: auto; flex: 0 0 auto; padding: 8px 10px; font-size: 12px; }
 
 @media (min-width: 768px) {
   .admin-sidebar { display: flex; }
@@ -1058,24 +1057,40 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
    left, 👁 full-view + call/WhatsApp + Find Match/Share/⋮ on the right,
    always visible without expanding (Aryan, 2026-10-11 and follow-up). */
 .admin-card-actions {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 6px; margin-top: 10px; padding-top: 8px;
-  border-top: 1px solid rgba(0,0,0,0.05); cursor: default;
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 8px; cursor: default;
 }
-.admin-card-stats { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-right: auto; font-size: 12px; color: #8e8e8e; }
-.admin-stat { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.admin-stat-divider { width: 1px; height: 12px; background: var(--border); }
+.admin-card-stats { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 12px; font-size: 11.5px; color: #8e8e8e; padding-left: 2px; }
+.admin-stat { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .admin-stat-up { color: #2563eb; }
 .admin-stat-down { color: #16a34a; }
-.admin-card-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.admin-card-spacer { flex: 1 1 0; min-width: 0; }
-.admin-card-btn, .admin-card-actions .btn { padding: 5px 10px; font-size: 12px; border-radius: 999px; }
-.admin-card-btn, .admin-card-btn-inner { display: inline-flex; align-items: center; gap: 5px; }
-.admin-card-actions .btn:has(> .lucide-more-vertical), .admin-card-actions .btn:has(> .lucide-ellipsis-vertical) { padding: 5px 7px; }
-@media (max-width: 380px) {
-  .admin-card-btn span, .admin-card-btn-inner span { display: none; }
-  .admin-card-spacer { display: none; }
-  .admin-card-buttons .admin-contact-number { display: none; }
+/* One uniform 32px-tall row, sized to fit a 393px phone (wraps rather than clipping on very narrow screens). ContactButtons sets inline padding, hence !important. */
+.admin-card-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 4px; min-width: 0; }
+.admin-card-buttons .admin-contact-number { font-family: inherit !important; font-variant-numeric: tabular-nums; }
+.admin-card-buttons .btn {
+  height: 32px; min-width: 30px; padding: 0 7px !important; font-size: 12px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex-shrink: 0;
 }
+.admin-card-buttons > span:first-child { gap: 4px !important; flex-shrink: 0; }
+.admin-card-spacer { flex: 1 1 0; min-width: 0; }
+.admin-card-btn, .admin-card-btn-inner { display: inline-flex; align-items: center; gap: 5px; }
+.admin-card-btn-primary { background: var(--primary-soft); color: var(--primary); border: 1px solid var(--primary-tint); font-weight: 600; }
+.admin-card-btn-primary:hover { background: var(--primary-tint); }
+@media (max-width: 392px) { .admin-card-btn span { display: none; } }
+@media (max-width: 352px) { .admin-card-buttons .admin-contact-number { display: none; } }
+/* Notes & follow-ups — tighter items and a two-line add form */
+.admin-note-item { font-size: 12.5px; line-height: 1.45; background: #f9f9f9; padding: 8px 10px; border-radius: 10px; margin-bottom: 6px; }
+.admin-note-chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; margin-right: 6px; vertical-align: 1px; }
+.admin-note-meta { font-size: 11px; color: #aaa; margin-top: 3px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.admin-note-form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.admin-note-row { display: flex; align-items: center; gap: 6px; }
+.admin-note-row .form-input, .admin-note-row .form-select { height: 36px; padding-top: 0; padding-bottom: 0; font-size: 12.5px; }
+.admin-note-add { height: 36px; padding: 0 16px; border-radius: 999px; flex-shrink: 0; }
+.admin-outcome-select { width: auto; flex: 1 1 0; min-width: 0; padding: 0 28px 0 12px; background-position: right 10px center; font-size: 12px; }
+.admin-note-date {
+  display: inline-flex; align-items: center; gap: 6px; flex: 1 1 0; min-width: 0; height: 36px; padding: 0 10px;
+  border: 1.5px solid transparent; border-radius: var(--radius); background: var(--gray1); color: #8e8e8e; cursor: pointer;
+}
+.admin-note-date input { border: none; background: transparent; font-size: 12px; color: #333; min-width: 0; width: 100%; outline: none; font-family: inherit; }
 .admin-priority { display: grid; grid-template-columns: 1fr; gap: 6px; margin-bottom: 16px; }
 .fm-match-avatar {
   width: 48px; height: 48px; border-radius: 50%; background: #f0f0f0; overflow: hidden; flex-shrink: 0;
