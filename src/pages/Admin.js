@@ -1787,6 +1787,27 @@ export default function Admin({ staffUser }) {
                       {p.verification_status === 'verified' && <BadgeCheck size={15} color="#2563eb" title="Selfie/ID verified by staff" />}
                     </div>
                     <div style={{ fontSize: 12, color: '#8e8e8e' }}>{[p.age && p.age + 'y', p.city, p.religion].filter(Boolean).join(' · ')}</div>
+                    {/* Counts sit under the name line (Aryan, 2026-10-12 —
+                        "profile card aur compact"): saves a whole row. Viewed =
+                        interest this profile got; Sent/Received = matches out
+                        of / into it. */}
+                    {!selectionMode && (() => {
+                      const c = cardCounts[p.id]
+                      const views = c ? c.memberViews + c.linkViews : null
+                      return (
+                        <div className="admin-card-stats">
+                          <span className="admin-cstat" title={c ? `${c.memberViews} member visit${c.memberViews !== 1 ? 's' : ''} · ${c.linkViews} share-link open${c.linkViews !== 1 ? 's' : ''}` : 'Loading…'}>
+                            <Eye size={12} /> {c ? views : '–'} viewed
+                          </span>
+                          <span className="admin-cstat admin-cstat-up" title={c ? `This profile was sent to ${c.sent} client${c.sent !== 1 ? 's' : ''} as a match` : 'Loading…'}>
+                            <ArrowUp size={12} /> {c ? c.sent : '–'} sent
+                          </span>
+                          <span className="admin-cstat admin-cstat-down" title={c ? `${c.received} match${c.received !== 1 ? 'es' : ''} sent to this client` : 'Loading…'}>
+                            <ArrowDown size={12} /> {c ? c.received : '–'} received
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                   {/* Ek hi row mein wrap karo — pehle "active" + "✓ Verified" + "Premium"
                       alag-alag lines mein stack hoke card ko lamba bana rahe the. "active"
@@ -1823,29 +1844,9 @@ export default function Admin({ staffUser }) {
                     2026-10-11): share count, view count, Find Match, one
                     Share button for every share type, and a ⋮ for the rest
                     (external-bureau tag, save contact, verify/notify, edit…). */}
-                {!selectionMode && (() => {
-                  const c = cardCounts[p.id]
-                  const views = c ? c.memberViews + c.linkViews : null
-                  return (
+                {!selectionMode && (
                     <div className="admin-card-actions" onClick={e => e.stopPropagation()}
                       onTouchStart={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
-                      {/* Simplified to 3 labelled stats (Aryan, 2026-10-12 — the
-                          4th "shares" count overlapped with Sent and the bare
-                          icons were confusing with no label). "Viewed" is how
-                          much interest this profile itself got; Sent/Received
-                          track matchmaking activity — how many matches went
-                          out from this profile vs. came in for this client. */}
-                      <div className="admin-card-stats">
-                        <span className="admin-stat" title={c ? `${c.memberViews} member visit${c.memberViews !== 1 ? 's' : ''} · ${c.linkViews} share-link open${c.linkViews !== 1 ? 's' : ''}` : 'Loading…'}>
-                          <Eye size={12} />{c ? views : '–'} viewed
-                        </span>
-                        <span className="admin-stat admin-stat-up" title={c ? `This profile was sent to ${c.sent} client${c.sent !== 1 ? 's' : ''} as a match` : 'Loading…'}>
-                          <ArrowUp size={12} />{c ? c.sent : '–'} sent
-                        </span>
-                        <span className="admin-stat admin-stat-down" title={c ? `${c.received} match${c.received !== 1 ? 'es' : ''} sent to this client` : 'Loading…'}>
-                          <ArrowDown size={12} />{c ? c.received : '–'} received
-                        </span>
-                      </div>
                       {/* One row (Aryan, 2026-10-12 — "aur compact"): contact
                           + view on the left, Match/Share/⋮ on the right. Share
                           is icon-only (universal icon); Find Match is the one
@@ -1886,8 +1887,7 @@ export default function Admin({ staffUser }) {
                       ]} />
                       </div>
                     </div>
-                  )
-                })()}
+                )}
 
                 {selected?.id === p.id && (
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
@@ -1898,6 +1898,18 @@ export default function Admin({ staffUser }) {
                     {p.selfie_path && p.verification_status !== 'verified' && (
                       <SelfieCompare selfiePath={p.selfie_path} photoPath={photos[p.id]} />
                     )}
+
+                    {/* Lead source — was write-only (updateLeadSource existed with
+                        no control to call it), so a walk-in or an old bulk-imported
+                        profile could never be tagged/corrected after creation, and
+                        new options like Marriage Bureau could never show up in the
+                        Dashboard pie chart (Aryan, 2026-10-12). */}
+                    <div className="admin-section-header"><Users size={13} />Lead Source</div>
+                    <select className="form-select" style={{ marginBottom: 14, fontSize: 13 }} value={p.lead_source || ''}
+                      onClick={e => e.stopPropagation()} onChange={e => updateLeadSource(p.id, e.target.value)}>
+                      <option value="">Not set</option>
+                      {LEAD_SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
 
                     {/* Notes / follow-up — naya chhota profile_notes table */}
                     <div className="admin-section-header"><StickyNote size={13} />Notes &amp; Follow-ups</div>

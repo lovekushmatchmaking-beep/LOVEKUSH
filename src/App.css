@@ -1056,13 +1056,12 @@ button:active, .btn:active, .bottom-nav-item:active, .radio-option:active, .step
 /* Profile card action bar — counts (incl. matches sent/received) on the
    left, 👁 full-view + call/WhatsApp + Find Match/Share/⋮ on the right,
    always visible without expanding (Aryan, 2026-10-11 and follow-up). */
-.admin-card-actions {
-  display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 8px; cursor: default;
-}
-.admin-card-stats { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 12px; font-size: 11.5px; color: #8e8e8e; padding-left: 2px; }
-.admin-stat { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.admin-stat-up { color: #2563eb; }
-.admin-stat-down { color: #16a34a; }
+.admin-card-actions { margin-top: 10px; cursor: default; }
+/* Counts sit under the name line (Aryan, 2026-10-12) — saves a whole row. */
+.admin-card-stats { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 8px; margin-top: 2px; font-size: 11px; color: #8e8e8e; }
+.admin-cstat { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.admin-cstat-up { color: #2563eb; }
+.admin-cstat-down { color: #16a34a; }
 /* One uniform 32px-tall row, sized to fit a 393px phone (wraps rather than clipping on very narrow screens). ContactButtons sets inline padding, hence !important. */
 .admin-card-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 4px; min-width: 0; }
 .admin-card-buttons .admin-contact-number { font-family: inherit !important; font-variant-numeric: tabular-nums; }
