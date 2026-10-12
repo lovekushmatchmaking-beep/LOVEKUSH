@@ -117,6 +117,15 @@ export function passesHardFilters(me, other) {
   if ((other.partner_education_level_preferences || []).length > 0 && me.education &&
       !other.partner_education_level_preferences.includes(me.education)) return false
 
+  // Occupation/sector preference (Government/Private Sector/Business/...)
+  // — dono taraf se, same pattern as education level preference above
+  // (Aryan's ask, 2026-10-12: Partner Preference mein Occupation field
+  // missing thi).
+  if ((me.partner_employment_type_preferences || []).length > 0 && other.employment_type &&
+      !me.partner_employment_type_preferences.includes(other.employment_type)) return false
+  if ((other.partner_employment_type_preferences || []).length > 0 && me.employment_type &&
+      !other.partner_employment_type_preferences.includes(me.employment_type)) return false
+
   // Country preference — dono taraf se. "Open to All" = koi restriction nahi.
   if (me.partner_country_preference && me.partner_country_preference !== 'Open to All' &&
       other.country && other.country !== me.partner_country_preference) return false

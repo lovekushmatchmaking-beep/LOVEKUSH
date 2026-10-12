@@ -2394,6 +2394,7 @@ function partnerPreferenceSection(p) {
   return { title: 'Looking For', rows: [
     ['Age', partnerAge], ['Height', partnerHeight], ['Income', partnerIncome],
     ['Education', arrOrStr(p.partner_education_level_preferences) || p.partner_education],
+    ['Occupation / Sector', arrOrStr(p.partner_employment_type_preferences)],
     ['Religion', p.partner_religion && p.partner_religion !== 'Any' ? p.partner_religion : null],
     ['Community', arrOrStr(p.partner_community_ids)],
     ['Location', p.partner_location], ['City preference', p.partner_city_preference],

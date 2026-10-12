@@ -8,7 +8,7 @@ import {
   RELIGIONS, CASTES, ISLAMIC_COMMUNITIES, CHRISTIAN_COMMUNITIES, RELIGION_HIERARCHY,
   PARTNER_COMMUNITY_SPECIAL_OPTIONS, PARTNER_COMMUNITY_NO_BAR, EDUCATIONS, LOCATION_PREFERENCES,
   COUNTRIES, CURRENCIES, PARTNER_HEIGHT_MIN_INCHES, PARTNER_HEIGHT_MAX_INCHES, formatHeightFromInches,
-  PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS, formatIncomeShort,
+  PARTNER_INCOME_BOUNDS, PARTNER_INCOME_STEPS, formatIncomeShort, EMPLOYMENT_TYPES,
 } from '../constants/profileOptions'
 
 // Single-choice fields render as a native <select> dropdown (duplicated
@@ -49,6 +49,7 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
     partner_state_preference: profile.partner_state_preference || '',
     partner_country_preference: profile.partner_country_preference || 'Open to All',
     partner_education_level_preferences: profile.partner_education_level_preferences || [],
+    partner_employment_type_preferences: profile.partner_employment_type_preferences || [],
     partner_income_currency: profile.partner_income_currency || 'INR',
     partner_income_min: profile.partner_income_min ?? PARTNER_INCOME_BOUNDS.INR.min,
     partner_income_max: profile.partner_income_max ?? PARTNER_INCOME_BOUNDS.INR.max,
@@ -146,7 +147,13 @@ export default function MatchSearch({ profile, onSearch, onBack }) {
           <FormLabel>Education Level Preference</FormLabel>
           <CheckboxDropdown options={EDUCATIONS} selected={form.partner_education_level_preferences}
             onChange={v => set('partner_education_level_preferences', v)} placeholder="Select education levels..." />
-          <div className="form-hint">Khaali chhodne par sab education levels acceptable maane jaayenge</div>
+          <div className="form-hint">Kuch select na karne par har education level accept maani jaayegi</div>
+        </div>
+        <div className="form-group">
+          <FormLabel>Occupation / Sector Preference</FormLabel>
+          <CheckboxDropdown options={EMPLOYMENT_TYPES} selected={form.partner_employment_type_preferences}
+            onChange={v => set('partner_employment_type_preferences', v)} placeholder="Select occupation / sector..." />
+          <div className="form-hint">Kuch select na karne par har occupation / sector accept maana jaayega</div>
         </div>
         <div className="form-group">
           <FormLabel>Income range</FormLabel>
