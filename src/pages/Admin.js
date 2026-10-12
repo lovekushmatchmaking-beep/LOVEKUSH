@@ -84,15 +84,21 @@ async function fetchAllRows(build, cap = DASH_CAP) {
 // Links ke andar"). Same reciprocal-row logic ShareLinksView already uses
 // per-card (reverseLink/mutualInterest there) — pulled out here so
 // Dashboard's "Needs action now" and My Queue can show the same signal
-// without re-deriving it. A pair = two non-revoked, non-bundle share_links
-// rows pointing at each other (A→B and B→A) that both have interested_at
-// set. Returns one entry per pair; `forwardedAt`/`introId` look at either
-// side, same as the "→ Connect for a meeting" button does.
+// without re-deriving it. A pair = a share_links row (l) plus its reverse
+// "Send interest" row (A shown to B, admin-created once B liked A) pointing
+// back at it, both with interested_at set. ONLY the reverse row must be
+// non-bundle — l itself is very often one profile out of a bulk-shared
+// bundle (audit 2026-10-12: a first cut here wrongly required BOTH sides
+// non-bundle and so dropped every mutual-like whose original share was part
+// of a bundle cycle, which in practice is most of them — ShareLinksView's
+// own `!x.bundle_token` check was always reverse-only). Returns one entry
+// per pair; `forwardedAt`/`introId` look at either side, same as the
+// "→ Connect for a meeting" button does.
 function computeMutualLikes(rows) {
   const seen = new Set()
   const pairs = []
   for (const l of rows) {
-    if (seen.has(l.id) || l.revoked || l.bundle_token || !l.interested_at || !l.client_profile_id) continue
+    if (seen.has(l.id) || l.revoked || !l.interested_at || !l.client_profile_id) continue
     const reverse = rows.find(x => x.profile_id === l.client_profile_id && x.client_profile_id === l.profile_id
       && !x.revoked && !x.bundle_token && x.interested_at)
     if (!reverse) continue
@@ -102,6 +108,11 @@ function computeMutualLikes(rows) {
     const [earlier, later] = new Date(l.interested_at) <= new Date(reverse.interested_at) ? [l, reverse] : [reverse, l]
     pairs.push({
       id: earlier.id,
+      // forward_share_link_interest requires created_by = the calling
+      // admin, and the two sides of a pair aren't always created by the
+      // same staff member — altId lets the caller retry on the other row
+      // if the first one isn't theirs to forward (audit 2026-10-12).
+      altId: later.id,
       profileId: earlier.profile_id,
       clientProfileId: earlier.client_profile_id,
       mutualAt: later.interested_at,
@@ -5364,7 +5375,16 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   const handleConnectMutual = async (pair) => {
     setForwardingMutual(prev => ({ ...prev, [pair.id]: true }))
     try {
-      const introId = await forwardShareLinkInterest(pair.id)
+      let introId
+      try {
+        introId = await forwardShareLinkInterest(pair.id)
+      } catch (err) {
+        // The RPC only forwards a link the calling admin created — the
+        // pair's two rows aren't always owned by the same staff member, so
+        // retry on the other side before giving up (audit 2026-10-12).
+        if (!pair.altId || pair.altId === pair.id) throw err
+        introId = await forwardShareLinkInterest(pair.altId)
+      }
       setMutualLikes(prev => prev.filter(p => p.id !== pair.id))
       showToast(introId ? 'Connected — a meeting request was created.' : 'Both profiles notified.')
     } catch (err) {
