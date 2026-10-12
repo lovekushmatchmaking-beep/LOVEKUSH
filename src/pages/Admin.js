@@ -1163,43 +1163,20 @@ export default function Admin({ staffUser }) {
     showToast(value ? 'Bureau number saved' : 'Bureau number removed')
   }
 
-  // Downloads a .vcf so the number can be saved straight into the phone's
-  // contacts (named with the profile ID, easy to find on WhatsApp later).
-  const saveProfileContact = (p) => {
-    const phone = p.client_phone || p.external_bureau_contact
-    if (!phone) { showToast('No number saved yet for this profile'); return }
-    const label = `${p.full_name || 'Client'} (${p.profile_code})${!p.client_phone && p.external_bureau_name ? ' via ' + p.external_bureau_name : ''}`
-    // N is mandatory in vCard 3.0 — without it many Android contact apps
-    // import only the number with no name (Aryan, 2026-10-12: "sirf number
-    // save ho raha hai"). Whole label goes in the given-name slot so the
-    // contact shows exactly "Name (LK123)" everywhere, including WhatsApp.
-    const esc = (v) => String(v).replace(/([\\;,])/g, '\\$1').replace(/\n/g, ' ')
-    const email = p.client_phone ? p.client_email : null
-    const vcf = [
-      'BEGIN:VCARD', 'VERSION:3.0',
-      `N:;${esc(label)};;;`, `FN:${esc(label)}`,
-      `TEL;TYPE=CELL:${phone}`,
-      ...(email ? [`EMAIL;TYPE=INTERNET:${esc(email)}`] : []),
-      'ORG:LOVEKUSH Client',
-      `NOTE:${esc(`LOVEKUSH ${p.profile_code}`)}`,
-      'END:VCARD',
-    ].join('\r\n')
-    const blob = new Blob([vcf], { type: 'text/vcard' })
-    const url = URL.createObjectURL(blob)
-    // iOS Safari ignores the `download` attribute on a blob URL and silently
-    // does nothing on a.click() — Aryan's "button se kuch nahi ho raha"
-    // (2026-10-11). Opening the blob URL instead makes iOS show its own
-    // "Add to Contacts" card; Android/desktop browsers still download the
-    // file since it's served with vcard content-type either way.
-    const opened = window.open(url, '_blank')
-    if (!opened) {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${p.profile_code || 'contact'}.vcf`
-      document.body.appendChild(a); a.click(); a.remove()
-    }
-    showToast(`Contact file ready for ${p.profile_code || label} — check your downloads/share sheet`)
-    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  const editProfileContact = async (p) => {
+    const rawPhone = window.prompt(`Mobile number for ${p.full_name || p.profile_code} (leave empty to remove):`, p.client_phone || '')
+    if (rawPhone === null) return
+    const phone = rawPhone.trim() || null
+    if (phone && !normalizePhone(phone)) { showToast('Enter a valid number (10 digits, or with country code)'); return }
+    const rawEmail = window.prompt(`Email for ${p.full_name || p.profile_code} (leave empty to remove):`, p.client_email || '')
+    if (rawEmail === null) return
+    const email = rawEmail.trim().toLowerCase() || null
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Enter a valid email address'); return }
+    const { error } = await supabase.from('profiles').update({ client_phone: phone, client_email: email }).eq('id', p.id)
+    if (error) { showToast('Could not save: ' + error.message); return }
+    setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, client_phone: phone, client_email: email } : x))
+    if (selected?.id === p.id) setSelected(prev => ({ ...prev, client_phone: phone, client_email: email }))
+    showToast('Contact details saved')
   }
 
   // Admin ki banayi profile ka user-site login (Aryan, 2026-10-12: client
@@ -1921,7 +1898,7 @@ export default function Admin({ staffUser }) {
                           hidden: p.verification_status === 'verified' || ['selfie_requested', 'selfie_submitted'].includes(p.verification_status) || p.is_admin_managed },
                         { label: 'Reject verification', icon: X, color: '#dc2626', onClick: () => setVerificationStatus(p.id, 'rejected'),
                           hidden: !(p.verification_status === 'selfie_submitted' || (p.id_document_uploaded && p.verification_status !== 'verified' && p.verification_status !== 'rejected')) },
-                        { label: 'Save contact', icon: UserPlus, onClick: () => saveProfileContact(p) },
+                        { label: 'Edit contact', icon: Pencil, onClick: () => editProfileContact(p) },
                         { label: p.user_id ? 'Send login link' : 'Create login & send link', icon: KeyRound, onClick: () => sendClientLoginLink(p), hidden: !p.is_admin_managed && !!p.user_id },
                         { label: p.external_bureau_name ? `Bureau: ${p.external_bureau_name}` : 'Mark as external bureau', icon: Building2, onClick: () => markExternalBureau(p) },
                         { label: p.external_bureau_contact ? 'Bureau contact number' : 'Add bureau contact number', icon: Phone, onClick: () => editBureauContact(p), hidden: !p.external_bureau_name },
