@@ -10,7 +10,7 @@ import {
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
   ThumbsUp, ThumbsDown, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2, Video,
-  Share2, UserPlus, Send, ArrowUp, ArrowDown,
+  Share2, UserPlus, Send, ArrowUp, ArrowDown, NotebookPen, Heart,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -2381,13 +2381,31 @@ const FIND_MATCHES_SEARCH_COLUMNS = ['profile_code', 'full_name', 'city', 'state
 // EditProfileForm (Dashboard.js) / BiodataView.js — no new fields.
 const arrOrStr = (v) => Array.isArray(v) ? (v.join(', ') || null) : (v || null)
 
+// Partner preferences ("Looking For") as its own section — pulled out of
+// profileDetailSections so the Find Matches side panel can show it as a
+// standalone, always-visible card (Aryan's ask, 2026-10-12: preferences
+// should be visible while matching, not buried inside the full collapsed
+// profile detail). Same fields, same labels, no new data model — just
+// reused here on its own.
+function partnerPreferenceSection(p) {
+  const partnerAge = (p.partner_age_min || p.partner_age_max) ? `${p.partner_age_min || '18'} - ${p.partner_age_max || '70'} yrs` : null
+  const partnerHeight = (p.partner_height_min && p.partner_height_max) ? `${formatHeightFromInches(p.partner_height_min)} - ${formatHeightFromInches(p.partner_height_max)}` : null
+  const partnerIncome = (p.partner_income_min || p.partner_income_max) ? `${formatIncomeShort(p.partner_income_min, p.partner_income_currency)} - ${formatIncomeShort(p.partner_income_max, p.partner_income_currency)}` : null
+  return { title: 'Looking For', rows: [
+    ['Age', partnerAge], ['Height', partnerHeight], ['Income', partnerIncome],
+    ['Education', arrOrStr(p.partner_education_level_preferences) || p.partner_education],
+    ['Religion', p.partner_religion && p.partner_religion !== 'Any' ? p.partner_religion : null],
+    ['Community', arrOrStr(p.partner_community_ids)],
+    ['Location', p.partner_location], ['City preference', p.partner_city_preference],
+    ['State preference', p.partner_state_preference], ['Country preference', p.partner_country_preference],
+    ['Notes', p.partner_notes],
+  ]}
+}
+
 function profileDetailSections(p) {
   const siblings = []
   if (p.brothers_count) siblings.push(`${p.brothers_count} Brother(s) (${p.brothers_married_count || 0} Married)`)
   if (p.sisters_count) siblings.push(`${p.sisters_count} Sister(s) (${p.sisters_married_count || 0} Married)`)
-  const partnerAge = (p.partner_age_min || p.partner_age_max) ? `${p.partner_age_min || '18'} - ${p.partner_age_max || '70'} yrs` : null
-  const partnerHeight = (p.partner_height_min && p.partner_height_max) ? `${formatHeightFromInches(p.partner_height_min)} - ${formatHeightFromInches(p.partner_height_max)}` : null
-  const partnerIncome = (p.partner_income_min || p.partner_income_max) ? `${formatIncomeShort(p.partner_income_min, p.partner_income_currency)} - ${formatIncomeShort(p.partner_income_max, p.partner_income_currency)}` : null
 
   return [
     { title: 'Personal', rows: [
@@ -2436,15 +2454,7 @@ function profileDetailSections(p) {
       ['Dress style', p.dress_style], ['Cuisines', arrOrStr(p.cuisines)],
       ['Sports', arrOrStr(p.sports)], ['Health info', arrOrStr(p.health_info)],
     ]},
-    { title: 'Looking For', rows: [
-      ['Age', partnerAge], ['Height', partnerHeight], ['Income', partnerIncome],
-      ['Education', arrOrStr(p.partner_education_level_preferences) || p.partner_education],
-      ['Religion', p.partner_religion && p.partner_religion !== 'Any' ? p.partner_religion : null],
-      ['Community', arrOrStr(p.partner_community_ids)],
-      ['Location', p.partner_location], ['City preference', p.partner_city_preference],
-      ['State preference', p.partner_state_preference], ['Country preference', p.partner_country_preference],
-      ['Notes', p.partner_notes],
-    ]},
+    partnerPreferenceSection(p),
     { title: 'Contact', rows: [
       ['Phone', p.client_phone], ['Email', p.client_email], ['Alternate email', p.alternate_email],
     ]},
@@ -2475,6 +2485,93 @@ function FullProfileDetails({ profile }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// Always-visible "Looking For" card on the Find Matches main profile panel
+// (Aryan's ask, 2026-10-12) — same fields/labels as the "Looking For"
+// section inside FullProfileDetails, just pulled out so it's on screen
+// without expanding the whole profile.
+function PartnerPreferencesCard({ profile }) {
+  const section = partnerPreferenceSection(profile)
+  const rows = section.rows.filter(([, v]) => v)
+  if (rows.length === 0) return null
+  return (
+    <div style={{marginTop:12,paddingTop:12,borderTop:'1px solid rgba(0,0,0,0.06)'}}>
+      <div style={{fontSize:12,fontWeight:600,color:'#444',display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+        <Heart size={13} /> Partner Preferences
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))',gap:'4px 10px'}}>
+        {rows.map(([label, value]) => (
+          <div key={label} style={{fontSize:12,padding:'3px 0',borderBottom:'1px solid rgba(0,0,0,0.05)'}}>
+            <span style={{color:'#8e8e8e'}}>{label}: </span>
+            <span style={{fontWeight:500}}>{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Admin-only free-text "Demand / Note" — one row per profile in a
+// dedicated staff-only table (admin_demand_notes), edited in place
+// (upsert), never shown to the client. Lets the admin jot what a call/
+// consultation revealed about the client's real requirement — the kind
+// of thing that doesn't fit the structured partner_* preference fields —
+// to use as reference while picking matches (Aryan's ask, 2026-10-12).
+function AdminDemandNote({ profileId, staffUser }) {
+  const [note, setNote] = useState('')
+  const [saved, setSaved] = useState('') // last-saved value, to show "Saved" vs dirty
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    supabase.from('admin_demand_notes').select('note').eq('profile_id', profileId).maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        setNote(data?.note || '')
+        setSaved(data?.note || '')
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [profileId])
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError('')
+    const { error: err } = await supabase.from('admin_demand_notes').upsert({
+      profile_id: profileId,
+      note: note.trim(),
+      updated_by: staffUser?.user_id,
+      updated_at: new Date().toISOString(),
+    })
+    setSaving(false)
+    if (err) { setError('Could not save: ' + err.message); return }
+    setSaved(note.trim())
+  }
+
+  if (loading) return null
+  const dirty = note.trim() !== saved
+
+  return (
+    <div style={{marginTop:12,paddingTop:12,borderTop:'1px solid rgba(0,0,0,0.06)'}} onClick={e => e.stopPropagation()}>
+      <div style={{fontSize:12,fontWeight:600,color:'#444',display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+        <NotebookPen size={13} /> Demand / Note <span style={{fontWeight:400,color:'#bbb',fontSize:11}}>(admin only)</span>
+      </div>
+      <textarea className="form-textarea" rows={3} style={{fontSize:12,resize:'vertical'}}
+        placeholder="What the client actually wants — from calls/consultation, not captured above..."
+        value={note} onChange={e => setNote(e.target.value)} />
+      <div style={{display:'flex',alignItems:'center',gap:8,marginTop:6}}>
+        <button className="btn btn-outline btn-sm" disabled={!dirty || saving} onClick={handleSave}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+        {!dirty && saved && <span style={{fontSize:12,color:'#16a34a'}}>✓ Saved</span>}
+        {error && <span style={{fontSize:12,color:'#dc2626'}}>{error}</span>}
+      </div>
     </div>
   )
 }
@@ -2729,6 +2826,21 @@ function FindMatchesView({ profile, results, loading, staffUserId, staffUser, on
           </div>
           {mainExpanded ? <ChevronUp size={18} color="#8e8e8e" /> : <ChevronDown size={18} color="#8e8e8e" />}
         </div>
+
+        {/* Partner preferences — always visible (not gated behind the
+            collapsible full-profile toggle above), so the admin has them
+            on screen while scanning the match list, without needing to
+            expand the whole profile (Aryan's ask, 2026-10-12). */}
+        <PartnerPreferencesCard profile={profile} />
+
+        {/* Admin-only "Demand / Note" — free text, filled by admin only,
+            never shown to the client (separate staff-only table, not a
+            profiles column or a profile_notes row — see migration
+            20261012_admin_demand_note.sql). Captures what a call/
+            consultation reveals about the client's real requirement,
+            which the structured preference fields above don't capture
+            (Aryan's ask, 2026-10-12). */}
+        <AdminDemandNote profileId={profile.id} staffUser={staffUser} />
 
         {mainExpanded && (
           <div className="fm-main-details">
