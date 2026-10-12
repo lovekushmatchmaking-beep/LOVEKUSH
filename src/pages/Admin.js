@@ -10,7 +10,7 @@ import {
   ClipboardList, Handshake, Link2, SlidersHorizontal, Search, Pencil, Crown, Camera,
   UserRound, Plus, Wrench, UserCog, Eye, Phone, Info, MessageCircle, TrendingUp, Trash2,
   ThumbsUp, ThumbsDown, MoreVertical, MapPin, BadgeCheck, ChevronDown, ChevronUp, Building2, Video,
-  Share2, UserPlus, Send, ArrowUp, ArrowDown, NotebookPen, Heart,
+  Share2, UserPlus, Send, ArrowUp, ArrowDown, NotebookPen, Heart, HeartHandshake,
 } from 'lucide-react'
 import { supabase } from '../supabase'
 import SignedImage from '../components/SignedImage'
@@ -78,6 +78,41 @@ async function fetchAllRows(build, cap = DASH_CAP) {
   }
   return { data: out, error: null }
 }
+
+// ===== MUTUAL LIKES — "each other liked" ek link pe (Aryan, 2026-10-12:
+// "woh toh sabse important cheez hai, kahin dikhta hi nahi, bas My Share
+// Links ke andar"). Same reciprocal-row logic ShareLinksView already uses
+// per-card (reverseLink/mutualInterest there) — pulled out here so
+// Dashboard's "Needs action now" and My Queue can show the same signal
+// without re-deriving it. A pair = two non-revoked, non-bundle share_links
+// rows pointing at each other (A→B and B→A) that both have interested_at
+// set. Returns one entry per pair; `forwardedAt`/`introId` look at either
+// side, same as the "→ Connect for a meeting" button does.
+function computeMutualLikes(rows) {
+  const seen = new Set()
+  const pairs = []
+  for (const l of rows) {
+    if (seen.has(l.id) || l.revoked || l.bundle_token || !l.interested_at || !l.client_profile_id) continue
+    const reverse = rows.find(x => x.profile_id === l.client_profile_id && x.client_profile_id === l.profile_id
+      && !x.revoked && !x.bundle_token && x.interested_at)
+    if (!reverse) continue
+    seen.add(l.id); seen.add(reverse.id)
+    // "Liked each other at" = whichever side's like landed second — that's
+    // the moment the pair actually became mutual.
+    const [earlier, later] = new Date(l.interested_at) <= new Date(reverse.interested_at) ? [l, reverse] : [reverse, l]
+    pairs.push({
+      id: earlier.id,
+      profileId: earlier.profile_id,
+      clientProfileId: earlier.client_profile_id,
+      mutualAt: later.interested_at,
+      forwardedAt: earlier.forwarded_at || reverse.forwarded_at,
+      introId: earlier.forwarded_introduction_id || reverse.forwarded_introduction_id,
+    })
+  }
+  return pairs
+}
+
+const MUTUAL_LIKES_COLUMNS = 'id, profile_id, client_profile_id, interested_at, revoked, bundle_token, forwarded_at, forwarded_introduction_id, created_at'
 
 // ===== SELFIE VERIFICATION — existing profiles.verification_status ko hi
 // aage badhaya: not_started → selfie_requested → selfie_submitted →
@@ -637,7 +672,12 @@ export default function Admin({ staffUser }) {
       supabase.from('introductions').select('*', { count: 'exact', head: true }).in('status', ['accepted', 'contacted', 'meeting_done']),
       // [29] New profiles in 30 days
       supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', monthAgo),
+      // [30] Mutual likes ("each other liked") — not a plain count query
+      // since it needs the pair-matching in computeMutualLikes(); every
+      // row with an interested_at is cheap enough to pull (audit 2026-10-12).
+      fetchAllRows(() => supabase.from('share_links').select(MUTUAL_LIKES_COLUMNS).not('interested_at', 'is', null)),
     ])
+    const mutualLikePairs = computeMutualLikes(counts[30].data || [])
     setStats({
       total: counts[0].count || 0,
       pending: counts[1].count || 0,
@@ -669,6 +709,11 @@ export default function Admin({ staffUser }) {
       meetingsWeek: counts[27].count || 0,
       inProgress: counts[28].count || 0,
       newMonth: counts[29].count || 0,
+      // Pending = not yet forwarded (admin still needs to connect them);
+      // the total pair count is for the Dashboard card regardless of
+      // forward state.
+      mutualLikes: mutualLikePairs.filter(p => !p.forwardedAt).length,
+      mutualLikesTotal: mutualLikePairs.length,
     })
     // Any failed count used to show up as a silent 0 — say so instead.
     const failed = counts.filter(c => c.error)
@@ -2022,6 +2067,11 @@ const TONES = {
   sched: { bg: '#eff6ff', fg: '#1d4ed8' },
   like: { bg: '#fdf2f8', fg: '#C2185B' },
   info: { bg: '#f5f5f4', fg: '#475569' },
+  // Same pink as ShareLinksView's "Both profiles liked each other" badge —
+  // light tint here to match every other action-list row's fixed dark
+  // label text (App.css .ai-label); the row's rank (top of the list) is
+  // what signals it's the most important one, per Aryan's ask.
+  mutual: { bg: '#fce4ec', fg: '#C2185B' },
 }
 
 // Opens My Queue on a specific tab (MyQueueView reads this on mount).
@@ -2035,6 +2085,10 @@ function TodayPanel({ stats, onOpen }) {
   const go = (view) => () => onOpen(view)
   // Ranked most-urgent first; only rows with something to do are shown.
   const items = [
+    // Both sides liked each other on the same share link — Aryan, 2026-10-12:
+    // "woh toh sabse important cheez hai", and it was only visible buried
+    // inside My Share Links. Leads the list now.
+    { key: 'mutualLikes', count: stats.mutualLikes, label: 'Liked each other', hint: 'Both sides liked the same link — connect them for a meeting', icon: HeartHandshake, tone: 'mutual', onClick: q('mutualLikes') },
     { key: 'todayMeetings', count: stats.todayMeetings, label: "Today's calls & meetings", hint: 'Confirm with both sides before the time', icon: CalendarClock, tone: 'sched', onClick: q('meetings') },
     { key: 'decisionsOverdue', count: stats.decisionsOverdue, label: 'Meeting decisions overdue', hint: '48 hours passed, get a Positive or Negative', icon: CheckCircle2, tone: 'urgent', onClick: q('decisions') },
     { key: 'overdueFollowUps', count: stats.overdueFollowUps, label: 'Missed follow-ups', hint: 'Were due before today', icon: Clock, tone: 'urgent', onClick: q('followups') },
@@ -5161,6 +5215,12 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   // Bureau shares where the other bureau replied "found a match" — had a
   // Dashboard badge but no My Queue list (audit 2026-10-11).
   const [bureauReplies, setBureauReplies] = useState([])
+  // Both sides liked each other on a share link, not yet connected — same
+  // computeMutualLikes() pairing ShareLinksView and the Dashboard card use
+  // (Aryan, 2026-10-12: this needed its own place here too, not just My
+  // Share Links).
+  const [mutualLikes, setMutualLikes] = useState([])
+  const [forwardingMutual, setForwardingMutual] = useState({})
   // Admin-only: how much pending work each staff member is carrying, so a
   // bulk burst of new profiles/requests can be spread out instead of
   // landing on whoever happens to click first (scale audit #8).
@@ -5184,7 +5244,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     // days. With no lower bound, months-old unmarked calls filled all 20
     // slots and pushed today's meetings off the list (audit 2026-10-11).
     const monthAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString()
-    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes, shareNotInterestedRes, decisionsRes, bureauRes] = await Promise.all([
+    const [followUpsRes, assignedRes, newRes, meetingsRes, meetingsCountRes, pendingCoordRes, shareInterestRes, shareNotInterestedRes, decisionsRes, bureauRes, mutualRes] = await Promise.all([
       // Was lte(nowIso) only — upcoming follow-ups (due later this week)
       // never got fetched at all, so there was nothing to group into an
       // "Upcoming" section (audit 2026-10-08, P1 #11 re-scope).
@@ -5212,6 +5272,8 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
       // chahiye — yeh list pehle sirf Coordination card par dikhti thi.
       supabase.from('introductions').select('*').eq('status', 'meeting_done').is('decision', null).order('decision_deadline', { ascending: true, nullsFirst: false }).limit(20),
       supabase.from('share_links').select('*').not('bureau_reply', 'is', null).is('bureau_reply_acknowledged_at', null).order('bureau_replied_at', { ascending: false }).limit(20),
+      // Both sides liked each other — computeMutualLikes() does the pairing below.
+      supabase.from('share_links').select(MUTUAL_LIKES_COLUMNS).not('interested_at', 'is', null),
     ])
     setOverdueFollowUps(followUpsRes.data || [])
     setAssignedPending(assignedRes.data || [])
@@ -5224,7 +5286,11 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     const shareNotInterestedRows = shareNotInterestedRes.data || []
     const decisions = decisionsRes.data || []
     const bureauRows = bureauRes.data || []
-    const ids = [...new Set([...meetings, ...pendingReqs, ...decisions].flatMap(m => [m.from_profile, m.to_profile]).concat([...shareInterestRows, ...shareNotInterestedRows, ...bureauRows].flatMap(s => [s.profile_id, s.client_profile_id])).filter(Boolean))]
+    // Only the ones still needing a "→ Connect for a meeting" click — once
+    // forwarded it already has its own introduction/meeting flow elsewhere.
+    const mutualPairs = computeMutualLikes(mutualRes.data || []).filter(p => !p.forwardedAt)
+      .sort((a, b) => new Date(b.mutualAt) - new Date(a.mutualAt))
+    const ids = [...new Set([...meetings, ...pendingReqs, ...decisions].flatMap(m => [m.from_profile, m.to_profile]).concat([...shareInterestRows, ...shareNotInterestedRows, ...bureauRows].flatMap(s => [s.profile_id, s.client_profile_id])).concat(mutualPairs.flatMap(p => [p.profileId, p.clientProfileId])).filter(Boolean))]
     let profilesById = {}
     if (ids.length > 0) {
       // external_bureau_* too — ProfileContact reads them; without them a
@@ -5239,6 +5305,7 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     setShareInterest(shareInterestRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id], clientProfile: s.client_profile_id ? profilesById[s.client_profile_id] : null })))
     setShareNotInterested(shareNotInterestedRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id], clientProfile: s.client_profile_id ? profilesById[s.client_profile_id] : null })))
     setBureauReplies(bureauRows.map(s => ({ ...s, shownProfile: profilesById[s.profile_id] })))
+    setMutualLikes(mutualPairs.map(p => ({ ...p, profileA: profilesById[p.profileId], profileB: profilesById[p.clientProfileId] })))
 
     // Team workload — admin-only (list_staff_with_email RPC is admin-gated).
     // Small number of staff, so one count query per staff member is fine
@@ -5291,6 +5358,22 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
     }
   }
 
+  // Same forward_share_link_interest RPC + same stay-on-page pattern as
+  // ShareLinksView's "→ Connect for a meeting" button — one click creates
+  // the single meeting request for the pair (20261011_workflow_audit_fixes.sql).
+  const handleConnectMutual = async (pair) => {
+    setForwardingMutual(prev => ({ ...prev, [pair.id]: true }))
+    try {
+      const introId = await forwardShareLinkInterest(pair.id)
+      setMutualLikes(prev => prev.filter(p => p.id !== pair.id))
+      showToast(introId ? 'Connected — a meeting request was created.' : 'Both profiles notified.')
+    } catch (err) {
+      showToast(err.message)
+    } finally {
+      setForwardingMutual(prev => { const next = { ...prev }; delete next[pair.id]; return next })
+    }
+  }
+
   const updatePendingContact = (profileId, phone) => {
     setPendingCoordination(prev => prev.map(m => ({
       ...m,
@@ -5326,6 +5409,33 @@ function MyQueueView({ staffUser, onBack, onOpenProfile, onManageCoordination, o
   // long scroll. Now a tile grid on top doubles as the tab bar — every
   // count visible at a glance, one list on screen at a time.
   const tabs = [
+    // Both sides liked each other, not yet connected — Aryan, 2026-10-12:
+    // "sabse important cheez hai", leads the tile grid.
+    { key: 'mutualLikes', icon: HeartHandshake, label: 'Liked each other', color: '#C2185B',
+      items: inQueue(mutualLikes, p => [...profileSearchBits(p.profileA), ...profileSearchBits(p.profileB)]),
+      empty: 'No mutual likes waiting to be connected right now.',
+      render: p => (
+        <div key={p.id} className="list-row resp-row-interested">
+          <div style={{fontSize:13,fontWeight:600}}>
+            {p.profileA?.full_name || 'Profile'} <Heart size={11} style={{color:'#C2185B',verticalAlign:'middle'}} /> {p.profileB?.full_name || 'Profile'}
+          </div>
+          <div style={{marginTop:6}}>
+            <span style={{fontSize:12,fontWeight:600,color:'#fff',background:'#C2185B',borderRadius:8,padding:'5px 10px',display:'inline-flex',alignItems:'center',gap:6}}>
+              <ThumbsUp size={12} /> Both liked each other · {fmt(p.mutualAt)}
+            </span>
+          </div>
+          <div style={{display:'flex',gap:8,marginTop:8,flexWrap:'wrap'}}>
+            {p.profileA?.client_phone && <ContactButtons phone={p.profileA.client_phone} logProfile={p.profileA} />}
+            {p.profileB?.client_phone && <ContactButtons phone={p.profileB.client_phone} logProfile={p.profileB} />}
+            {openShareBtn}
+            <button className="btn btn-black btn-sm" style={{padding:'5px 10px',fontSize:12}}
+              disabled={forwardingMutual[p.id]} onClick={()=>handleConnectMutual(p)}
+              title="Creates the one meeting request for this pair">
+              {forwardingMutual[p.id] ? 'Connecting...' : '→ Connect for a meeting'}
+            </button>
+          </div>
+        </div>
+      ) },
     { key: 'interested', icon: ThumbsUp, label: 'Clients interested', color: '#C2185B',
       items: inQueue(shareInterest, s => [...profileSearchBits(s.shownProfile), ...profileSearchBits(s.clientProfile), s.share_id]),
       empty: 'No unread interest from share links right now.',
