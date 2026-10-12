@@ -1830,7 +1830,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
             <input className="form-input" value={form.middle_name} onChange={e=>set('middle_name',e.target.value)} />
           </div>
           <div className="form-group">
-            <FormLabel>Last Name / Surname *</FormLabel>
+            <FormLabel>Last Name / Surname</FormLabel>
             <input className="form-input" value={form.last_name} onChange={e=>set('last_name',e.target.value)} />
           </div>
         </div>

@@ -308,7 +308,9 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
 
   const goToNextPersonalQ = () => {
     const q = PERSONAL_QUESTIONS[personalQ]
-    if (q.type==='name' && (!form.first_name.trim() || !form.last_name.trim())) { showToast('Please enter first name and last name'); return }
+    // Surname optional — kai log sirf first name use karte hain (Aryan ko
+    // "." daal ke save karna padta tha).
+    if (q.type==='name' && !form.first_name.trim()) { showToast('Please enter first name'); return }
     if (q.required && !form[q.key]) { showToast('Please answer this question'); return }
     if (q.key==='client_phone' && form.client_phone && !normalizePhone(form.client_phone)) {
       showToast('Please enter a valid phone number (10 digits, or with country code)'); return
@@ -822,8 +824,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   const completeness = () => calculateSectionCompleteness(form, photos.filter(Boolean).length).overall
 
   const handleSubmit = async () => {
-    if(!form.first_name || !form.last_name || !form.date_of_birth) {
-      showToast('Please fill required fields (First Name, Last Name, Date of Birth)'); return
+    if(!form.first_name.trim() || !form.date_of_birth) {
+      showToast('Please fill required fields (First Name, Date of Birth)'); return
     }
     // Aryan ka audit (gap 3): Profile Photo "*" required likha tha but
     // photo ke bina bhi submit ho jaata tha. Sirf self-signup ke liye
@@ -996,8 +998,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
             <input className="form-input" placeholder="Optional" value={form.middle_name} onChange={e=>set('middle_name',e.target.value)} />
           </div>
           <div className="form-group">
-            <FormLabel>Last Name / Surname *</FormLabel>
-            <input className="form-input" placeholder="As per records" value={form.last_name} onChange={e=>set('last_name',e.target.value)} />
+            <FormLabel>Last Name / Surname</FormLabel>
+            <input className="form-input" placeholder="Optional" value={form.last_name} onChange={e=>set('last_name',e.target.value)} />
           </div>
         </div>
       )
@@ -1284,8 +1286,8 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
                   <FormLabel style={{marginTop:14}}>Middle Name</FormLabel>
                   <input className="form-input" placeholder="Optional" value={form.middle_name}
                     onChange={e=>set('middle_name',e.target.value)} />
-                  <FormLabel style={{marginTop:14}}>Last Name / Surname *</FormLabel>
-                  <input className="form-input" placeholder="As per records" value={form.last_name}
+                  <FormLabel style={{marginTop:14}}>Last Name / Surname</FormLabel>
+                  <input className="form-input" placeholder="Optional" value={form.last_name}
                     onChange={e=>set('last_name',e.target.value)}
                     onKeyDown={e=>{ if(e.key==='Enter') goToNextPersonalQ() }} />
                 </>
