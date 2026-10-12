@@ -399,6 +399,7 @@ export default function ProfileView({ match: m, viewerIsPremium, viewerProfileId
           ]} />
           <FactCard title="Education & Occupation" fields={[
             ['Education Level', (m.partner_education_level_preferences || []).join(', ') || null],
+            ['Occupation / Sector', (m.partner_employment_type_preferences || []).join(', ') || null],
             ['Income', incomeLabel(m.partner_income_min, m.partner_income_max, m.partner_income_currency)],
           ]} />
           <FactCard title="Religion & Ethnicity" fields={[

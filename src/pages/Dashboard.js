@@ -624,6 +624,7 @@ export default function Dashboard({ user }) {
                     ['Religion', profile.partner_religion],
                     ['Preferred Community', Array.isArray(profile.partner_community_ids) ? profile.partner_community_ids.join(', ') : null],
                     ['Education Level', Array.isArray(profile.partner_education_level_preferences) && profile.partner_education_level_preferences.length ? profile.partner_education_level_preferences.join(', ') : null],
+                    ['Occupation / Sector', Array.isArray(profile.partner_employment_type_preferences) && profile.partner_employment_type_preferences.length ? profile.partner_employment_type_preferences.join(', ') : null],
                     ['Location', profile.partner_location],
                     ['Preferred City', profile.partner_city_preference],
                     ['Preferred State', profile.partner_state_preference],
@@ -1610,6 +1611,7 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
     partner_location: profile.partner_location || '',
     partner_education: profile.partner_education || 'Any',
     partner_education_level_preferences: profile.partner_education_level_preferences || [],
+    partner_employment_type_preferences: profile.partner_employment_type_preferences || [],
     partner_notes: profile.partner_notes || '',
     // Extracted from Aryan's original Google Form (2026-10-10) — all optional.
     marriage_timeline: profile.marriage_timeline || '',
@@ -2630,7 +2632,13 @@ export function EditProfileForm({ profile, user, onSave, onCancel, onManagePriva
           <FormLabel>Education Level Preference</FormLabel>
           <CheckboxDropdown options={EDUCATIONS} selected={form.partner_education_level_preferences}
             onChange={v=>set('partner_education_level_preferences',v)} placeholder="Select education levels..." />
-          <div className="form-hint">Khaali chhodne par sab education levels acceptable maane jaayenge</div>
+          <div className="form-hint">Kuch select na karne par har education level accept maani jaayegi</div>
+        </div>
+        <div className="form-group">
+          <FormLabel>Occupation / Sector Preference</FormLabel>
+          <CheckboxDropdown options={EMPLOYMENT_TYPES} selected={form.partner_employment_type_preferences}
+            onChange={v=>set('partner_employment_type_preferences',v)} placeholder="Select occupation / sector..." />
+          <div className="form-hint">Kuch select na karne par har occupation / sector accept maana jaayega</div>
         </div>
         <div className="form-group">
           <FormLabel>Location Preference</FormLabel>

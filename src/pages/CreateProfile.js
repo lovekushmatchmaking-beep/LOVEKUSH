@@ -214,6 +214,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
     partner_city_preference:'', partner_state_preference:'', partner_country_preference:'Open to All',
     partner_religion:'Any', partner_community_ids:[], partner_location:'Open to relocation',
     partner_education:'Any', partner_education_level_preferences:[],
+    partner_employment_type_preferences:[],
     partner_notes:''
   })
 
