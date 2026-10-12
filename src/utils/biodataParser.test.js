@@ -174,6 +174,18 @@ Own House: Yes
 Vehicle: Car
 Hobbies: Reading
 About Me: Cheerful and grounded.
+Partner Age: 27-32
+Partner Height: 5'6" - 6'0"
+Partner Income: 10 LPA+
+Partner Religion: Hindu
+Partner Caste: Kushwaha, Maurya
+Partner Education: Post Graduation
+Partner Occupation: Government, Private Sector
+Partner Marital Status: Never married
+Partner Complexion: Fair
+Partner City: Lucknow
+Partner State: Uttar Pradesh
+Partner Country: India
 Partner Expectations: Well educated, kind.`
   const { found, unmatched } = parseBiodataText(sample, { includeContact: true })
   const keys = found.map(f => f.key)
@@ -228,4 +240,98 @@ Partner Expectations: Educated girl from a cultured family.`)
     family_type: 'Joint', family_city: 'Varanasi', own_house: 'Yes', vehicle_ownership: 'Both',
     college_name: 'IIT Kanpur', hobbies: 'Cricket, music', partner_notes: 'Educated girl from a cultured family.',
   })
+})
+
+test('reads partner preferences into the Partner Preferences fields', () => {
+  const { values, unmatched } = parseBiodataText(`Name: Priya Sharma
+Religion: Hindu
+Partner Age: 27 to 32 years
+Partner Height: 5'6" - 6'0"
+Partner Income: 10-20 LPA
+Partner Religion: Hindu
+Partner Caste: Brahmin, Kushwaha
+Partner Education: MBA / B.Tech
+Partner Occupation: Govt job or MNC
+Partner Marital Status: Unmarried
+Partner Complexion: Fair
+Partner City: Delhi
+Partner Country: Indian
+Partner Expectations: Family oriented.`)
+  expect(values).toMatchObject({
+    partner_age_min: 27, partner_age_max: 32, partner_height_min: 66, partner_height_max: 72,
+    partner_income_min: 1000000, partner_income_max: 2000000, partner_religion: 'Hindu',
+    partner_education_level_preferences: ['Post Graduation', 'Graduation'],
+    partner_employment_type_preferences: ['Government', 'Private Sector'],
+    partner_marital_status_preference: 'Never married', partner_complexion_preference: 'Fair',
+    partner_city_preference: 'Delhi', partner_country_preference: 'India', partner_notes: 'Family oriented.',
+  })
+  expect(values.partner_community_ids).toEqual(expect.arrayContaining(['Kushwaha']))
+  expect(values.religion).toBe('Hindu')
+  expect(unmatched.map(u => u.key)).not.toContain('partner_age')
+})
+
+test('partner preferences: open-ended and single-bound values', () => {
+  const { values } = parseBiodataText(`Religion: Sikh
+Partner Age: 28+
+Partner Income: above 15 lakh
+Partner Caste: No bar
+Partner Religion: Any`)
+  expect(values).toMatchObject({ partner_age_min: 28, partner_income_min: 1500000, partner_religion: 'Any',
+    partner_community_ids: ['Any Community / No Bar'] })
+  expect(values.partner_age_max).toBeUndefined()
+})
+
+test('Punjabi alone does not become Hindu: religion is left for the admin', () => {
+  const { values, unmatched } = parseBiodataText(`Name: Simran Arora
+Caste: Punjabi
+Mother Tongue: Punjabi`)
+  expect(values.religion).toBeUndefined()
+  expect(values.community).toBeUndefined()
+  expect(unmatched.find(u => u.key === 'religion').raw).toMatch(/Hindu or Sikh/)
+})
+
+test('"Religion: Punjabi" is not a religion either', () => {
+  const { values, unmatched } = parseBiodataText(`Name: Rohit Khanna
+Religion: Punjabi`)
+  expect(values.religion).toBeUndefined()
+  expect(unmatched.filter(u => u.key === 'religion')).toHaveLength(1)
+})
+
+test('clear Sikh cues set religion Sikh and use the Sikh community list', () => {
+  const kaur = parseBiodataText(`Name: Harpreet Kaur
+Caste: Ramgarhia`)
+  expect(kaur.values).toMatchObject({ religion: 'Sikh', community: 'Ramgarhia' })
+
+  const singh = parseBiodataText(`Name: Gurpreet Singh Sandhu
+Caste: Jat Sikh
+Mother Tongue: Punjabi`)
+  expect(singh.values).toMatchObject({ religion: 'Sikh', community: 'Others / Not in list', custom_caste_text: 'Jat Sikh' })
+
+  const explicit = parseBiodataText(`Name: Aman Arora
+Religion: Sikh
+Caste: Arora`)
+  expect(explicit.values).toMatchObject({ religion: 'Sikh', community: 'Arora' })
+})
+
+test('Singh without any Punjabi/Sikh cue is not assumed Sikh', () => {
+  const { values } = parseBiodataText(`Name: Rahul Singh
+Caste: Rajput`)
+  expect(values.religion).toBeUndefined()
+  expect(values.community).toMatch(/Rajput/)
+})
+
+test('explicit Hindu religion is kept for Punjabi Hindus', () => {
+  const { values } = parseBiodataText(`Name: Neha Khanna
+Religion: Hindu
+Caste: Khatri
+Mother Tongue: Punjabi`)
+  expect(values.religion).toBe('Hindu')
+})
+
+test('a partner religion line is not a cue for own religion', () => {
+  const { values } = parseBiodataText(`Name: Neha Khanna
+Caste: Khatri
+Partner Religion: Sikh`)
+  expect(values.religion).toBeUndefined()
+  expect(values.partner_religion).toBe('Sikh')
 })

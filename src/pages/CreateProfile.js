@@ -268,7 +268,15 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
   // Biodata (PDF/photo) se mile fields — wahi set()/setCommunity() se jaate
   // hain jo user ke haath se chunne par chalte hain, taaki saare side-effects
   // (currency sync, degree reset, sensitive-community privacy) waise hi lagein.
+  // Biodata se partner age aayi ho to save par default age range use nahi karte.
+  const partnerAgeFromBiodata = React.useRef({})
   const applyBiodata = (values) => {
+    if ('partner_age_min' in values || 'partner_age_max' in values) {
+      partnerAgeFromBiodata.current = {
+        ...('partner_age_min' in values ? { partner_age_min: values.partner_age_min } : {}),
+        ...('partner_age_max' in values ? { partner_age_max: values.partner_age_max } : {}),
+      }
+    }
     const keys = [...APPLY_ORDER.filter(k => k in values), ...Object.keys(values).filter(k => !APPLY_ORDER.includes(k))]
     keys.forEach(k => {
       if (k === 'gender' && PROFILE_FOR_GENDER[form.profile_for]) return
@@ -908,6 +916,7 @@ export default function CreateProfile({ user, adminMode, onComplete }) {
           // range profile ke data se logically set hoti hai (baad mein Edit
           // Profile se badal sakte hain).
           ...defaultPartnerAgeRange(ageCheck.age, form.gender),
+          ...partnerAgeFromBiodata.current,
           partner_height_min: parseInt(form.partner_height_min) || null,
           partner_height_max: parseInt(form.partner_height_max) || null,
           partner_income_min: parseInt(form.partner_income_min) || null,
