@@ -2700,7 +2700,14 @@ export const WORKING_AS_OPTIONS = [
 // Lead source — business-owner audit (2026-10-04): how a client found us,
 // captured at signup/Create Client. Used for the admin Breakdown panel and
 // to gauge marketing spend ROI. Matches profiles.lead_source check constraint.
-export const LEAD_SOURCE_OPTIONS = ['Referral', 'Online Ads', 'Walk-in', 'Website', 'Marriage Bureau', 'Other']
+// Expanded 2026-10-12 (Aryan: "jitne possible lead source hai sab daal do").
+// Existing values kept as-is so old rows still match.
+export const LEAD_SOURCE_OPTIONS = [
+  'Referral', 'Friends & Family', 'Marriage Bureau', 'Walk-in',
+  'Website', 'Website Ad', 'Online Ads', 'Google Search', 'Facebook / Instagram', 'WhatsApp', 'YouTube',
+  'Leaflet / Pamphlet', 'Visiting Card', 'Newspaper Ad', 'Hoarding / Banner', 'Event / Mela',
+  'Phone Call', 'Other',
+]
 
 // ===== Extracted from Aryan's original Google Form (registration + T&C) —
 // 2026-10-10. All optional, all in Edit Profile (not the signup wizard,
