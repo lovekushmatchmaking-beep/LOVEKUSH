@@ -3,7 +3,7 @@
 // ko hi buckets mein group karta hai — koi naya column/table nahi.
 import { parseHeightToInches } from '../constants/profileOptions'
 
-export const STATS_COLUMNS = 'gender, age, date_of_birth, height, religion, community, city, state, country, marital_status, education, profile_for, mother_tongue, manglik, diet, profile_status, lead_source, created_at'
+export const STATS_COLUMNS = 'gender, age, date_of_birth, height, religion, community, city, state, country, marital_status, education, profile_for, mother_tongue, manglik, diet, profile_status, lead_source, external_bureau_name, created_at'
 
 const UNKNOWN = 'Not filled'
 
@@ -59,7 +59,9 @@ export const DIMENSIONS = {
   manglik: { label: 'Manglik', bucket: field('manglik') },
   diet: { label: 'Diet', bucket: field('diet') },
   profile_status: { label: 'Profile Status', bucket: field('profile_status') },
-  lead_source: { label: 'Lead Source', bucket: field('lead_source') },
+  // A profile taken from another bureau/matrimonial counts as that source,
+  // whatever lead_source says — external_bureau_name is the stronger signal.
+  lead_source: { label: 'Lead Source', bucket: (p) => p.external_bureau_name ? 'Other Matrimonial' : field('lead_source')(p) },
 }
 
 // ===== CONVERSION FUNNEL — "Lead → Match → Meeting" stages Aryan ne
